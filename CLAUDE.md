@@ -17,7 +17,12 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 
 ## Yapı
 - `Assets/Scripts` · `Assets/Prefabs` · `Assets/Scenes` · `Assets/Art` · `Assets/Audio` · `Assets/Materials` · `Assets/Settings` (URP asset + renderer)
-- Karakterler: `Assets/Art/Characters/{Soldier,Zombie}/*.glb`. Orijinal dosyalar `Source~/` altında (EXT_texture_webp; glTFast desteklemediği için dokular PNG'ye çevrildi).
+- Karakterler: `Assets/Art/Characters/{Soldier,Zombie}/*.glb` = Blender ile decimate edilmiş mesh (Soldier 9k, Zombie 6k tri), materyalsiz. Dokular `Textures/*_BaseColor.png` (max 1024, Android/iOS ASTC 6x6). Orijinal yüksek poligonlu dosyalar `Source~/` altında (EXT_texture_webp, Unity görmez). Modeller +Z'ye bakar.
+- Script'ler `Game` asmdef'inde: Core (GameManager, Pool, GameDefs: layer/Arena/Vault, Haptics), Input (TouchControls), Player (PlayerController, Weapon, Bullet), Enemies (Zombie, ZombieSpawner), World (ArenaGenerator), FX (CameraRig, Fx, HitFlash), UI (HUD).
+- **Sahne kod ile üretilir:** `Assets/Editor/GameSceneBuilder.cs` (menü: Tools/Zombie Shooter/Rebuild Game Scene veya `-executeMethod GameSceneBuilder.Build`). Dokular, materyaller, prefab'lar (Player, Zombie, Bullet, Crate) ve Game.unity'yi yeniden yazar — sahnede elle yapılan değişiklikler kaybolur, kalıcı değişiklikleri builder'a işle. `GameSceneBuilder.Capture` (graphics'li batchmode, `CAPTURE_DIR` env) doğrulama için PNG render alır.
+- Layer'lar: 8 Wall, 9 Crate, 10 Zombie, 11 Player. Arena iç alanı 40x28 (`Arena.HalfX/HalfZ`).
+- Shader'lar `Assets/Shaders`: Game/FxAdditive, Game/FxAlpha, Game/Flash (URP unlit). Karakter/çevre: URP Simple Lit.
+- PlayMode testleri: `Assets/Tests/PlayMode/GameSmokeTest.cs` (spawn+auto-aim kill+joystick+ölüm+restart, vault). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
 
 ## Kurallar
 - Kullanıcıya onay sorma; adımları kendin yap.
@@ -27,10 +32,15 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 
 ## İlerleme
 - [x] Proje kurulumu: URP, glTFast, Input System, Player Settings (landscape, bundle id), klasörler, Game sahnesi, git
-- [ ] Oyuncu hareketi + floating joystick
-- [ ] Ateş / nişan (sağ yarı, auto-aim)
-- [ ] Zombi spawn + AI + pooling
-- [ ] Vault sistemi
-- [ ] Skor + kombo + UI
-- [ ] Vuruş hissi (juice)
-- [ ] Mixamo rig + Humanoid animasyonlar
+- [x] **Faz 1 prototip** (2026-11-15)
+  - [x] Oyuncu: floating joystick (sol yarı), kodla dönüş + yürüme bob/sallanma, CharacterController
+  - [x] Ateş/nişan: sağ yarı basılı tut, sürükleme yönü 360°, sürüklemesiz en yakın zombiye auto-aim; pooled mermiler (spherecast)
+  - [x] Zombi: oyuncuya yürür + kodla sallanma, yerden çıkma, ayrışma (separation), kasaları vault, temas hasarı; kenarlardan sonsuz spawn, zamanla artan yoğunluk/hız/can, pooling
+  - [x] Arena: duvarlı 40x28 alan, rastgele kasalar, kasaya koşunca otomatik vault
+  - [x] Vuruş hissi: muzzle flash, beyaz hit flash, knockback, kill'de hitstop, screenshake, haptic (iOS plugin / Android VibrationEffect), partiküller (goo, chunk, spark, pop, dust)
+  - [x] UI: skor (sayaç animasyonu), kombo çarpanı (5 vuruşta +1, max x10; 2 sn vuruşsuz sıfırlanır), can barı, hasar vinyeti, FPS, game over + dokun/restart, en iyi skor (PlayerPrefs)
+  - [x] Editor testi: mouse sol tık sol/sağ yarı simülasyonu, WASD hareket, sağ tık imlece ateş, Space restart
+- [ ] Ses (silah, vuruş, ölüm, müzik)
+- [ ] Mixamo rig + Humanoid animasyonlar (koşu, ateş, zombi yürüyüş/ölüm)
+- [ ] Cihazda performans profili (60 FPS hedefi, 70 zombi), gerekirse GPU instancing/LOD
+- [ ] Silah çeşitleri / power-up, dalga yapısı, ana menü
