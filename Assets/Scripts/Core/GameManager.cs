@@ -90,6 +90,7 @@ public class GameManager : MonoBehaviour
         IsGameOver = true;
         hitStopActive = false;
         Time.timeScale = 0.3f;
+        GameAudio.Play(SfxId.GameOver, player ? player.transform.position : Vector3.zero);
         if (Score > BestScore) { BestScore = Score; PlayerPrefs.SetInt("best", BestScore); PlayerPrefs.Save(); }
         StartCoroutine(GameOverRoutine());
     }

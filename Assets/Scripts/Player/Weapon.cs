@@ -9,10 +9,14 @@ public class Weapon : MonoBehaviour
 
     public float fireRate = 10f;
     public float spreadDeg = 3f;
-    public float bulletSpeed = 42f;
-    public float damage = 1f;
-    public float autoAimRange = 16f;
+    public float bulletSpeed = 55f;
+    public float damage = 25f;
+    public float damageJitter = 0.15f;
+    [Range(0f, 1f)] public float critChance = 0.12f;
+    public float critMultiplier = 2f;
+    public float autoAimRange = 18f;
     public float maxAimAngleToFire = 40f;
+    public float cameraKick = 0.12f;
 
     public bool IsFiring { get; private set; }
     public Vector3 AimDir { get; private set; }
@@ -80,7 +84,9 @@ public class Weapon : MonoBehaviour
         Vector3 dir = Quaternion.Euler(0f, Random.Range(-spreadDeg, spreadDeg), 0f) * aim;
         Vector3 start = muzzle.position;
         Vector3 castFrom = owner.transform.position; castFrom.y = start.y;
-        pool.Get().Launch(start, castFrom, dir, bulletSpeed, damage, pool);
+        bool crit = Random.value < critChance;
+        float dmg = damage * Random.Range(1f - damageJitter, 1f + damageJitter) * (crit ? critMultiplier : 1f);
+        pool.Get().Launch(start, castFrom, dir, bulletSpeed, dmg, crit, pool);
 
         if (muzzleFlash)
         {
@@ -91,6 +97,9 @@ public class Weapon : MonoBehaviour
         }
         if (Fx.I) Fx.I.Muzzle(start, dir);
         Recoil = 1f;
-        GameManager.I.Shake(0.035f);
+        var gm = GameManager.I;
+        if (gm.cameraRig) gm.cameraRig.Kick(-dir, cameraKick);
+        gm.Shake(0.02f);
+        GameAudio.Play(SfxId.Shoot, start);
     }
 }

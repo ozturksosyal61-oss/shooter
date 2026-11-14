@@ -16,6 +16,14 @@ public class HitFlash : MonoBehaviour
         for (int i = 0; i < renderers.Length; i++) originals[i] = renderers[i].sharedMaterial;
     }
 
+    /// <summary>Changes the material restored after a flash (e.g. zombie variants).</summary>
+    public void SetBaseMaterial(Material m)
+    {
+        if (m == null) return;
+        for (int i = 0; i < originals.Length; i++) originals[i] = m;
+        if (!on) for (int i = 0; i < renderers.Length; i++) renderers[i].sharedMaterial = m;
+    }
+
     public void Flash(float duration)
     {
         until = Time.unscaledTime + duration;

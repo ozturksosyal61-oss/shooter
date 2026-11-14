@@ -36,6 +36,10 @@ public class PlayerController : MonoBehaviour
     Vector3 vStart, vEnd;
     float vT, vDuration, vPeak;
 
+    void OnEnable() => FloatingOrigin.OnShift += OnShift;
+    void OnDisable() => FloatingOrigin.OnShift -= OnShift;
+    void OnShift(Vector3 d) { vStart += d; vEnd += d; }
+
     void Awake()
     {
         cc = GetComponent<CharacterController>();
@@ -87,6 +91,7 @@ public class PlayerController : MonoBehaviour
         vDuration = vaultBaseDuration + Vector3.Distance(vStart, vEnd) * vaultDurationPerMeter;
         vPeak = top + 0.15f - vStart.y;
         cc.enabled = false;
+        GameAudio.Play(SfxId.Vault, transform.position);
         return true;
     }
 
@@ -138,6 +143,7 @@ public class PlayerController : MonoBehaviour
         fromDir.y = 0f;
         knock += fromDir.normalized * 7f;
         if (flash) flash.Flash(0.1f);
+        GameAudio.Play(SfxId.PlayerHurt, transform.position);
         GameManager.I.OnPlayerHurt();
         if (Health <= 0f) Die();
     }
@@ -146,6 +152,7 @@ public class PlayerController : MonoBehaviour
     {
         IsDead = true;
         deathT = 0f;
+        GameAudio.Play(SfxId.PlayerDeath, transform.position);
         GameManager.I.TriggerGameOver();
     }
 

@@ -13,8 +13,8 @@ TagManager:
   - UI
   - 
   - 
-  - Wall
-  - Crate
+  - Blocker
+  - Vaultable
   - Zombie
   - Player
   - 

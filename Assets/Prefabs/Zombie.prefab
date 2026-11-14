@@ -148,12 +148,14 @@ MonoBehaviour:
   model: {fileID: 7956135265120107954}
   flash: {fileID: 2576268948248806360}
   body: {fileID: 4499582681142543760}
-  contactDamage: 12
+  bodyRenderer: {fileID: 2208773348410893375}
+  walkerMaterial: {fileID: 2100000, guid: 063186aad0d417345b4d38bb64c103bb, type: 2}
+  runnerMaterial: {fileID: 2100000, guid: eee2927296415204ca58327f96da02e2, type: 2}
   contactRange: 0.85
   contactCooldown: 0.9
   separationRadius: 0.75
+  lookAhead: 1.4
   riseDuration: 0.55
-  deathDuration: 0.5
 --- !u!1 &4750680993505897730
 GameObject:
   m_ObjectHideFlags: 0

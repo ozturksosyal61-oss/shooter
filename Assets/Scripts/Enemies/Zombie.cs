@@ -1,6 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Pooled zombie. Walks toward the player and steers around obstacles (never vaults —
+/// obstacle-crossing is reserved for future bosses). Dies with a ragdoll-like topple.
+/// </summary>
 public class Zombie : MonoBehaviour
 {
     public static readonly List<Zombie> Active = new List<Zombie>(128);
@@ -8,49 +12,66 @@ public class Zombie : MonoBehaviour
     public Transform model;
     public HitFlash flash;
     public CapsuleCollider body;
+    public Renderer bodyRenderer;
+    public Material walkerMaterial;
+    public Material runnerMaterial;
 
-    public float contactDamage = 12f;
     public float contactRange = 0.85f;
     public float contactCooldown = 0.9f;
     public float separationRadius = 0.75f;
+    public float lookAhead = 1.4f;
     public float riseDuration = 0.55f;
-    public float deathDuration = 0.5f;
 
-    enum State { Rising, Walking, Vaulting, Dying }
+    enum State { Rising, Walking, Dying }
 
     State state;
-    float hp, speed, stateT, swayPhase, attackCd, punch, lunge;
+    float hp, speed, damage, stateT, swayPhase, attackCd, punch, lunge;
+    bool runner;
     Vector3 knock;
-    Vector3 vStart, vEnd;
-    float vPeak, vDuration;
+    int avoidSide;          // sticky steering side (+1 / -1), 0 = none
+    float avoidTimer;
     int activeIndex = -1;
     Pool<Zombie> pool;
 
+    // death "ragdoll"
+    Vector3 deathVel;
+    Vector3 tumbleAxis;
+    float tumbleAngle, tumbleVel, deathSpin;
+    bool landed;
+
     static readonly Collider[] Buffer = new Collider[12];
+    static readonly float[] SteerAngles = { 30f, 55f, 80f, 110f };
 
     public bool Targetable => state != State.Dying && (state != State.Rising || stateT > 0.35f);
+    public Vector3 AimPoint => transform.position + Vector3.up * 1.1f;
 
-    public void Spawn(Vector3 pos, float health, float moveSpeed, Pool<Zombie> owner)
+    public void Spawn(Vector3 pos, float health, float moveSpeed, float contactDamage, bool isRunner, Pool<Zombie> owner)
     {
         pool = owner;
         hp = health;
         speed = moveSpeed;
+        damage = contactDamage;
+        runner = isRunner;
         knock = Vector3.zero;
         punch = lunge = 0f;
         attackCd = 0.5f;
+        avoidSide = 0;
         swayPhase = Random.value * 10f;
         state = State.Rising;
         stateT = 0f;
         var p = GameManager.I.player;
         Vector3 look = p ? p.transform.position - pos : Vector3.forward; look.y = 0f;
         transform.SetPositionAndRotation(pos, look.sqrMagnitude > 0.01f ? Quaternion.LookRotation(look) : Quaternion.identity);
+        transform.localScale = Vector3.one * (runner ? 0.92f : Random.Range(0.97f, 1.06f));
         model.localPosition = Vector3.down * 1.9f;
         model.localRotation = Quaternion.identity;
         model.localScale = Vector3.one;
+        flash.SetBaseMaterial(runner ? runnerMaterial : walkerMaterial);
         body.enabled = true;
         activeIndex = Active.Count;
         Active.Add(this);
         if (Fx.I) Fx.I.Dust(pos);
+        GameAudio.Play(SfxId.ZombieSpawn, pos);
     }
 
     public static Zombie FindNearest(Vector3 p, float range)
@@ -79,6 +100,13 @@ public class Zombie : MonoBehaviour
         activeIndex = -1;
     }
 
+    /// <summary>Removes zombies that fell far behind the player (they will be respawned near the view).</summary>
+    public void Despawn()
+    {
+        Unregister();
+        pool.Release(this);
+    }
+
     void Update()
     {
         float dt = Time.deltaTime;
@@ -86,11 +114,9 @@ public class Zombie : MonoBehaviour
         switch (state)
         {
             case State.Rising: UpdateRising(); break;
-            case State.Walking: UpdateWalking(dt); break;
-            case State.Vaulting: UpdateVault(dt); break;
-            case State.Dying: UpdateDying(dt); return;
+            case State.Walking: UpdateWalking(dt); Animate(dt); break;
+            case State.Dying: UpdateDying(dt); break;
         }
-        if (state != State.Rising) Animate(dt);
     }
 
     void UpdateRising()
@@ -110,7 +136,8 @@ public class Zombie : MonoBehaviour
         float dist = to.magnitude;
         Vector3 dir = dist > 0.01f ? to / dist : transform.forward;
 
-        Vector3 desired = dist > contactRange * 0.8f ? dir * speed : Vector3.zero;
+        Vector3 moveDir = dist > contactRange * 0.8f ? Steer(pos, dir, dt) : Vector3.zero;
+        Vector3 desired = moveDir * speed;
 
         // Separation from other zombies.
         int n = Physics.OverlapSphereNonAlloc(pos + Vector3.up * 0.8f, separationRadius, Buffer, GameLayers.ZombieMask, QueryTriggerInteraction.Ignore);
@@ -125,42 +152,68 @@ public class Zombie : MonoBehaviour
         }
         desired += sep * speed * 1.6f;
 
-        // Obstacles: vault crates, slide along walls.
-        if (desired.sqrMagnitude > 0.01f)
+        // Slide along anything we still touch.
+        if (desired.sqrMagnitude > 0.0001f &&
+            Physics.SphereCast(pos + Vector3.up * 0.5f, body.radius * 0.8f, desired.normalized, out var hit, body.radius + 0.15f,
+                GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore))
         {
-            Vector3 dd = desired.normalized;
-            if (Vault.TryCompute(pos, dd, body.radius, body.radius + 0.25f, out var land, out var top))
-            {
-                StartVault(land, top);
-                return;
-            }
-            if (Physics.SphereCast(pos + Vector3.up * 0.5f, body.radius * 0.8f, dd, out var hit, body.radius + 0.2f,
-                    GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore))
-            {
-                Vector3 nrm = hit.normal; nrm.y = 0f;
-                desired = Vector3.ProjectOnPlane(desired, nrm.normalized);
-            }
+            Vector3 nrm = hit.normal; nrm.y = 0f;
+            if (nrm.sqrMagnitude > 0.001f) desired = Vector3.ProjectOnPlane(desired, nrm.normalized);
         }
 
         pos += (desired + knock) * dt;
         knock *= Mathf.Exp(-9f * dt);
-        pos = Arena.Clamp(pos, body.radius);
         pos = Depenetrate(pos);
         pos.y = 0f;
         transform.position = pos;
 
-        Vector3 face = dir;
-        if (face.sqrMagnitude > 0.01f)
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(face), 300f * dt);
+        Vector3 face = moveDir.sqrMagnitude > 0.01f && dist > 2f ? moveDir : dir;
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(face), 300f * dt);
 
         attackCd -= dt;
         if (dist < contactRange && attackCd <= 0f && !player.IsDead)
         {
             attackCd = contactCooldown;
             lunge = 1f;
-            player.TakeDamage(contactDamage, dir);
+            GameAudio.Play(SfxId.ZombieAttack, pos);
+            player.TakeDamage(damage, dir);
         }
     }
+
+    /// <summary>Whisker steering: keep the direct line if clear, otherwise turn to a sticky side.</summary>
+    Vector3 Steer(Vector3 pos, Vector3 dir, float dt)
+    {
+        Vector3 origin = pos + Vector3.up * 0.6f;
+        float r = body.radius * 0.9f;
+        avoidTimer -= dt;
+        if (!Blocked(origin, dir, r))
+        {
+            if (avoidTimer <= 0f) avoidSide = 0;
+            return dir;
+        }
+        if (avoidSide == 0)
+        {
+            // Pick the side whose first free angle is smaller; fall back to a random side.
+            avoidSide = Random.value < 0.5f ? 1 : -1;
+            foreach (float a in SteerAngles)
+            {
+                bool right = !Blocked(origin, Quaternion.Euler(0f, a, 0f) * dir, r);
+                bool left = !Blocked(origin, Quaternion.Euler(0f, -a, 0f) * dir, r);
+                if (right != left) { avoidSide = right ? 1 : -1; break; }
+                if (right) break;
+            }
+        }
+        avoidTimer = 0.6f;
+        foreach (float a in SteerAngles)
+        {
+            Vector3 d = Quaternion.Euler(0f, a * avoidSide, 0f) * dir;
+            if (!Blocked(origin, d, r)) return d;
+        }
+        return Quaternion.Euler(0f, 120f * avoidSide, 0f) * dir;
+    }
+
+    bool Blocked(Vector3 origin, Vector3 d, float r) =>
+        Physics.SphereCast(origin, r, d, out _, lookAhead, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore);
 
     Vector3 Depenetrate(Vector3 pos)
     {
@@ -177,86 +230,105 @@ public class Zombie : MonoBehaviour
         return pos;
     }
 
-    void StartVault(Vector3 land, float top)
-    {
-        state = State.Vaulting;
-        stateT = 0f;
-        vStart = transform.position;
-        vEnd = land;
-        vDuration = 0.35f + Vector3.Distance(vStart, vEnd) * 0.12f;
-        vPeak = top + 0.1f;
-        Vector3 f = vEnd - vStart; f.y = 0f;
-        if (f.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(f);
-    }
-
-    void UpdateVault(float dt)
-    {
-        float t = Mathf.Clamp01(stateT / vDuration);
-        Vector3 p = Vector3.Lerp(vStart, vEnd, t);
-        p.y = Mathf.Sin(t * Mathf.PI) * vPeak;
-        transform.position = p;
-        if (t >= 1f) { state = State.Walking; stateT = 0f; punch = 0.5f; }
-    }
-
     void Animate(float dt)
     {
-        swayPhase += dt * (5f + speed);
+        swayPhase += dt * (5f + speed * (runner ? 1.6f : 1f));
         punch = Mathf.MoveTowards(punch, 0f, dt * 6f);
         lunge = Mathf.MoveTowards(lunge, 0f, dt * 4f);
         float sway = Mathf.Sin(swayPhase);
-        float bob = Mathf.Abs(Mathf.Cos(swayPhase)) * 0.06f;
-        float lean = 12f + Mathf.Sin(swayPhase * 0.5f) * 4f + lunge * 20f;
-        if (state == State.Vaulting) lean += Mathf.Sin(Mathf.Clamp01(stateT / vDuration) * Mathf.PI) * 30f;
+        float bob = Mathf.Abs(Mathf.Cos(swayPhase)) * (runner ? 0.1f : 0.06f);
+        float lean = (runner ? 22f : 12f) + Mathf.Sin(swayPhase * 0.5f) * 4f + lunge * 20f;
         model.localPosition = new Vector3(0f, bob, lunge * 0.25f);
-        model.localRotation = Quaternion.Euler(lean, sway * 6f, sway * 11f);
+        model.localRotation = Quaternion.Euler(lean, sway * 6f, sway * (runner ? 7f : 11f));
         float s = 1f + punch * 0.18f;
         model.localScale = new Vector3(s, 1f / s, s);
     }
 
-    public void TakeHit(float damage, Vector3 dir, Vector3 point)
+    public void TakeHit(float amount, bool crit, Vector3 dir, Vector3 point)
     {
         if (state == State.Dying) return;
         dir.y = 0f;
-        hp -= damage;
+        hp -= amount;
         flash.Flash(0.07f);
-        knock = Vector3.ClampMagnitude(knock + dir * 3.2f, 7f);
+        knock = Vector3.ClampMagnitude(knock + dir * (crit ? 4.5f : 3f), 7f);
         punch = 1f;
         var gm = GameManager.I;
         gm.RegisterHit();
         if (Fx.I) Fx.I.Hit(point, dir);
-        if (hp <= 0f) Die(dir);
-        else gm.Shake(0.04f);
+        if (DamageNumbers.I) DamageNumbers.I.Show(point + Vector3.up * 0.4f, Mathf.RoundToInt(amount), crit);
+        if (hp <= 0f) Die(dir, point);
+        else
+        {
+            gm.HitStop(crit ? 0.025f : 0.012f);
+            gm.Shake(crit ? 0.08f : 0.04f);
+            GameAudio.Play(crit ? SfxId.Crit : SfxId.Hit, point);
+        }
     }
 
-    void Die(Vector3 dir)
+    void Die(Vector3 dir, Vector3 point)
     {
         state = State.Dying;
         stateT = 0f;
         body.enabled = false;
         Unregister();
-        knock = dir * 9f;
-        if (dir.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(-dir);
+        if (dir.sqrMagnitude < 0.01f) dir = -transform.forward;
+        dir.Normalize();
+        // Fall away from the shot: face the shooter, tumble backwards.
+        transform.rotation = Quaternion.LookRotation(-dir);
+        deathVel = dir * Random.Range(6f, 9f) + Vector3.up * Random.Range(3f, 4.5f);
+        tumbleAxis = Vector3.right;
+        tumbleAngle = 0f;
+        tumbleVel = -Random.Range(380f, 520f);
+        deathSpin = Random.Range(-90f, 90f);
+        landed = false;
+        model.localPosition = Vector3.zero;
+        model.localScale = Vector3.one;
+
         var gm = GameManager.I;
         gm.RegisterKill();
-        gm.HitStop(0.05f);
-        gm.Shake(0.22f);
+        gm.HitStop(0.06f);
+        gm.Shake(0.3f);
         Haptics.Play(Haptics.Kind.Medium);
+        GameAudio.Play(SfxId.Kill, point);
         if (Fx.I) Fx.I.Death(transform.position + Vector3.up * 0.9f, dir);
     }
 
     void UpdateDying(float dt)
     {
-        Vector3 pos = transform.position + knock * dt;
-        knock *= Mathf.Exp(-7f * dt);
-        transform.position = Arena.Clamp(pos, 0.3f);
+        const float lieAngle = -90f;
+        Vector3 pos = transform.position + deathVel * dt;
+        deathVel.y -= 22f * dt;
+        if (pos.y <= 0f)
+        {
+            pos.y = 0f;
+            if (deathVel.y < -2f && !landed)
+            {
+                deathVel.y = -deathVel.y * 0.3f; // one small bounce
+                if (Fx.I) Fx.I.Dust(pos);
+            }
+            else { deathVel.y = 0f; landed = true; }
+            deathVel.x *= Mathf.Exp(-8f * dt);
+            deathVel.z *= Mathf.Exp(-8f * dt);
+        }
+        pos = Depenetrate(pos);
+        transform.position = pos;
 
-        float t = Mathf.Clamp01(stateT / deathDuration);
-        float fall = 1f - (1f - t) * (1f - t);
-        float sink = Mathf.Clamp01((stateT - deathDuration) / 0.5f);
-        model.localRotation = Quaternion.Euler(-88f * fall, 0f, 0f);
-        model.localPosition = new Vector3(0f, 0.15f * fall - sink * 0.6f, 0f);
-        model.localScale = Vector3.one;
-        if (stateT >= deathDuration + 0.5f) pool.Release(this);
+        // Tumble backwards past horizontal, then settle flat with a damped spring.
+        if (!landed && tumbleAngle > lieAngle - 15f) tumbleAngle += tumbleVel * dt;
+        else
+        {
+            float k = 120f, c = 14f;
+            tumbleVel += (-(tumbleAngle - lieAngle) * k - tumbleVel * c) * dt;
+            tumbleAngle += tumbleVel * dt;
+        }
+        deathSpin *= Mathf.Exp(-4f * dt);
+        transform.rotation *= Quaternion.Euler(0f, deathSpin * dt, 0f);
+        model.localRotation = Quaternion.AngleAxis(tumbleAngle, tumbleAxis);
+        model.localPosition = new Vector3(0f, 0.2f * Mathf.Clamp01(-tumbleAngle / 90f), 0f);
+
+        float sinkStart = 1.4f;
+        if (stateT > sinkStart) model.localPosition += Vector3.down * (stateT - sinkStart) * 0.8f;
+        if (stateT >= sinkStart + 0.8f) pool.Release(this);
     }
 
     void OnDisable() => Unregister();

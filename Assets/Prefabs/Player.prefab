@@ -307,10 +307,14 @@ MonoBehaviour:
   bulletPrefab: {fileID: 8749808404031341107, guid: 1ff6bd44e78dbaa4faa59261d7d648c2, type: 3}
   fireRate: 10
   spreadDeg: 3
-  bulletSpeed: 42
-  damage: 1
-  autoAimRange: 16
+  bulletSpeed: 55
+  damage: 25
+  damageJitter: 0.15
+  critChance: 0.12
+  critMultiplier: 2
+  autoAimRange: 18
   maxAimAngleToFire: 40
+  cameraKick: 0.12
 --- !u!114 &5961805834129898778
 MonoBehaviour:
   m_ObjectHideFlags: 0
