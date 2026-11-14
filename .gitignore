@@ -44,3 +44,6 @@ crashlytics-build.properties
 .DS_Store
 Thumbs.db
 *.slnx
+
+# Full Mixamo download set (used clips are copied into Assets/Art/Characters/*/Anim)
+/_mixamo/anim/

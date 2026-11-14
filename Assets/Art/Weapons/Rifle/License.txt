@@ -1,0 +1,2 @@
+Assault Rifle by Quaternius (https://quaternius.com), via poly.pizza/m/Bgvuu4CUMV
+License: CC0 1.0 Universal (Public Domain). Normalized with Tools/blender_normalize_weapon.py.

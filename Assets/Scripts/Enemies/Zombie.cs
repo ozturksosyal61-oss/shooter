@@ -2,14 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Pooled zombie. Walks toward the player and steers around obstacles (never vaults —
-/// obstacle-crossing is reserved for future bosses). Dies with a ragdoll-like topple.
+/// Pooled, animated zombie. Rises from the ground screaming, walks/runs toward the player and
+/// steers around obstacles (never vaults — obstacle-crossing is reserved for future bosses),
+/// attacks on contact, and dies by being thrown back first, then playing its dying animation.
 /// </summary>
 public class Zombie : MonoBehaviour
 {
     public static readonly List<Zombie> Active = new List<Zombie>(128);
 
     public Transform model;
+    public Animator animator;
     public HitFlash flash;
     public CapsuleCollider body;
     public Renderer bodyRenderer;
@@ -21,11 +23,29 @@ public class Zombie : MonoBehaviour
     public float separationRadius = 0.75f;
     public float lookAhead = 1.4f;
     public float riseDuration = 0.55f;
+    [Tooltip("How long the zombie screams after rising before it starts walking.")]
+    public float screamDuration = 1.1f;
+    [Tooltip("Raw humanoid root speed of the walk / run clips, measured by the builder (0 = in-place clip).")]
+    public float walkClipSpeed;
+    public float runClipSpeed;
+    public float walkSpeedFallback = 1.2f;
+    public float runSpeedFallback = 3.5f;
+    [Tooltip("Length of the dying clip (s), measured by the builder.")]
+    public float dyingLength = 2.2f;
+
+    static readonly int Gait = Animator.StringToHash("Gait");
+    static readonly int AnimSpeed = Animator.StringToHash("AnimSpeed");
+    static readonly int LocoState = Animator.StringToHash("Locomotion");
+    static readonly int ScreamState = Animator.StringToHash("Scream");
+    static readonly int AttackState = Animator.StringToHash("Attack");
+    static readonly int PunchState = Animator.StringToHash("Punch");
+    static readonly int HitState = Animator.StringToHash("Hit");
+    static readonly int DyingState = Animator.StringToHash("Dying");
 
     enum State { Rising, Walking, Dying }
 
     State state;
-    float hp, speed, damage, stateT, swayPhase, attackCd, punch, lunge;
+    float hp, speed, damage, stateT, attackCd, punch;
     bool runner;
     Vector3 knock;
     int avoidSide;          // sticky steering side (+1 / -1), 0 = none
@@ -33,16 +53,25 @@ public class Zombie : MonoBehaviour
     int activeIndex = -1;
     Pool<Zombie> pool;
 
-    // death "ragdoll"
+    // death: thrown back first, dying animation once it lands
     Vector3 deathVel;
-    Vector3 tumbleAxis;
-    float tumbleAngle, tumbleVel, deathSpin;
+    float deathSpin, landedT;
     bool landed;
+
+    float walkSpeed, runSpeed;
+
+    void Awake()
+    {
+        float k = model.lossyScale.y; // clip root speeds are measured on the unscaled avatar
+        walkSpeed = walkClipSpeed > 0f ? walkClipSpeed * k : walkSpeedFallback;
+        runSpeed = runClipSpeed > 0f ? runClipSpeed * k : runSpeedFallback;
+    }
 
     static readonly Collider[] Buffer = new Collider[12];
     static readonly float[] SteerAngles = { 30f, 55f, 80f, 110f };
 
     public bool Targetable => state != State.Dying && (state != State.Rising || stateT > 0.35f);
+    public bool IsRunner => runner;
     public Vector3 AimPoint => transform.position + Vector3.up * 1.1f;
 
     public void Spawn(Vector3 pos, float health, float moveSpeed, float contactDamage, bool isRunner, Pool<Zombie> owner)
@@ -53,10 +82,9 @@ public class Zombie : MonoBehaviour
         damage = contactDamage;
         runner = isRunner;
         knock = Vector3.zero;
-        punch = lunge = 0f;
+        punch = 0f;
         attackCd = 0.5f;
         avoidSide = 0;
-        swayPhase = Random.value * 10f;
         state = State.Rising;
         stateT = 0f;
         var p = GameManager.I.player;
@@ -70,8 +98,13 @@ public class Zombie : MonoBehaviour
         body.enabled = true;
         activeIndex = Active.Count;
         Active.Add(this);
+
+        animator.SetFloat(Gait, 0f);
+        animator.SetFloat(AnimSpeed, 1f);
+        animator.Play(ScreamState, 0, 0f);
         if (Fx.I) Fx.I.Dust(pos);
         GameAudio.Play(SfxId.ZombieSpawn, pos);
+        GameAudio.Play(SfxId.ZombieScream, pos);
     }
 
     public static Zombie FindNearest(Vector3 p, float range)
@@ -121,11 +154,16 @@ public class Zombie : MonoBehaviour
 
     void UpdateRising()
     {
+        // Claw out of the ground while screaming, then start walking.
         float t = Mathf.Clamp01(stateT / riseDuration);
         float e = 1f - (1f - t) * (1f - t) * (1f - t);
         model.localPosition = Vector3.down * 1.9f * (1f - e);
-        model.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * 25f) * 6f * (1f - t));
-        if (t >= 1f) { state = State.Walking; stateT = 0f; }
+        if (stateT >= riseDuration + screamDuration)
+        {
+            state = State.Walking;
+            stateT = 0f;
+            animator.CrossFadeInFixedTime(LocoState, 0.25f, 0, Random.value);
+        }
     }
 
     void UpdateWalking(float dt)
@@ -174,7 +212,8 @@ public class Zombie : MonoBehaviour
         if (dist < contactRange && attackCd <= 0f && !player.IsDead)
         {
             attackCd = contactCooldown;
-            lunge = 1f;
+            // The attack animation starts at the moment of contact; damage lands now.
+            animator.CrossFadeInFixedTime(Random.value < 0.5f ? AttackState : PunchState, 0.08f, 0);
             GameAudio.Play(SfxId.ZombieAttack, pos);
             player.TakeDamage(damage, dir);
         }
@@ -193,7 +232,6 @@ public class Zombie : MonoBehaviour
         }
         if (avoidSide == 0)
         {
-            // Pick the side whose first free angle is smaller; fall back to a random side.
             avoidSide = Random.value < 0.5f ? 1 : -1;
             foreach (float a in SteerAngles)
             {
@@ -232,16 +270,18 @@ public class Zombie : MonoBehaviour
 
     void Animate(float dt)
     {
-        swayPhase += dt * (5f + speed * (runner ? 1.6f : 1f));
         punch = Mathf.MoveTowards(punch, 0f, dt * 6f);
-        lunge = Mathf.MoveTowards(lunge, 0f, dt * 4f);
-        float sway = Mathf.Sin(swayPhase);
-        float bob = Mathf.Abs(Mathf.Cos(swayPhase)) * (runner ? 0.1f : 0.06f);
-        float lean = (runner ? 22f : 12f) + Mathf.Sin(swayPhase * 0.5f) * 4f + lunge * 20f;
-        model.localPosition = new Vector3(0f, bob, lunge * 0.25f);
-        model.localRotation = Quaternion.Euler(lean, sway * 6f, sway * (runner ? 7f : 11f));
-        float s = 1f + punch * 0.18f;
+        float s = 1f + punch * 0.12f;
         model.localScale = new Vector3(s, 1f / s, s);
+        model.localPosition = Vector3.zero;
+
+        // Gait: 0 idle (next to the player), 1 walk, 2 run; playback speed follows movement speed.
+        var p = GameManager.I.player;
+        Vector3 d = p.transform.position - transform.position; d.y = 0f;
+        bool moving = d.magnitude > contactRange * 0.8f;
+        animator.SetFloat(Gait, !moving ? 0f : runner ? 2f : 1f, 0.15f, dt);
+        float clip = runner ? runSpeed : walkSpeed;
+        animator.SetFloat(AnimSpeed, moving ? Mathf.Clamp(speed / Mathf.Max(0.1f, clip), 0.6f, 2f) : 1f);
     }
 
     public void TakeHit(float amount, bool crit, Vector3 dir, Vector3 point)
@@ -273,16 +313,17 @@ public class Zombie : MonoBehaviour
         Unregister();
         if (dir.sqrMagnitude < 0.01f) dir = -transform.forward;
         dir.Normalize();
-        // Fall away from the shot: face the shooter, tumble backwards.
+        // Face the shooter so the throw and the dying animation both fall away from the shot.
         transform.rotation = Quaternion.LookRotation(-dir);
         deathVel = dir * Random.Range(6f, 9f) + Vector3.up * Random.Range(3f, 4.5f);
-        tumbleAxis = Vector3.right;
-        tumbleAngle = 0f;
-        tumbleVel = -Random.Range(380f, 520f);
         deathSpin = Random.Range(-90f, 90f);
         landed = false;
+        landedT = 0f;
         model.localPosition = Vector3.zero;
+        model.localRotation = Quaternion.identity;
         model.localScale = Vector3.one;
+        animator.SetFloat(AnimSpeed, 1f);
+        animator.CrossFadeInFixedTime(HitState, 0.05f, 0);
 
         var gm = GameManager.I;
         gm.RegisterKill();
@@ -295,7 +336,7 @@ public class Zombie : MonoBehaviour
 
     void UpdateDying(float dt)
     {
-        const float lieAngle = -90f;
+        // 1) Thrown back by the killing shot (hit-reaction pose, leaning back in the air).
         Vector3 pos = transform.position + deathVel * dt;
         deathVel.y -= 22f * dt;
         if (pos.y <= 0f)
@@ -303,32 +344,38 @@ public class Zombie : MonoBehaviour
             pos.y = 0f;
             if (deathVel.y < -2f && !landed)
             {
-                deathVel.y = -deathVel.y * 0.3f; // one small bounce
+                deathVel.y = -deathVel.y * 0.25f; // one small bounce
                 if (Fx.I) Fx.I.Dust(pos);
             }
-            else { deathVel.y = 0f; landed = true; }
+            else if (!landed) Land();
             deathVel.x *= Mathf.Exp(-8f * dt);
             deathVel.z *= Mathf.Exp(-8f * dt);
         }
         pos = Depenetrate(pos);
         transform.position = pos;
-
-        // Tumble backwards past horizontal, then settle flat with a damped spring.
-        if (!landed && tumbleAngle > lieAngle - 15f) tumbleAngle += tumbleVel * dt;
-        else
-        {
-            float k = 120f, c = 14f;
-            tumbleVel += (-(tumbleAngle - lieAngle) * k - tumbleVel * c) * dt;
-            tumbleAngle += tumbleVel * dt;
-        }
         deathSpin *= Mathf.Exp(-4f * dt);
         transform.rotation *= Quaternion.Euler(0f, deathSpin * dt, 0f);
-        model.localRotation = Quaternion.AngleAxis(tumbleAngle, tumbleAxis);
-        model.localPosition = new Vector3(0f, 0.2f * Mathf.Clamp01(-tumbleAngle / 90f), 0f);
 
-        float sinkStart = 1.4f;
-        if (stateT > sinkStart) model.localPosition += Vector3.down * (stateT - sinkStart) * 0.8f;
-        if (stateT >= sinkStart + 0.8f) pool.Release(this);
+        if (!landed)
+        {
+            model.localRotation = Quaternion.Euler(-25f * Mathf.Clamp01(stateT / 0.25f), 0f, 0f);
+            if (stateT > 1.5f) Land();
+            return;
+        }
+        model.localRotation = Quaternion.Slerp(model.localRotation, Quaternion.identity, 1f - Mathf.Exp(-10f * dt));
+
+        // 3) Stay down for a moment, then sink into the ground and return to the pool.
+        landedT += dt;
+        if (landedT > dyingLength) model.localPosition = Vector3.down * (landedT - dyingLength) * 0.8f;
+        if (landedT > dyingLength + 0.9f) pool.Release(this);
+    }
+
+    void Land()
+    {
+        // 2) Landed: the dying animation takes over from the thrown pose.
+        deathVel.y = 0f;
+        landed = true;
+        animator.CrossFadeInFixedTime(DyingState, 0.15f, 0);
     }
 
     void OnDisable() => Unregister();

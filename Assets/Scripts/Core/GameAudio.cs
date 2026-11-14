@@ -3,7 +3,8 @@ using UnityEngine;
 
 public enum SfxId
 {
-    Shoot, Hit, Crit, Kill, PlayerHurt, PlayerDeath, Vault, ZombieSpawn, ZombieAttack, GameOver
+    Shoot, Hit, Crit, Kill, PlayerHurt, PlayerDeath, Vault, ZombieSpawn, ZombieAttack, GameOver,
+    ReloadStart, ReloadEnd, ZombieScream
 }
 
 /// <summary>

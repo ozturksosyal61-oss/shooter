@@ -4,6 +4,7 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     public Transform model;
+    public SoldierRig rig;
     public Weapon weapon;
     public HitFlash flash;
 
@@ -24,12 +25,8 @@ public class PlayerController : MonoBehaviour
     public bool IsVaulting => vaulting;
 
     CharacterController cc;
-    Vector3 knock;
+    Vector3 knock, lastHitDir = Vector3.forward;
     float invulnUntil;
-
-    // visuals
-    float bobPhase, moveBlend, squash = 1f, deathT;
-    Vector3 modelBasePos;
 
     // vault
     bool vaulting;
@@ -44,13 +41,12 @@ public class PlayerController : MonoBehaviour
     {
         cc = GetComponent<CharacterController>();
         Health = maxHealth;
-        modelBasePos = model.localPosition;
     }
 
     void Update()
     {
         float dt = Time.deltaTime;
-        if (IsDead) { DeathAnim(dt); return; }
+        if (IsDead) return;
 
         var input = TouchControls.I;
         Vector2 mv = input ? input.Move : Vector2.zero;
@@ -78,7 +74,7 @@ public class PlayerController : MonoBehaviour
         if (face.sqrMagnitude > 0.001f)
             transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(face), turnSpeed * dt);
 
-        AnimateModel(dt, vaulting ? 0f : mag);
+        if (rig) rig.Tick(dt, vaulting ? Vector3.zero : move, vaulting ? 0f : mag * moveSpeed, weapon.IsFiring || weapon.IsReloading, vaulting);
     }
 
     bool TryStartVault(Vector3 dir)
@@ -106,33 +102,8 @@ public class PlayerController : MonoBehaviour
         {
             vaulting = false;
             cc.enabled = true;
-            squash = 0.72f;
             GameManager.I.Shake(0.12f);
         }
-    }
-
-    void AnimateModel(float dt, float moveAmount)
-    {
-        moveBlend = Mathf.MoveTowards(moveBlend, moveAmount, dt * 6f);
-        bobPhase += dt * (9f + 6f * moveBlend);
-        squash = Mathf.MoveTowards(squash, 1f, dt * 3.5f);
-
-        float bob = Mathf.Abs(Mathf.Sin(bobPhase)) * 0.08f * moveBlend;
-        float roll = Mathf.Sin(bobPhase) * 5f * moveBlend;
-        float lean = 8f * moveBlend;
-        float recoil = weapon ? weapon.Recoil : 0f;
-
-        if (vaulting)
-        {
-            float t = Mathf.Clamp01(vT);
-            lean = Mathf.Sin(t * Mathf.PI) * 25f;
-        }
-
-        model.localPosition = modelBasePos + new Vector3(0f, bob, -0.08f * recoil);
-        model.localRotation = Quaternion.Euler(lean - 6f * recoil, 0f, roll);
-        float s = squash;
-        float inv = 1f / Mathf.Sqrt(s);
-        model.localScale = new Vector3(inv, s, inv);
     }
 
     public void TakeDamage(float amount, Vector3 fromDir)
@@ -141,6 +112,7 @@ public class PlayerController : MonoBehaviour
         invulnUntil = Time.time + invulnerableTime;
         Health = Mathf.Max(0f, Health - amount);
         fromDir.y = 0f;
+        lastHitDir = fromDir;
         knock += fromDir.normalized * 7f;
         if (flash) flash.Flash(0.1f);
         GameAudio.Play(SfxId.PlayerHurt, transform.position);
@@ -151,17 +123,8 @@ public class PlayerController : MonoBehaviour
     void Die()
     {
         IsDead = true;
-        deathT = 0f;
+        if (rig) rig.Die(lastHitDir);
         GameAudio.Play(SfxId.PlayerDeath, transform.position);
         GameManager.I.TriggerGameOver();
-    }
-
-    void DeathAnim(float dt)
-    {
-        deathT = Mathf.Min(1f, deathT + dt / 0.45f);
-        float e = 1f - (1f - deathT) * (1f - deathT);
-        model.localRotation = Quaternion.Euler(-85f * e, 0f, 0f);
-        model.localPosition = modelBasePos + Vector3.up * 0.15f * e;
-        model.localScale = Vector3.one;
     }
 }

@@ -20,16 +20,19 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - **Skor + kombo** sistemi (ardışık öldürmeler çarpan verir).
 - **Öncelik: vuruş hissi** — hit flash, knockback, kamera sarsıntısı, hit-stop, partikül, ses.
 - **Performans:** Hedef 60 FPS mobil; mermi/zombi/efektler için **object pooling**, Update'te allocation yok.
-- **Animasyon:** Şu an `.glb` modeller statik görsel (iskelet yok), hareket kodla. Mixamo için T-pose FBX'ler `_mixamo/` altında hazır; riglenip **Humanoid** avatar ile animasyonlar gelecek.
+- **Animasyon:** Mixamo Humanoid (Soldier / Zombie avatar), root motion kapalı. Asker: alt gövde 8 yönlü locomotion (hareket yönü nişan yönüne göre lokal → geri geri koşarken ateş), üst gövde avatar mask ile nişan/reload, vault = jump, 2 ölüm animasyonu. Zombi: idle/walk/run, temas anında saldırı, doğarken çığlık, ölümde önce savrulma sonra dying.
+- **Silah:** Tüfek göğüs önünde nişan yönünde tutulur, iki el IK ile kabza / el kundağına; mermi ve muzzle flash namlu ucundan. 30'luk şarjör, boşalınca otomatik reload (1.5 sn, animasyon hızı senkron), reload sırasında ateş yok; tetik bırakılıp 1 sn geçince ve şarjör yarıdan azsa taktik reload.
 
 ## Yapı
 - `Assets/Scripts` · `Assets/Prefabs` (+`Env/`) · `Assets/Scenes` · `Assets/Art` · `Assets/Audio` · `Assets/Materials` · `Assets/Settings` (URP asset + renderer)
-- Karakterler: `Assets/Art/Characters/{Soldier,Zombie}/*.glb` = Blender ile decimate edilmiş mesh (Soldier 9k, Zombie 6k tri), materyalsiz. Dokular `Textures/*_BaseColor.png` (max 1024, Android/iOS ASTC 6x6). Orijinal yüksek poligonlu dosyalar `Source~/` altında (EXT_texture_webp, Unity görmez). Modeller +Z'ye bakar.
+- Karakterler: `Assets/Art/Characters/{Soldier,Zombie}/*_Rigged.fbx` = Mixamo'da riglenmiş düşük poligon mesh (Soldier 9k, Zombie 6k tri), Humanoid avatar (Zombie: Optimize Game Objects). Animasyonlar `Anim/*.fbx` (yalnızca kullanılanlar; tam set `_mixamo/anim/` altında, git'e dahil değil). Dokular `Textures/*_BaseColor.png` (max 1024, ASTC 6x6). Eski statik `*.glb` ve `Source~/` orijinalleri referans için duruyor.
+- Animator: `Assets/Animation/Soldier.controller`, `Zombie.controller`, `UpperBody.mask` — builder üretir. Import: loop yalnız döngü kliplerinde; root rotation + height bake, XZ bake yalnız tek seferlik kliplerde (ölüm, saldırı, reload). Zombi "scream" için Mixamo **Zombie Scream** yok → `zombie agonizing` vekil; `_mixamo/anim/zombie/zombie scream.fbx` → `Assets/Art/Characters/Zombie/Anim/` kopyalanıp builder çalıştırılırsa otomatik kullanılır.
+- Silah: `Assets/Art/Weapons/Rifle/Rifle.glb` — Quaternius Assault Rifle (CC0, poly.pizza), `Tools/blender_normalize_weapon.py` ile namlu +Z / yukarı +Y / 0.85 m. Prefab içinde ×1.1, RightGrip / LeftGrip / Muzzle noktaları builder'da (`GameSceneBuilder.Characters.cs`).
 - Ortam: `Assets/Art/Environment/{Cars,Survival,Roads,Commercial,Industrial}` — Kenney (CC0, lisanslar klasörlerde) GLB'leri + kit başına `Textures/colormap.png`. Builder bunları düzleştirip gerçek boyuta ölçekler → `Assets/Prefabs/Env/*.prefab` (pivot alt-orta, BoxCollider, `EnvProp.radius`, yüksekler `Fadeable`). Toplam ~3 MB.
 - Mixamo: `_mixamo/{Soldier,Zombie}.fbx` (T-pose, 1.8 m, origin ayakta, doku gömülü). Yeniden üret: `blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <glb> <basecolor.png> <out.fbx> 1.8`.
 - Script'ler `Game` asmdef'inde:
   - Core: GameManager, Pool, GameDefs (layer'lar, `Vault`, `Difficulty`), Haptics, GameAudio (ses hook'ları: `GameAudio.Play(SfxId, pos)` + `OnSfx` event; klipler inspector'da SfxId sırasıyla)
-  - Input: TouchControls · Player: PlayerController, Weapon, Bullet · Enemies: Zombie, ZombieSpawner
+  - Input: TouchControls · Player: PlayerController, SoldierRig (Animator + IK + silah yerleşimi), Weapon (şarjör/reload), Bullet · Enemies: Zombie, ZombieSpawner
   - World: ChunkManager (sonsuz şehir), FloatingOrigin, EnvProp, Fadeable · FX: CameraRig, Fx, HitFlash · UI: HUD, DamageNumbers
 - **Sonsuz dünya:** 20x20 m chunk = bir şehir bloğu (kenarlarda yarım 7 m yol + sarı orta şerit/yaya geçidi, kaldırım, 9x9 iç alan). Oyuncu etrafında 5x5 aktif, chunk ve objeler pool'lu, seed'li (`ChunkManager.seed`, `randomSeed`). Mahalle = seed'li Perlin (`DistrictAt`): Cadde / Çarşı / Sanayi / Liman, her birinin zemin dokusu ve obje seti `DistrictSettings`'te. Yollarda araba/barikat/yanan varil, iç alanda bina veya prop.
 - **Floating origin:** oyuncu 120 m'yi geçince tüm root objeler chunk katı kadar kaydırılır (`FloatingOrigin.OnShift` event'i; dünya pozisyonu tutan sistemler buna abone). Global konum: `FloatingOrigin.ToGlobal`.
@@ -37,7 +40,7 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - **Sahne kod ile üretilir:** `Assets/Editor/GameSceneBuilder.cs` (menü: Tools/Zombie Shooter/Rebuild Game Scene veya `-executeMethod GameSceneBuilder.Build`). Üretilen dokular, materyaller, tüm prefab'lar ve Game.unity'yi yeniden yazar — elle yapılan değişiklikler kaybolur, kalıcı değişiklikleri builder'a işle.
 - Layer'lar: 8 Blocker (bina, konteyner, yanan varil, tank — vault edilmez, mermi durdurur), 9 Vaultable (kasa, araba, barikat, çöp konteyneri), 10 Zombie, 11 Player.
 - Shader'lar `Assets/Shaders`: Game/FxAdditive, Game/FxAlpha, Game/Flash (URP unlit). Karakter/çevre: URP Simple Lit. Kameranın önünü kapatan binalar `Fadeable` ile yarı saydam olur.
-- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart, VaultOverObstacle, FloatingOriginAndChunks; `CaptureScreens` [Explicit] gameplay PNG'si alır (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
+- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart, VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload; `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
 
 ## Kurallar
 - Kullanıcıya onay sorma; adımları kendin yap.
@@ -63,7 +66,14 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
   - [x] Belirgin zorluk eğrisi (`Difficulty`), koşucu zombi varyantı
   - [x] Vuruş hissi: tracer, isabet kıvılcımı + yeşil kan sıçraması ve yer lekesi, ragdoll benzeri savrulup devrilme, hitstop/shake (vuruşta hafif, kill'de güçlü), ateşte kamera geri tepmesi, hasar sayısı pop-up (kritik sarı), `GameAudio` ses hook'ları
   - [x] Mixamo hazırlık: `_mixamo/Soldier.fbx`, `_mixamo/Zombie.fbx`
-- [ ] Mixamo'da rigle + animasyonları indir (koşu, ateş, zombi yürüyüş/ölüm) → Humanoid import
+- [x] **Faz 3 — Animasyon + silah** (2026-11-15)
+  - [x] Mixamo FBX'ler Humanoid import (Soldier/Zombie avatar), loop ayarları, root motion kapalı
+  - [x] Asker Animator: 8 yönlü walk/run blend tree (aim-lokal), üst gövde nişan/reload katmanı, vault=jump, ölüm (önden/arkadan); kod bob/sallanma kaldırıldı
+  - [x] Zombi Animator: idle/walk/run (koşucu), temasla saldırı (attack/punch), savrulma → dying, doğuşta scream (vekil: agonizing)
+  - [x] CC0 tüfek (Quaternius), iki el IK, namlu ucundan mermi/muzzle flash
+  - [x] 30'luk şarjör, otomatik + taktik reload, HUD mermi sayacı + reload barı
+- [ ] Mixamo "Zombie Scream" indir (şu an agonizing vekil); zombi yürüme klibi yavaş (≈0.5 m/s) → daha hızlı bir walk klibi
+- [ ] Ateş animasyonu/recoil için additive katman (şu an procedural)
 - [ ] Ses dosyaları (`GameAudio.clips`), müzik
 - [ ] Özel zombi / boss dalgaları (laboratuvar mutasyonları, özgün tasarım; bazıları engel aşabilir)
 - [ ] Cihazda performans profili (60 FPS hedefi, 70 zombi), gerekirse GPU instancing/LOD

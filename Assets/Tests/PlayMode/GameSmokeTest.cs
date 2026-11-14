@@ -171,6 +171,43 @@ public class GameSmokeTest
         Assert.IsTrue(Physics.Raycast(local + Vector3.up * 5f, Vector3.down, 10f), "ground under the player");
     }
 
+    [UnityTest]
+    public IEnumerator MagazineAndReload()
+    {
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var w = gm.player.weapon;
+        Assert.AreEqual(30, w.Ammo);
+        var anim = gm.player.rig.Animator;
+        Assert.IsTrue(anim.isHuman && anim.avatar.isValid, "soldier avatar should be a valid humanoid");
+        Debug.Log($"SMOKE: humanScale={anim.humanScale:0.00} run={gm.player.rig.RunSpeed:0.00}");
+
+        // Empty the magazine: reload must start automatically and no shots fire meanwhile.
+        var firePos = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
+        SetMouse(firePos, true);
+        float t0 = Time.realtimeSinceStartup;
+        while (!w.IsReloading && Time.realtimeSinceStartup - t0 < 6f) yield return null;
+        Assert.IsTrue(w.IsReloading, "empty magazine should trigger a reload");
+        Assert.AreEqual(0, w.Ammo);
+        yield return Wait(0.5f);
+        Assert.AreEqual(0, w.Ammo, "no firing during reload");
+        SetMouse(firePos, false);
+        t0 = Time.realtimeSinceStartup;
+        while (w.IsReloading && Time.realtimeSinceStartup - t0 < 3f) yield return null;
+        float took = Time.realtimeSinceStartup - t0 + 0.5f;
+        Debug.Log($"SMOKE: reload took ~{took:0.00}s ammo={w.Ammo}");
+        Assert.AreEqual(30, w.Ammo);
+
+        // Tactical reload: fire ~20 rounds, release, wait > 1 s.
+        SetMouse(firePos, true);
+        while (w.Ammo > 12) yield return null;
+        SetMouse(firePos, false);
+        Assert.IsFalse(w.IsReloading);
+        yield return Wait(1.3f);
+        Assert.IsTrue(w.IsReloading || w.Ammo == 30, "tactical reload after 1 s idle with < half magazine");
+        Debug.Log("SMOKE: tactical reload ok");
+    }
+
     /// <summary>Renders gameplay frames to PNG. Run with -testFilter GameSmokeTest.CaptureScreens and CAPTURE_DIR set.</summary>
     [UnityTest, Explicit]
     public IEnumerator CaptureScreens()
@@ -183,6 +220,24 @@ public class GameSmokeTest
         SetMouse(firePos, true);
         yield return Wait(12f);
         Shot(Path.Combine(dir, "play_1.png"));
+        var pt = gm.player.transform;
+        if (System.Environment.GetEnvironmentVariable("CAPTURE_DEBUG") == "1")
+        {
+            var rig = gm.player.rig;
+            foreach (var r in rig.weaponRoot.GetComponentsInChildren<MeshRenderer>()) foreach (var m in r.materials) m.SetColor("_BaseColor", Color.red);
+            var hand = rig.Animator.GetBoneTransform(HumanBodyBones.RightHand);
+            Debug.Log($"CAPTURE: rifle pos={rig.weaponRoot.position - pt.position} fwd={rig.weaponRoot.forward} player fwd={pt.forward} hand={hand.position - pt.position} muzzle={gm.player.weapon.muzzle.position - pt.position}");
+        }
+        ShotFrom(Path.Combine(dir, "close_fire.png"), pt.position + pt.right * 1.6f + pt.forward * 2.2f + Vector3.up * 1.7f, pt.position + Vector3.up * 1.1f);
+        ShotFrom(Path.Combine(dir, "close_side.png"), pt.position + pt.right * 2.6f + Vector3.up * 1.4f, pt.position + Vector3.up * 1.1f);
+        SetMouse(firePos, false);
+        gm.player.weapon.StartReload();
+        yield return Wait(0.6f);
+        ShotFrom(Path.Combine(dir, "close_reload.png"), pt.position + pt.right * 1.6f + pt.forward * 2.2f + Vector3.up * 1.7f, pt.position + Vector3.up * 1.1f);
+        SetMouse(firePos, true);
+        yield return Wait(2f);
+        var z = Zombie.FindNearest(pt.position, 40f);
+        if (z) ShotFrom(Path.Combine(dir, "close_zombie.png"), z.transform.position + z.transform.forward * 2.8f + Vector3.up * 1.6f, z.transform.position + Vector3.up * 1f);
         // Different district: jump far away.
         SetMouse(firePos, false);
         for (int k = 0; k < 4; k++)
@@ -197,6 +252,15 @@ public class GameSmokeTest
         yield return Wait(0.5f);
         Shot(Path.Combine(dir, "play_3.png"));
         Debug.Log($"CAPTURE: {dir} district={ChunkManager.I.DistrictAtPosition(gm.player.transform.position)}");
+    }
+
+    static void ShotFrom(string path, Vector3 from, Vector3 lookAt)
+    {
+        var cam = Camera.main;
+        var p = cam.transform.position; var r = cam.transform.rotation;
+        cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(lookAt - from));
+        Shot(path);
+        cam.transform.SetPositionAndRotation(p, r);
     }
 
     static void Shot(string path)

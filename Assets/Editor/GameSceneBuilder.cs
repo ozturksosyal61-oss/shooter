@@ -13,7 +13,7 @@ using UnityEngine.UI;
 /// Menu: Tools/Zombie Shooter/Rebuild Game Scene. Batchmode: -executeMethod GameSceneBuilder.Build
 /// Everything in Assets/Prefabs, Assets/Materials, Assets/Art/Textures and Game.unity is overwritten.
 /// </summary>
-public static class GameSceneBuilder
+public static partial class GameSceneBuilder
 {
     const string ArtTex = "Assets/Art/Textures";
     const string MatDir = "Assets/Materials";
@@ -21,14 +21,9 @@ public static class GameSceneBuilder
     const string EnvPrefabDir = "Assets/Prefabs/Env";
     const string EnvArt = "Assets/Art/Environment";
     const string ScenePath = "Assets/Scenes/Game.unity";
-    const string SoldierGlb = "Assets/Art/Characters/Soldier/Soldier.glb";
-    const string ZombieGlb = "Assets/Art/Characters/Zombie/Zombie.glb";
     const string SoldierTex = "Assets/Art/Characters/Soldier/Textures/Soldier_BaseColor.png";
     const string ZombieTex = "Assets/Art/Characters/Zombie/Textures/Zombie_BaseColor.png";
 
-    // Model facing correction (degrees around Y) so the mesh faces +Z.
-    public const float SoldierYaw = 0f;
-    public const float ZombieYaw = 0f;
 
     [MenuItem("Tools/Zombie Shooter/Rebuild Game Scene")]
     public static void Build()
@@ -39,12 +34,13 @@ public static class GameSceneBuilder
         ConfigureCharacterTexture(SoldierTex);
         ConfigureCharacterTexture(ZombieTex);
         var m = CreateMaterials(t);
+        var anims = ImportCharacterAnimations();
         BuildBulletPrefab(m);
         BuildSplatPrefab(m);
-        BuildZombiePrefab(m);
+        BuildZombiePrefab(m, anims);
         var env = BuildEnvironmentPrefabs(m);
         AssetDatabase.SaveAssets();
-        BuildPlayerPrefab(m, Load<Bullet>("Bullet"));
+        BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
         AssetDatabase.SaveAssets();
         BuildScene(scene, m, t, env);
         AssetDatabase.SaveAssets();
@@ -403,28 +399,6 @@ public static class GameSceneBuilder
         return q;
     }
 
-    /// <summary>Adds Model (animated pivot at feet) → Mesh (scaled so feet sit on y=0, centered).</summary>
-    static MeshRenderer AddCharacterModel(Transform root, string glbPath, Material mat, float height, float yaw)
-    {
-        var mesh = AssetDatabase.LoadAllAssetsAtPath(glbPath).OfType<Mesh>().FirstOrDefault();
-        if (mesh == null) throw new System.Exception("No mesh in " + glbPath);
-        var model = new GameObject("Model").transform;
-        model.SetParent(root, false);
-        var meshGo = new GameObject("Mesh");
-        meshGo.transform.SetParent(model, false);
-        var b = mesh.bounds;
-        float s = height / b.size.y;
-        var rot = Quaternion.Euler(0f, yaw, 0f);
-        meshGo.transform.localRotation = rot;
-        meshGo.transform.localScale = Vector3.one * s;
-        meshGo.transform.localPosition = rot * new Vector3(-b.center.x * s, 0f, -b.center.z * s) + Vector3.up * (-b.min.y * s);
-        meshGo.AddComponent<MeshFilter>().sharedMesh = mesh;
-        var mr = meshGo.AddComponent<MeshRenderer>();
-        mr.sharedMaterial = mat;
-        mr.shadowCastingMode = ShadowCastingMode.On;
-        return mr;
-    }
-
     static GameObject SavePrefab(GameObject go, string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -450,62 +424,6 @@ public static class GameSceneBuilder
         var q = Quad("Quad", go.transform, m.splat);
         q.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
         SavePrefab(go, $"{PrefabDir}/GooSplat.prefab");
-    }
-
-    static void BuildZombiePrefab(Mats m)
-    {
-        AssetDatabase.DeleteAsset($"{PrefabDir}/Crate.prefab");
-        var go = new GameObject("Zombie");
-        var mr = AddCharacterModel(go.transform, ZombieGlb, m.zombie, 1.8f, ZombieYaw);
-        var cap = go.AddComponent<CapsuleCollider>();
-        cap.radius = 0.35f; cap.height = 1.7f; cap.center = new Vector3(0f, 0.85f, 0f);
-        var rb = go.AddComponent<Rigidbody>();
-        rb.isKinematic = true; rb.useGravity = false; rb.interpolation = RigidbodyInterpolation.None;
-        var flash = go.AddComponent<HitFlash>();
-        flash.renderers = new Renderer[] { mr };
-        flash.flashMaterial = m.flash;
-        var z = go.AddComponent<Zombie>();
-        z.model = go.transform.Find("Model");
-        z.flash = flash;
-        z.body = cap;
-        z.bodyRenderer = mr;
-        z.walkerMaterial = m.zombie;
-        z.runnerMaterial = m.zombieRunner;
-        SetLayer(go, GameLayers.Zombie);
-        SavePrefab(go, $"{PrefabDir}/Zombie.prefab");
-    }
-
-    static void BuildPlayerPrefab(Mats m, Bullet bullet)
-    {
-        var go = new GameObject("Player");
-        var mr = AddCharacterModel(go.transform, SoldierGlb, m.soldier, 1.75f, SoldierYaw);
-        var cc = go.AddComponent<CharacterController>();
-        cc.radius = 0.35f; cc.height = 1.7f; cc.center = new Vector3(0f, 0.85f, 0f);
-        cc.stepOffset = 0.25f; cc.skinWidth = 0.04f; cc.minMoveDistance = 0f;
-
-        var muzzle = new GameObject("Muzzle").transform;
-        muzzle.SetParent(go.transform, false);
-        muzzle.localPosition = new Vector3(0.15f, 1.1f, 0.75f);
-        var mf = Quad("MuzzleFlash", muzzle, m.muzzle);
-        mf.transform.localPosition = new Vector3(0f, 0f, 0.25f);
-        mf.SetActive(false);
-
-        var flash = go.AddComponent<HitFlash>();
-        flash.renderers = new Renderer[] { mr };
-        flash.flashMaterial = m.flash;
-
-        var weapon = go.AddComponent<Weapon>();
-        weapon.muzzle = muzzle;
-        weapon.muzzleFlash = mf.transform;
-        weapon.bulletPrefab = bullet;
-
-        var pc = go.AddComponent<PlayerController>();
-        pc.model = go.transform.Find("Model");
-        pc.weapon = weapon;
-        pc.flash = flash;
-        weapon.owner = pc;
-        SetLayer(go, GameLayers.Player);
-        SavePrefab(go, $"{PrefabDir}/Player.prefab");
     }
 
     // ---------------------------------------------------------------- environment prefabs
@@ -921,6 +839,22 @@ public static class GameSceneBuilder
         Anchor(fps.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-30f, -30f), new Vector2(240f, 40f));
         fps.text = "-- FPS";
 
+        // Ammo counter + reload bar (top-right, under the FPS counter)
+        var ammo = Txt("Ammo", root, 64, TextAnchor.UpperRight, Color.white);
+        Anchor(ammo.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-30f, -80f), new Vector2(360f, 80f));
+        ammo.text = "30<size=30> / 30</size>";
+        var reloadRoot = Rect("Reload", root);
+        Anchor(reloadRoot, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-30f, -165f), new Vector2(260f, 60f));
+        var reloadLabel = Txt("Label", reloadRoot, 26, TextAnchor.UpperRight, new Color(1f, 0.85f, 0.2f));
+        Anchor(reloadLabel.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(260f, 30f));
+        reloadLabel.text = "ŞARJÖR DEĞİŞİYOR";
+        var reloadBg = Img("BarBg", reloadRoot, t.white, new Color(0f, 0f, 0f, 0.55f));
+        Anchor(reloadBg.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(0f, -36f), new Vector2(260f, 12f));
+        var reloadBar = Img("Bar", reloadBg.transform, t.white, new Color(1f, 0.85f, 0.2f));
+        reloadBar.rectTransform.anchorMin = Vector2.zero; reloadBar.rectTransform.anchorMax = new Vector2(0f, 1f);
+        reloadBar.rectTransform.offsetMin = reloadBar.rectTransform.offsetMax = Vector2.zero;
+        reloadRoot.gameObject.SetActive(false);
+
         // Game over
         var go = Img("GameOver", root, t.white, new Color(0.05f, 0f, 0f, 0.65f));
         Stretch(go.rectTransform);
@@ -955,6 +889,9 @@ public static class GameSceneBuilder
         hud.healthFillImage = hpFill;
         hud.damageVignette = vig;
         hud.fpsText = fps;
+        hud.ammoText = ammo;
+        hud.reloadRoot = reloadRoot.gameObject;
+        hud.reloadBar = reloadBar.rectTransform;
         hud.gameOverPanel = go.gameObject;
         hud.gameOverScoreText = goScore;
         return hud;

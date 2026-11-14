@@ -12,10 +12,15 @@ public class HUD : MonoBehaviour
     public Image healthFillImage;
     public Image damageVignette;
     public Text fpsText;
+    public Text ammoText;
+    public GameObject reloadRoot;
+    public RectTransform reloadBar;
     public GameObject gameOverPanel;
     public Text gameOverScoreText;
 
-    int shownScore = -1, lastCombo = -1, lastMult = -1, lastFps = -1;
+    int shownScore = -1, lastCombo = -1, lastMult = -1, lastFps = -1, lastAmmo = -1;
+    float ammoPunch;
+    string[] ammoStrings;
     float displayScore, healthShown = 1f, vignette, comboPunch;
     float fpsTimer;
     int fpsFrames;
@@ -64,6 +69,28 @@ public class HUD : MonoBehaviour
         healthShown = Mathf.MoveTowards(healthShown, h, dt * 2f);
         healthFill.anchorMax = new Vector2(healthShown, 1f);
         healthFillImage.color = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.3f, 0.9f, 0.3f), healthShown);
+
+        // Ammo + reload
+        var w = p ? p.weapon : null;
+        if (w && ammoText)
+        {
+            if (w.Ammo != lastAmmo)
+            {
+                if (w.Ammo > lastAmmo) ammoPunch = 1f;
+                lastAmmo = w.Ammo;
+                if (ammoStrings == null || ammoStrings.Length != w.magazineSize + 1)
+                {
+                    ammoStrings = new string[w.magazineSize + 1];
+                    for (int i = 0; i <= w.magazineSize; i++) ammoStrings[i] = i + "<size=30> / " + w.magazineSize + "</size>";
+                }
+                ammoText.text = ammoStrings[Mathf.Clamp(w.Ammo, 0, w.magazineSize)];
+                ammoText.color = w.Ammo <= w.magazineSize / 5 ? new Color(1f, 0.35f, 0.3f) : Color.white;
+            }
+            ammoPunch = Mathf.MoveTowards(ammoPunch, 0f, dt * 4f);
+            ammoText.transform.localScale = Vector3.one * (1f + 0.25f * ammoPunch);
+            reloadRoot.SetActive(w.IsReloading);
+            if (w.IsReloading) reloadBar.anchorMax = new Vector2(w.ReloadProgress, 1f);
+        }
 
         // Damage vignette
         vignette = Mathf.MoveTowards(vignette, 0f, dt * 1.6f);
