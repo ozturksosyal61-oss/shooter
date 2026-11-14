@@ -45,7 +45,7 @@ public class Zombie : MonoBehaviour
     enum State { Rising, Walking, Dying }
 
     State state;
-    float hp, speed, damage, stateT, attackCd, punch;
+    float hp, speed, damage, stateT, attackCd, punch, moanTimer;
     bool runner;
     Vector3 knock;
     int avoidSide;          // sticky steering side (+1 / -1), 0 = none
@@ -84,6 +84,7 @@ public class Zombie : MonoBehaviour
         knock = Vector3.zero;
         punch = 0f;
         attackCd = 0.5f;
+        moanTimer = Random.Range(2f, 8f);
         avoidSide = 0;
         state = State.Rising;
         stateT = 0f;
@@ -208,6 +209,13 @@ public class Zombie : MonoBehaviour
         Vector3 face = moveDir.sqrMagnitude > 0.01f && dist > 2f ? moveDir : dir;
         transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(face), 300f * dt);
 
+        moanTimer -= dt;
+        if (moanTimer <= 0f)
+        {
+            moanTimer = Random.Range(4f, 10f);
+            if (dist < 20f) GameAudio.Play(SfxId.ZombieMoan, pos + Vector3.up * 1.5f);
+        }
+
         attackCd -= dt;
         if (dist < contactRange && attackCd <= 0f && !player.IsDead)
         {
@@ -329,8 +337,8 @@ public class Zombie : MonoBehaviour
         gm.RegisterKill();
         gm.HitStop(0.06f);
         gm.Shake(0.3f);
-        Haptics.Play(Haptics.Kind.Medium);
-        GameAudio.Play(SfxId.Kill, point);
+        GameAudio.Play(SfxId.Hit, point);
+        GameAudio.Play(SfxId.Kill, point); // death voice; the kill haptic fires with it
         if (Fx.I) Fx.I.Death(transform.position + Vector3.up * 0.9f, dir);
     }
 

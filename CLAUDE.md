@@ -19,6 +19,7 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - **Görsel:** Çizgi film tarzı asker + zombi; kamera ~55–60° eğik, oyuncuyu takip eder.
 - **Skor + kombo** sistemi (ardışık öldürmeler çarpan verir).
 - **Öncelik: vuruş hissi** — hit flash, knockback, kamera sarsıntısı, hit-stop, partikül, ses.
+- **Ses:** CC0 kaynaklar (Kenney, OpenGameArt) + Python sentezi; her dosyanın kaynağı/lisansı `CREDITS.md`'de. Lisansı CC0 veya ticari kullanıma açık olmayan ses **eklenmez**. Toplam ses bütçesi ≤ 6 MB (şu an ~1.4 MB).
 - **Performans:** Hedef 60 FPS mobil; mermi/zombi/efektler için **object pooling**, Update'te allocation yok.
 - **Animasyon:** Mixamo Humanoid (Soldier / Zombie avatar), root motion kapalı. Asker: alt gövde 8 yönlü locomotion (hareket yönü nişan yönüne göre lokal → geri geri koşarken ateş), üst gövde avatar mask ile nişan/reload, vault = jump, 2 ölüm animasyonu. Zombi: idle/walk/run, temas anında saldırı, doğarken çığlık, ölümde önce savrulma sonra dying.
 - **Silah:** Tüfek göğüs önünde nişan yönünde tutulur, iki el IK ile kabza / el kundağına; mermi ve muzzle flash namlu ucundan. 30'luk şarjör, boşalınca otomatik reload (1.5 sn, animasyon hızı senkron), reload sırasında ateş yok; tetik bırakılıp 1 sn geçince ve şarjör yarıdan azsa taktik reload.
@@ -31,7 +32,7 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - Ortam: `Assets/Art/Environment/{Cars,Survival,Roads,Commercial,Industrial}` — Kenney (CC0, lisanslar klasörlerde) GLB'leri + kit başına `Textures/colormap.png`. Builder bunları düzleştirip gerçek boyuta ölçekler → `Assets/Prefabs/Env/*.prefab` (pivot alt-orta, BoxCollider, `EnvProp.radius`, yüksekler `Fadeable`). Toplam ~3 MB.
 - Mixamo: `_mixamo/{Soldier,Zombie}.fbx` (T-pose, 1.8 m, origin ayakta, doku gömülü). Yeniden üret: `blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <glb> <basecolor.png> <out.fbx> 1.8`.
 - Script'ler `Game` asmdef'inde:
-  - Core: GameManager, Pool, GameDefs (layer'lar, `Vault`, `Difficulty`), Haptics, GameAudio (ses hook'ları: `GameAudio.Play(SfxId, pos)` + `OnSfx` event; klipler inspector'da SfxId sırasıyla)
+  - Core: GameManager, Pool, GameDefs (layer'lar, `Vault`, `Difficulty`), Haptics, GameAudio (+`AudioPrefs`), MusicDirector, ListenerFollow
   - Input: TouchControls · Player: PlayerController, SoldierRig (Animator + IK + silah yerleşimi), Weapon (şarjör/reload), Bullet · Enemies: Zombie, ZombieSpawner
   - World: ChunkManager (sonsuz şehir), FloatingOrigin, EnvProp, Fadeable · FX: CameraRig, Fx, HitFlash · UI: HUD, DamageNumbers
 - **Sonsuz dünya:** 20x20 m chunk = bir şehir bloğu (kenarlarda yarım 7 m yol + sarı orta şerit/yaya geçidi, kaldırım, 9x9 iç alan). Oyuncu etrafında 5x5 aktif, chunk ve objeler pool'lu, seed'li (`ChunkManager.seed`, `randomSeed`). Mahalle = seed'li Perlin (`DistrictAt`): Cadde / Çarşı / Sanayi / Liman, her birinin zemin dokusu ve obje seti `DistrictSettings`'te. Yollarda araba/barikat/yanan varil, iç alanda bina veya prop.
@@ -40,7 +41,11 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - **Sahne kod ile üretilir:** `Assets/Editor/GameSceneBuilder.cs` (menü: Tools/Zombie Shooter/Rebuild Game Scene veya `-executeMethod GameSceneBuilder.Build`). Üretilen dokular, materyaller, tüm prefab'lar ve Game.unity'yi yeniden yazar — elle yapılan değişiklikler kaybolur, kalıcı değişiklikleri builder'a işle.
 - Layer'lar: 8 Blocker (bina, konteyner, yanan varil, tank — vault edilmez, mermi durdurur), 9 Vaultable (kasa, araba, barikat, çöp konteyneri), 10 Zombie, 11 Player.
 - Shader'lar `Assets/Shaders`: Game/FxAdditive, Game/FxAlpha, Game/Flash (URP unlit). Karakter/çevre: URP Simple Lit. Kameranın önünü kapatan binalar `Fadeable` ile yarı saydam olur.
-- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart, VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload; `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
+- **Ses sistemi:** `GameAudio.Play(SfxId, pos, pitchMul, volumeMul)` tek giriş noktası (+ `OnSfx` event). `SfxEntry` bankası (builder'da `SoundBank()`): klip varyantları (aynısı arka arkaya çalmaz), voice limiti (aşınca en eski çalınır), minInterval, pitch ±%8 + volume varyasyonu, spatialBlend/rolloff (Linear 8→40 m; listener oyuncunun 2 m üstünde, `ListenerFollow`), **haptic ve music duck aynı entry'de** → atış/kill/hasar haptic'i sesle senkron; başka yerde `Haptics.Play` çağırma. Reload parçaları reload klibindeki animation event'lerden (`SoldierRig.OnReloadEvent`).
+- Müzik: `MusicDirector` iki loop katmanı (calm ↔ intense) yakındaki zombi sayısı + kombo + ateşe göre crossfade; `Duck()`; ölümde `AudioLowPassFilter` ile ~550 Hz'e boğulur.
+- Mixer: `Assets/Audio/GameMixer.mixer` (Master → Music / SFX / UI), exposed `MasterVolume/MusicVolume/SfxVolume/UiVolume`; kayıtlı ayarlar `AudioPrefs.Set/Get/Apply` (PlayerPrefs `vol_*`, 0..1 → dB). Mixer'ı builder internal `AudioMixerController` API'sıyla reflection üzerinden üretir.
+- Ses import: SFX mono + Vorbis q0.5, ≤1 sn → Decompress On Load, uzun → Compressed In Memory; müzik Streaming q0.4. Ses dosyalarını yeniden üretmek: `python Tools/build_audio.py <indirilen_paketler> .` (numpy, scipy, soundfile).
+- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart (+ölümde müzik low-pass), VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload, AudioHooks; `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
 
 ## Kurallar
 - Kullanıcıya onay sorma; adımları kendin yap.
@@ -74,7 +79,12 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
   - [x] 30'luk şarjör, otomatik + taktik reload, HUD mermi sayacı + reload barı
 - [ ] Mixamo "Zombie Scream" indir (şu an agonizing vekil); zombi yürüme klibi yavaş (≈0.5 m/s) → daha hızlı bir walk klibi
 - [ ] Ateş animasyonu/recoil için additive katman (şu an procedural)
-- [ ] Ses dosyaları (`GameAudio.clips`), müzik
+- [x] **Faz 4 — Ses** (2026-11-15)
+  - [x] CC0 SFX: tüfek (3), isabet et/kritik/beton/metal, zombi inleme(6)/çığlık(4)/saldırı(4)/ölüm(4), oyuncu hasar(4)/ölüm(2), ayak sesi(5), vault zıplama/iniş, reload parçaları (animation event), kill-streak, UI tık, ölüm jingle'ı, patlama
+  - [x] Sentez: boş tetik, düşük mermi uyarısı, kombo ding (çarpanla yükselen pitch), kalp atışı (can < %30)
+  - [x] Müzik: calm/intense katmanları yoğunluğa göre, ducking, ölümde low-pass
+  - [x] Pooling (24 voice), voice limit, varyasyon, 3D rolloff, haptic senkronu, AudioMixer + kayıtlı volume
+- [ ] Ayarlar menüsü (AudioPrefs hazır), patlayan varil (Explosion sesi + duck hazır)
 - [ ] Özel zombi / boss dalgaları (laboratuvar mutasyonları, özgün tasarım; bazıları engel aşabilir)
 - [ ] Cihazda performans profili (60 FPS hedefi, 70 zombi), gerekirse GPU instancing/LOD
 - [ ] Silah çeşitleri / power-up, dalga yapısı, ana menü

@@ -97,6 +97,9 @@ public class GameSmokeTest
         Assert.IsTrue(gm.IsGameOver, "player should eventually die");
 
         yield return Wait(2.5f);
+        float cutoff = MusicDirector.I.calmFilter.cutoffFrequency;
+        Debug.Log($"SMOKE: music cutoff after death={cutoff:0}");
+        Assert.Less(cutoff, 3000f, "music should be low-passed on death");
         SetMouse(firePos, true);
         yield return null;
         yield return null;
@@ -206,6 +209,44 @@ public class GameSmokeTest
         yield return Wait(1.3f);
         Assert.IsTrue(w.IsReloading || w.Ammo == 30, "tactical reload after 1 s idle with < half magazine");
         Debug.Log("SMOKE: tactical reload ok");
+    }
+
+    [UnityTest]
+    public IEnumerator AudioHooks()
+    {
+        yield return LoadGame();
+        var gm = GameManager.I;
+        Assert.NotNull(GameAudio.I, "GameAudio missing");
+        Assert.NotNull(GameAudio.I.mixer, "AudioMixer missing");
+        Assert.IsTrue(GameAudio.I.mixer.GetFloat(AudioPrefs.Music, out _), "MusicVolume must be exposed");
+        Assert.IsTrue(GameAudio.I.mixer.GetFloat(AudioPrefs.Sfx, out _), "SfxVolume must be exposed");
+        Assert.NotNull(MusicDirector.I, "MusicDirector missing");
+        Assert.NotNull(Object.FindAnyObjectByType<AudioListener>(), "listener missing");
+
+        var heard = new System.Collections.Generic.HashSet<SfxId>();
+        System.Action<SfxId, Vector3> h = (id, p) => heard.Add(id);
+        GameAudio.OnSfx += h;
+        try
+        {
+            // Shoot until the magazine empties (auto reload → animation events), then walk.
+            var firePos = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
+            SetMouse(firePos, true);
+            float t0 = Time.realtimeSinceStartup;
+            while (!gm.player.weapon.IsReloading && Time.realtimeSinceStartup - t0 < 8f) yield return null;
+            yield return Wait(1.8f);
+            SetMouse(firePos, false);
+            var leftPos = new Vector2(Screen.width * 0.2f, Screen.height * 0.4f);
+            SetMouse(leftPos, true);
+            yield return null;
+            SetMouse(leftPos + new Vector2(0f, Screen.height * 0.3f), true);
+            yield return Wait(1.5f);
+            SetMouse(leftPos, false);
+            yield return Wait(4f);
+        }
+        finally { GameAudio.OnSfx -= h; }
+        Debug.Log("SMOKE: heard " + string.Join(",", heard));
+        foreach (var id in new[] { SfxId.Shoot, SfxId.MagOut, SfxId.MagIn, SfxId.Bolt, SfxId.Footstep, SfxId.ZombieScream })
+            Assert.IsTrue(heard.Contains(id), "expected sound " + id);
     }
 
     /// <summary>Renders gameplay frames to PNG. Run with -testFilter GameSmokeTest.CaptureScreens and CAPTURE_DIR set.</summary>

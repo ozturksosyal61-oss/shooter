@@ -55,7 +55,7 @@ public static partial class GameSceneBuilder
     }
 
     /// <summary>Humanoid clip import. Root motion is never applied at runtime; rotation/height are baked so the body stays upright.</summary>
-    static AnimationClip ConfigureClip(string path, Avatar source, string name, bool loop, bool bakeXZ)
+    static AnimationClip ConfigureClip(string path, Avatar source, string name, bool loop, bool bakeXZ, AnimationEvent[] events = null)
     {
         var imp = (ModelImporter)AssetImporter.GetAtPath(path);
         if (imp == null) throw new System.Exception("Missing animation: " + path);
@@ -78,6 +78,7 @@ public static partial class GameSceneBuilder
         c.keepOriginalPositionY = true;
         c.lockRootPositionXZ = bakeXZ;
         c.keepOriginalPositionXZ = true;
+        c.events = events ?? new AnimationEvent[0];
         imp.clipAnimations = new[] { c };
         imp.SaveAndReimport();
         return AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>().First(x => !x.name.StartsWith("__preview__"));
@@ -93,7 +94,10 @@ public static partial class GameSceneBuilder
         a.idle = ConfigureClip(S("idle"), a.soldierAvatar, "Idle", true, false);
         a.idleAim = ConfigureClip(S("idle aiming"), a.soldierAvatar, "IdleAiming", true, false);
         a.jump = ConfigureClip(S("jump loop"), a.soldierAvatar, "Vault", true, false);
-        a.reload = ConfigureClip(S("reload"), a.soldierAvatar, "Reload", false, true);
+        // Reload sound parts are fired by animation events (normalised times on the reload clip).
+        AnimationEvent Ev(float t, string part) => new AnimationEvent { time = t, functionName = "OnReloadEvent", stringParameter = part };
+        a.reload = ConfigureClip(S("reload"), a.soldierAvatar, "Reload", false, true,
+            new[] { Ev(0.22f, "MagOut"), Ev(0.55f, "MagIn"), Ev(0.8f, "Bolt") });
         a.deathFront = ConfigureClip(S("death from the front"), a.soldierAvatar, "DeathFront", false, true);
         a.deathBack = ConfigureClip(S("death from the back"), a.soldierAvatar, "DeathBack", false, true);
         for (int i = 0; i < 8; i++)

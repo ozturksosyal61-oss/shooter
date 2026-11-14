@@ -16,6 +16,9 @@ public class PlayerController : MonoBehaviour
     public float vaultBaseDuration = 0.2f;
     public float vaultDurationPerMeter = 0.06f;
 
+    [Header("Audio")]
+    public float strideLength = 1.25f;
+
     [Header("Health")]
     public float maxHealth = 100f;
     public float invulnerableTime = 0.4f;
@@ -26,7 +29,7 @@ public class PlayerController : MonoBehaviour
 
     CharacterController cc;
     Vector3 knock, lastHitDir = Vector3.forward;
-    float invulnUntil;
+    float invulnUntil, stride;
 
     // vault
     bool vaulting;
@@ -60,6 +63,18 @@ public class PlayerController : MonoBehaviour
             Vector3 vel = move * moveSpeed + knock;
             vel.y = -6f;
             cc.Move(vel * dt);
+            // Footsteps by distance travelled.
+            stride += mag * moveSpeed * dt;
+            if (stride >= strideLength)
+            {
+                stride = 0f;
+                GameAudio.Play(SfxId.Footstep, transform.position, 1f, Mathf.Lerp(0.5f, 1f, mag));
+            }
+        }
+        if (GameAudio.I)
+        {
+            float h = Health / maxHealth;
+            GameAudio.I.SetLowHealth(h < 0.3f, 1f - h / 0.3f);
         }
         knock *= Mathf.Exp(-10f * dt);
 
@@ -102,6 +117,7 @@ public class PlayerController : MonoBehaviour
         {
             vaulting = false;
             cc.enabled = true;
+            GameAudio.Play(SfxId.VaultLand, transform.position);
             GameManager.I.Shake(0.12f);
         }
     }
@@ -123,6 +139,7 @@ public class PlayerController : MonoBehaviour
     void Die()
     {
         IsDead = true;
+        if (GameAudio.I) GameAudio.I.SetLowHealth(false, 0f);
         if (rig) rig.Die(lastHitDir);
         GameAudio.Play(SfxId.PlayerDeath, transform.position);
         GameManager.I.TriggerGameOver();

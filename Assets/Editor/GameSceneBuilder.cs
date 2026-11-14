@@ -34,6 +34,7 @@ public static partial class GameSceneBuilder
         ConfigureCharacterTexture(SoldierTex);
         ConfigureCharacterTexture(ZombieTex);
         var m = CreateMaterials(t);
+        ConfigureAudioImports();
         var anims = ImportCharacterAnimations();
         BuildBulletPrefab(m);
         BuildSplatPrefab(m);
@@ -442,7 +443,7 @@ public static partial class GameSceneBuilder
     /// pivot at bottom centre, kit material, optional box collider / fade / fire.
     /// </summary>
     static GameObject EnvPrefab(Mats m, string kit, string glb, string name, Fit fit, float size, float yScale,
-        int layer, bool collide, bool fadeable = false, bool fire = false, float radiusScale = 1f)
+        int layer, bool collide, bool fadeable = false, bool fire = false, float radiusScale = 1f, Surface surface = Surface.Concrete)
     {
         var src = LoadGo($"{EnvArt}/{kit}/{glb}.glb");
         if (src == null) throw new System.Exception($"Missing {kit}/{glb}.glb");
@@ -485,6 +486,7 @@ public static partial class GameSceneBuilder
         }
         var prop = root.AddComponent<EnvProp>();
         prop.radius = Mathf.Max(b.extents.x, b.extents.z) * radiusScale;
+        prop.surface = surface;
 
         if (fadeable)
         {
@@ -541,12 +543,12 @@ public static partial class GameSceneBuilder
         const int V = GameLayers.Vaultable, B = GameLayers.Blocker;
         var e = new Env();
         e.cars = new[] { "sedan", "taxi", "police", "van", "suv", "hatchback-sports" }
-            .Select(c => EnvPrefab(m, "Cars", c, "Car_" + c, Fit.Length, 4.0f, 0.72f, V, true)).ToArray();
+            .Select(c => EnvPrefab(m, "Cars", c, "Car_" + c, Fit.Length, 4.0f, 0.72f, V, true, surface: Surface.Metal)).ToArray();
         e.barricades = new[] { EnvPrefab(m, "Roads", "construction-barrier", "Barricade", Fit.Length, 2.4f, 0.7f, V, true) };
-        e.burningBarrels = new[] { EnvPrefab(m, "Survival", "barrel", "BurningBarrel", Fit.Height, 1.0f, 1f, B, true, fire: true, radiusScale: 1.4f) };
+        e.burningBarrels = new[] { EnvPrefab(m, "Survival", "barrel", "BurningBarrel", Fit.Height, 1.0f, 1f, B, true, fire: true, radiusScale: 1.4f, surface: Surface.Metal) };
         e.crate = EnvPrefab(m, "Survival", "box", "Crate", Fit.Height, 1.0f, 1f, V, true);
         e.crateLarge = EnvPrefab(m, "Survival", "box-large", "CrateLarge", Fit.Height, 1.0f, 1f, V, true);
-        e.dumpster = EnvPrefab(m, "Roads", "dumpster", "Dumpster", Fit.Length, 2.2f, 0.85f, V, true);
+        e.dumpster = EnvPrefab(m, "Roads", "dumpster", "Dumpster", Fit.Length, 2.2f, 0.85f, V, true, surface: Surface.Metal);
         e.streetLight = EnvPrefab(m, "Roads", "light-square", "StreetLight", Fit.Height, 4.5f, 1f, 0, false, radiusScale: 0.3f);
         e.parasolA = EnvPrefab(m, "Commercial", "detail-parasol-a", "ParasolA", Fit.Height, 2.6f, 1f, 0, false, radiusScale: 0.8f);
         e.parasolB = EnvPrefab(m, "Commercial", "detail-parasol-b", "ParasolB", Fit.Height, 2.6f, 1f, 0, false, radiusScale: 0.8f);
@@ -561,9 +563,9 @@ public static partial class GameSceneBuilder
         e.industrial = new[] { "a", "c", "d", "g", "h", "i", "k" }
             .Select(c => EnvPrefab(m, "Industrial", "building-" + c, "Factory_" + c, Fit.Footprint, 8.5f, 1f, B, true, fadeable: true)).ToArray();
         e.containers = new[] { "a", "b", "c" }
-            .Select(c => EnvPrefab(m, "Industrial", "shipping-container-" + c, "Container_" + c, Fit.Length, 6.0f, 1f, B, true, fadeable: true)).ToArray();
-        e.tank = EnvPrefab(m, "Industrial", "detail-tank", "Tank", Fit.Length, 3.0f, 1f, B, true, fadeable: true);
-        e.tankLarge = EnvPrefab(m, "Industrial", "detail-tank-large", "TankLarge", Fit.Footprint, 3.6f, 1f, B, true, fadeable: true);
+            .Select(c => EnvPrefab(m, "Industrial", "shipping-container-" + c, "Container_" + c, Fit.Length, 6.0f, 1f, B, true, fadeable: true, surface: Surface.Metal)).ToArray();
+        e.tank = EnvPrefab(m, "Industrial", "detail-tank", "Tank", Fit.Length, 3.0f, 1f, B, true, fadeable: true, surface: Surface.Metal);
+        e.tankLarge = EnvPrefab(m, "Industrial", "detail-tank-large", "TankLarge", Fit.Footprint, 3.6f, 1f, B, true, fadeable: true, surface: Surface.Metal);
         return e;
     }
 
@@ -640,7 +642,6 @@ public static partial class GameSceneBuilder
         cam.backgroundColor = new Color(0.2f, 0.21f, 0.23f);
         var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = false;
-        camGo.AddComponent<AudioListener>();
         var rig = camGo.AddComponent<CameraRig>();
         rig.target = player.transform;
         camGo.transform.SetPositionAndRotation(Quaternion.Euler(57f, 0f, 0f) * Vector3.back * 16f, Quaternion.Euler(57f, 0f, 0f));
@@ -649,7 +650,7 @@ public static partial class GameSceneBuilder
         BuildFx(m);
         var spawner = new GameObject("ZombieSpawner").AddComponent<ZombieSpawner>();
         spawner.prefab = Load<Zombie>("Zombie");
-        new GameObject("GameAudio").AddComponent<GameAudio>();
+        BuildAudio(player.transform);
 
         var hud = BuildUI(t, out _);
 

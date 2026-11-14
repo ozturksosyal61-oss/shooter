@@ -372,6 +372,7 @@ MonoBehaviour:
   turnSpeed: 1080
   vaultBaseDuration: 0.2
   vaultDurationPerMeter: 0.06
+  strideLength: 1.25
   maxHealth: 100
   invulnerableTime: 0.4
 --- !u!1 &8317065611463842869

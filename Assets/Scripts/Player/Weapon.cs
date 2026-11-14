@@ -40,6 +40,7 @@ public class Weapon : MonoBehaviour
 
     Pool<Bullet> pool;
     float cooldown, flashUntil, reloadT, idleT;
+    bool lowAmmoWarned, dryFired;
     Camera cam;
     static readonly Plane AimPlane = new Plane(Vector3.up, new Vector3(0f, 1f, 0f));
 
@@ -73,6 +74,14 @@ public class Weapon : MonoBehaviour
 
         UpdateMagazine(dt);
 
+        // Dry trigger: pulling the trigger while the magazine is being swapped (once per pull).
+        if (IsFiring && IsReloading && !dryFired)
+        {
+            dryFired = true;
+            GameAudio.Play(SfxId.DryFire, muzzle.position);
+        }
+        if (!IsFiring) dryFired = false;
+
         cooldown -= dt;
         if (IsFiring && !IsReloading && aim.sqrMagnitude > 0.01f && cooldown <= 0f &&
             Vector3.Angle(owner.transform.forward, aim) < maxAimAngleToFire)
@@ -98,8 +107,8 @@ public class Weapon : MonoBehaviour
             {
                 IsReloading = false;
                 Ammo = magazineSize;
+                lowAmmoWarned = false;
                 GameAudio.Play(SfxId.ReloadEnd, owner.transform.position);
-                Haptics.Play(Haptics.Kind.Light);
             }
             return;
         }
@@ -132,6 +141,11 @@ public class Weapon : MonoBehaviour
     void Fire(Vector3 aim)
     {
         Ammo--;
+        if (Ammo <= magazineSize / 6 && Ammo > 0 && !lowAmmoWarned)
+        {
+            lowAmmoWarned = true;
+            GameAudio.Play(SfxId.LowAmmo, owner.transform.position);
+        }
         Vector3 dir = Quaternion.Euler(0f, Random.Range(-spreadDeg, spreadDeg), 0f) * aim;
         Vector3 start = muzzle.position;
         Vector3 castFrom = owner.transform.position; castFrom.y = start.y;

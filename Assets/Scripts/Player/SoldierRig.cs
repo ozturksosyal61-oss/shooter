@@ -85,6 +85,14 @@ public class SoldierRig : MonoBehaviour
 
     public void Kick() => recoil = 1f;
 
+    /// <summary>Animation event on the reload clip ("MagOut", "MagIn", "Bolt").</summary>
+    public void OnReloadEvent(string part)
+    {
+        if (!reloading) return;
+        var id = part == "MagOut" ? SfxId.MagOut : part == "MagIn" ? SfxId.MagIn : SfxId.Bolt;
+        GameAudio.Play(id, owner.position + Vector3.up * 1.1f);
+    }
+
     public void PlayReload(float duration)
     {
         reloading = true;

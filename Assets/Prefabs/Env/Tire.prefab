@@ -45,6 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c56657881d47e84987e030c1360a92c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game::EnvProp
+  surface: 0
   radius: 0.35
 --- !u!1 &5024499478242619372
 GameObject:
