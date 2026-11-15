@@ -9,6 +9,10 @@ public enum SfxId
     HitConcrete, HitMetal, ZombieMoan, Footstep, VaultLand, MagOut, MagIn, Bolt,
     DryFire, LowAmmo, ComboUp, KillStreak, UiClick, Explosion,
     ComboBreak, WaveStart, WaveClear, Pickup, ActiveReloadPerfect, ActiveReloadFail, NewRecord,
+    // F7 — special zombies
+    ShieldSpawn, ShieldBlock, BombSpawn, BombFuse, BombExplode, TongueSpawn, TongueWarn, TongueLash, TongueGrab, TongueSnap,
+    // F6 — roguelite / barrels
+    LevelUp, CardPick, Shotgun, TurretShot, GrenadeThrow, BarrelExplode,
 }
 
 [Serializable]

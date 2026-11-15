@@ -92,7 +92,21 @@ public class GameManager : MonoBehaviour
         return m;
     }
 
-    public void RegisterKill(bool runner)
+    public int SpecialKills { get; private set; }
+
+    /// <summary>Raised for every kill (after scoring) — progression / cards listen.</summary>
+    public event System.Action<Zombie> Killed;
+
+    public void RegisterKill(Zombie z)
+    {
+        if (z.IsSpecial) SpecialKills++;
+        RegisterKill(z.IsRunner ? RunnerScore : z.score);
+        Killed?.Invoke(z);
+    }
+
+    public void RegisterKill(bool runner) => RegisterKill(runner ? RunnerScore : WalkerScore);
+
+    public void RegisterKill(int baseScore)
     {
         Kills++;
         Combo++;
@@ -101,7 +115,7 @@ public class GameManager : MonoBehaviour
         int m = MultiplierFor(Combo);
         if (m > Multiplier) GameAudio.Play(SfxId.ComboUp, PlayerPos, 1f + 0.07f * (m - 2));
         Multiplier = m;
-        Score += (runner ? RunnerScore : WalkerScore) * Multiplier;
+        Score += baseScore * Multiplier;
         if (Combo % 10 == 0) GameAudio.Play(SfxId.KillStreak, PlayerPos, 1f + 0.04f * Mathf.Min(Combo / 10 - 1, 8));
     }
 

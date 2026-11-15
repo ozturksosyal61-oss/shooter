@@ -180,6 +180,24 @@ public static partial class GameSceneBuilder
         E(SfxId.ActiveReloadPerfect, "combo_up", 0.8f, 1, ui: true, pitchVar: 0f, haptic: true, hk: Haptics.Kind.Medium),
         E(SfxId.ActiveReloadFail, "dry_fire", 1f, 1, spatial: 0f),
         E(SfxId.NewRecord, "new_record_jingle", 0.9f, 1, ui: true, pitchVar: 0f, volVar: 0f),
+        // F7 special zombies (spawn cues are wide so they are heard off screen).
+        E(SfxId.ShieldSpawn, "shield_roar", 0.95f, 1, spatial: 0.4f, minInterval: 0.5f, pitchVar: 0.05f, duck: true, haptic: true, hk: Haptics.Kind.Medium, maxDist: 60f),
+        E(SfxId.ShieldBlock, "shield_ricochet", 0.65f, maxVoices: 3, minInterval: 0.04f, pitchVar: 0.1f, haptic: true, hk: Haptics.Kind.Light),
+        E(SfxId.BombSpawn, "bomb_spawn", 0.9f, 1, spatial: 0.4f, minInterval: 0.5f, maxDist: 60f),
+        E(SfxId.BombFuse, "bomb_fuse", 1f, 2, spatial: 0.5f, pitchVar: 0.03f, volVar: 0f, haptic: true, hk: Haptics.Kind.Medium),
+        E(SfxId.BombExplode, "bomb_burst", 1f, 3, spatial: 0.5f, minInterval: 0.05f, duck: true, haptic: true, hk: Haptics.Kind.Heavy, maxDist: 60f),
+        E(SfxId.TongueSpawn, "tongue_spawn", 0.9f, 1, spatial: 0.4f, minInterval: 0.5f, maxDist: 60f),
+        E(SfxId.TongueWarn, "tongue_warn", 0.9f, 2, spatial: 0.3f, pitchVar: 0f, haptic: true, hk: Haptics.Kind.Light),
+        E(SfxId.TongueLash, "tongue_lash", 0.9f, 2, spatial: 0.5f),
+        E(SfxId.TongueGrab, "tongue_grab", 1f, 1, spatial: 0.2f, haptic: true, hk: Haptics.Kind.Heavy, duck: true),
+        E(SfxId.TongueSnap, "tongue_snap", 1f, 2, spatial: 0.3f, haptic: true, hk: Haptics.Kind.Medium),
+        // F6 roguelite / barrels.
+        E(SfxId.LevelUp, "level_up", 0.85f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Medium),
+        E(SfxId.CardPick, "card_pick", 0.85f, 1, ui: true, pitchVar: 0f, haptic: true, hk: Haptics.Kind.Light),
+        E(SfxId.Shotgun, "shotgun", 0.75f, 2, spatial: 0.2f, minInterval: 0.1f, haptic: true, hk: Haptics.Kind.Medium),
+        E(SfxId.TurretShot, "turret_shot", 0.45f, 3, minInterval: 0.05f),
+        E(SfxId.GrenadeThrow, "grenade_throw", 0.7f, 2, spatial: 0.3f),
+        E(SfxId.BarrelExplode, "barrel_explode", 1f, 3, spatial: 0.5f, minInterval: 0.05f, duck: true, haptic: true, hk: Haptics.Kind.Heavy, maxDist: 60f),
     };
 
     // ---------------------------------------------------------------- scene objects

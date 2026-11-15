@@ -31,6 +31,14 @@ public static partial class GameSceneBuilder
         Anchor(dnTemplate.rectTransform, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(240f, 70f));
         dnRoot.gameObject.AddComponent<DamageNumbers>().template = dnTemplate;
 
+        // Off-screen threat arrows (specials always; nearby ordinary zombies too)
+        var thrRoot = Rect("Threats", root);
+        Stretch(thrRoot);
+        var thrTemplate = Img("Arrow", thrRoot, t.arrow, Color.white);
+        Anchor(thrTemplate.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(64f, 64f));
+        var threats = thrRoot.gameObject.AddComponent<ThreatIndicators>();
+        threats.template = thrTemplate;
+
         // Joystick + aim ring
         var joyBase = Img("JoystickBase", root, t.ring, Color.white);
         Anchor(joyBase.rectTransform, Vector2.zero, new Vector2(0.5f, 0.5f), new Vector2(260f, 240f), new Vector2(260f, 260f));

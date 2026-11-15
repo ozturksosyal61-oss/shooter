@@ -55,6 +55,11 @@ public struct WaveParams
     public float speedMultiplier;
     public float runnerChance;
     public float contactDamage;
+    /// <summary>Chance that a spawn is a special (lab mutation) zombie; 0 before wave 3.</summary>
+    public float specialChance;
+    /// <summary>Every few waves: a "special wave" with many more mutations.</summary>
+    public bool specialWave;
+    public int maxShield, maxBomb, maxTongue;
 }
 
 public static class Difficulty
@@ -85,6 +90,34 @@ public static class Difficulty
             speedMultiplier = Mathf.Min(1f + SpeedPerWave * k, 1.45f),
             runnerChance = Mathf.Clamp((n - 1) * 0.08f, 0f, 0.45f),
             contactDamage = BaseDamage + DamagePerWave * k,
+            specialChance = SpecialChance(n),
+            specialWave = IsSpecialWave(n),
+            maxShield = SpecialLimit(n, 1, 3, 4),
+            maxBomb = SpecialLimit(n, 2, 2, 6),
+            maxTongue = SpecialLimit(n, 1, 4, 3),
         };
+    }
+
+    // Special zombies: mixed in from wave 3, more every wave; every 5th wave is a special wave.
+    public static int FirstSpecialWave = 3;
+    public static float SpecialBase = 0.05f;
+    public static float SpecialPerWave = 0.025f;
+    public static float SpecialMax = 0.25f;
+    public static int SpecialWaveEvery = 5;
+
+    public static bool IsSpecialWave(int n) => n >= SpecialWaveEvery && n % SpecialWaveEvery == 0;
+
+    static float SpecialChance(int n)
+    {
+        if (n < FirstSpecialWave) return 0f;
+        float c = Mathf.Min(SpecialBase + SpecialPerWave * (n - FirstSpecialWave), SpecialMax);
+        return IsSpecialWave(n) ? Mathf.Min(c * 2.5f, 0.55f) : c;
+    }
+
+    static int SpecialLimit(int n, int start, int wavesPerExtra, int cap)
+    {
+        if (n < FirstSpecialWave) return 0;
+        int l = Mathf.Min(start + (n - FirstSpecialWave) / wavesPerExtra, cap);
+        return IsSpecialWave(n) ? l * 2 : l;
     }
 }

@@ -83,7 +83,10 @@ public class HUD : MonoBehaviour
     void OnWaveStarted(int wave)
     {
         waveBanner.text = "DALGA " + wave;
-        waveSubBanner.text = wave == 1 ? "Devriye başladı" : "Daha fazlası geliyor!";
+        bool special = WaveDirector.I && WaveDirector.I.Params.specialWave;
+        waveSubBanner.text = special ? "ÖZEL DALGA — mutantlar geliyor!" : wave == 1 ? "Devriye başladı"
+            : wave == Difficulty.FirstSpecialWave ? "Dikkat: laboratuvar mutantları!" : "Daha fazlası geliyor!";
+        waveSubBanner.color = special ? new Color(1f, 0.35f, 0.3f) : Gold;
         bannerT = 0f;
     }
 

@@ -33,6 +33,7 @@ public static partial class GameSceneBuilder
         var t = GenerateTextures();
         ConfigureCharacterTexture(SoldierTex);
         ConfigureCharacterTexture(ZombieTex);
+        foreach (var dir in new[] { ShieldDir, BombDir, TongueDir }) ConfigureCharacterTexture(BaseColor(dir));
         var m = CreateMaterials(t);
         ConfigureAudioImports();
         var anims = ImportCharacterAnimations();
@@ -40,6 +41,7 @@ public static partial class GameSceneBuilder
         BuildSplatPrefab(m);
         BuildHealthPackPrefab(m, t);
         BuildZombiePrefab(m, anims);
+        BuildSpecialZombiePrefabs(m, anims);
         var env = BuildEnvironmentPrefabs(m);
         AssetDatabase.SaveAssets();
         BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
@@ -75,9 +77,9 @@ public static partial class GameSceneBuilder
     // ---------------------------------------------------------------- textures
     class Tex
     {
-        public Texture2D soft, tracer, splat;
+        public Texture2D soft, tracer, splat, ringTex, band;
         public Texture2D[] ground = new Texture2D[4];
-        public Sprite ring, disc, vignette, white;
+        public Sprite ring, disc, vignette, white, arrow;
     }
 
     static Tex GenerateTextures()
@@ -116,6 +118,28 @@ public static partial class GameSceneBuilder
             float r = Dist(u, v) * 2f; float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1.35f, r)); return new Color(1, 1, 1, a);
         });
         t.white = WriteSprite("UI_White", 8, (u, v) => Color.white);
+        // Ground ring under special zombies / the soldier: bright rim with a soft inner glow.
+        t.ringTex = WriteTex("FX_Ring", 128, (u, v) =>
+        {
+            float r = Dist(u, v) * 2f;
+            float rim = Mathf.Exp(-Mathf.Pow((r - 0.86f) / 0.06f, 2f));
+            float glow = Mathf.Clamp01(1f - r) * 0.18f * Mathf.Clamp01((0.95f - r) * 20f);
+            return new Color(1, 1, 1, Mathf.Clamp01(rim + glow));
+        }, true, TextureWrapMode.Clamp, 128);
+        // Line band (tongue / telegraph): soft across the width, constant along the length.
+        t.band = WriteTex("FX_Band", 32, (u, v) =>
+        {
+            float a = 1f - Mathf.Abs(v - 0.5f) * 2f;
+            return new Color(1, 1, 1, Mathf.SmoothStep(0f, 1f, a * 1.6f));
+        }, false, TextureWrapMode.Clamp, 32);
+        // Off-screen threat arrow (points right).
+        t.arrow = WriteSprite("UI_Arrow", 64, (u, v) =>
+        {
+            float x = u, y = Mathf.Abs(v - 0.5f) * 2f;
+            float tri = Mathf.Clamp01((0.92f - x - y * 0.75f) * 30f) * Mathf.Clamp01((x - 0.12f) * 30f);
+            float notch = Mathf.Clamp01((x - 0.12f - (1f - y) * 0.22f) * 30f);
+            return new Color(1, 1, 1, tri * notch);
+        });
         for (int d = 0; d < 4; d++)
         {
             var district = (District)d;
@@ -329,6 +353,7 @@ public static partial class GameSceneBuilder
     class Mats
     {
         public Material soldier, zombie, zombieRunner, flash, bullet, muzzle, goo, chunks, sparks, pop, dust, fire, splat;
+        public Material shieldZombie, bombZombie, tongueZombie, ringShield, ringBomb, ringTongue, ringSoldier, tongue, telegraph, fxFire;
         public Material[] ground = new Material[4];
         public readonly Dictionary<string, Material> kit = new Dictionary<string, Material>();
         public readonly Dictionary<string, Material> kitFade = new Dictionary<string, Material>();
@@ -366,6 +391,20 @@ public static partial class GameSceneBuilder
         m.pop = Mat("M_FxPop", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", Color.white); });
         m.dust = Mat("M_FxDust", "Game/FxAlpha", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", Color.white); });
         m.fire = Mat("M_FxFire", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", Color.white); });
+        Material CharMat(string n, string dir) =>
+            Mat(n, simpleLit, x => { x.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(BaseColor(dir))); x.SetColor("_BaseColor", Color.white); });
+        m.shieldZombie = CharMat("M_ShieldZombie", ShieldDir);
+        m.bombZombie = CharMat("M_BombZombie", BombDir);
+        m.tongueZombie = CharMat("M_TongueZombie", TongueDir);
+        Material Ring(string n, Color c) =>
+            Mat(n, "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.ringTex); x.SetColor("_BaseColor", c); x.SetFloat("_VertexColor", 0f); });
+        m.ringShield = Ring("M_Ring_Shield", new Color(1f, 0.15f, 0.12f, 1f));
+        m.ringBomb = Ring("M_Ring_Bomb", new Color(1f, 0.55f, 0.08f, 1f));
+        m.ringTongue = Ring("M_Ring_Tongue", new Color(0.75f, 0.25f, 1f, 1f));
+        m.ringSoldier = Ring("M_Ring_Soldier", new Color(0.35f, 0.95f, 1f, 0.9f));
+        m.tongue = Mat("M_Tongue", "Game/FxAlpha", x => { x.SetTexture("_BaseMap", t.band); x.SetColor("_BaseColor", new Color(0.85f, 0.25f, 0.4f, 1f)); x.SetFloat("_VertexColor", 0f); });
+        m.telegraph = Mat("M_Telegraph", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.band); x.SetColor("_BaseColor", new Color(1f, 0.1f, 0.08f, 1f)); x.SetFloat("_VertexColor", 0f); });
+        m.fxFire = Mat("M_FxExplosion", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", Color.white); });
         m.splat = Mat("M_GooSplat", "Game/FxAlpha", x => { x.SetTexture("_BaseMap", t.splat); x.SetColor("_BaseColor", new Color(0.35f, 0.75f, 0.12f, 0.9f)); x.SetFloat("_VertexColor", 0f); });
         for (int d = 0; d < 4; d++)
         {
@@ -686,6 +725,9 @@ public static partial class GameSceneBuilder
         pickups.healthPackPrefab = LoadGo($"{PrefabDir}/HealthPack.prefab");
         var spawner = new GameObject("ZombieSpawner").AddComponent<ZombieSpawner>();
         spawner.prefab = Load<Zombie>("Zombie");
+        spawner.shieldPrefab = Load<Zombie>("ShieldZombie");
+        spawner.bombPrefab = Load<Zombie>("BombZombie");
+        spawner.tonguePrefab = Load<Zombie>("TongueZombie");
         BuildAudio(player.transform);
 
         var hud = BuildUI(t, out _);
@@ -694,7 +736,7 @@ public static partial class GameSceneBuilder
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })
             .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g))).ToArray();
         warm.skinnedSample = LoadGo(ZombieRigged);
-        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash };
+        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash, m.shieldZombie, m.bombZombie, m.tongueZombie };
         warm.font = UIFont;
 
         var gm = new GameObject("GameManager").AddComponent<GameManager>();
@@ -715,6 +757,7 @@ public static partial class GameSceneBuilder
         fx.sparks = Ps("Sparks", fx.transform, m.sparks, new Color(1f, 0.8f, 0.35f), 0f, 400, true);
         fx.pop = Ps("Pop", fx.transform, m.pop, new Color(1f, 1f, 0.9f, 0.9f), 0f, 60, false);
         fx.dust = Ps("Dust", fx.transform, m.dust, new Color(0.55f, 0.5f, 0.45f, 0.6f), -0.05f, 250, false);
+        fx.fire = Ps("Fire", fx.transform, m.fxFire, new Color(1f, 0.55f, 0.15f, 1f), -0.15f, 200, true);
         fx.splatPrefab = LoadGo($"{PrefabDir}/GooSplat.prefab");
         return fx;
     }

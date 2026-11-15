@@ -13,6 +13,7 @@ public class Fx : MonoBehaviour
     public ParticleSystem sparks;  // additive sparks
     public ParticleSystem pop;     // additive impact flash
     public ParticleSystem dust;    // alpha dust puffs
+    public ParticleSystem fire;    // additive fireball puffs (explosions)
 
     public GameObject splatPrefab;
     public int splatCount = 40;
@@ -55,7 +56,7 @@ public class Fx : MonoBehaviour
     void OnShift(Vector3 delta)
     {
         // Fx root itself is shifted with the other roots; world-space particles must be moved by hand.
-        foreach (var ps in new[] { goo, chunks, sparks, pop, dust })
+        foreach (var ps in new[] { goo, chunks, sparks, pop, dust, fire })
         {
             if (!ps) continue;
             int max = ps.main.maxParticles;
@@ -98,7 +99,11 @@ public class Fx : MonoBehaviour
         return dir * Random.Range(min, max) + r + Vector3.up * Random.Range(upMin, upMax);
     }
 
-    public void Splat(Vector3 p, float size)
+    static readonly Color Scorch = new Color(0.08f, 0.07f, 0.06f, 0.75f);
+
+    public void Splat(Vector3 p, float size) => Splat(p, size, default);
+
+    public void Splat(Vector3 p, float size, Color color)
     {
         if (splats == null) return;
         int i = nextSplat;
@@ -108,7 +113,7 @@ public class Fx : MonoBehaviour
         t.SetPositionAndRotation(new Vector3(p.x, 0.02f + i * 0.0004f, p.z), Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
         t.localScale = Vector3.one * size * Random.Range(0.8f, 1.2f);
         splatBorn[i] = Time.time;
-        splatColor[i] = Color.Lerp(new Color(0.35f, 0.75f, 0.12f, 0.9f), new Color(0.25f, 0.55f, 0.08f, 0.9f), Random.value);
+        splatColor[i] = color.a > 0f ? color : Color.Lerp(new Color(0.35f, 0.75f, 0.12f, 0.9f), new Color(0.25f, 0.55f, 0.08f, 0.9f), Random.value);
         mpb.SetColor(BaseColor, splatColor[i]);
         splatRenderers[i].SetPropertyBlock(mpb);
     }
@@ -127,6 +132,29 @@ public class Fx : MonoBehaviour
         for (int i = 0; i < 10; i++) Emit(chunks, p, Spray(dir, 2f, 6f, 3f, 2f, 5f), Random.Range(0.15f, 0.3f), Random.Range(0.5f, 0.8f));
         Emit(pop, p, Vector3.zero, 2.2f, 0.1f);
         Splat(p + dir * 1.2f, 1.6f);
+    }
+
+    /// <summary>Fireball, sparks, a ring of dust and a scorch mark sized to the blast radius.</summary>
+    public void Explosion(Vector3 p, float radius, bool big)
+    {
+        Vector3 c = p + Vector3.up * 0.6f;
+        Emit(pop, c, Vector3.zero, radius * 1.6f, 0.14f);
+        if (fire)
+            for (int i = 0; i < (big ? 26 : 12); i++)
+            {
+                Vector3 r = Random.insideUnitSphere; r.y = Mathf.Abs(r.y) * 0.6f;
+                Emit(fire, c + r * radius * 0.25f, r * radius * Random.Range(1.2f, 2.2f) + Vector3.up * Random.Range(1f, 3f),
+                    Random.Range(0.6f, 1.2f) * (big ? 1f : 0.7f), Random.Range(0.35f, 0.6f));
+            }
+        for (int i = 0; i < (big ? 24 : 10); i++)
+            Emit(sparks, c, Random.insideUnitSphere * Random.Range(6f, 14f) + Vector3.up * 4f, Random.Range(0.06f, 0.14f), Random.Range(0.2f, 0.45f));
+        for (int i = 0; i < 14; i++)
+        {
+            float a = i / 14f * Mathf.PI * 2f;
+            Vector3 d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            Emit(dust, p + d * radius * 0.3f + Vector3.up * 0.2f, d * Random.Range(4f, 7f) + Vector3.up * Random.Range(0.5f, 1.5f), Random.Range(0.8f, 1.4f), Random.Range(0.5f, 0.9f));
+        }
+        Splat(p, radius * 0.9f, Scorch);
     }
 
     public void Spark(Vector3 p, Vector3 normal)

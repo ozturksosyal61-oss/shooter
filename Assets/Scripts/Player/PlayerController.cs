@@ -29,9 +29,15 @@ public class PlayerController : MonoBehaviour
     public float maxHealth = 100f;
     public float invulnerableTime = 0.4f;
 
+    [Header("Grabbed (Dilci tongue)")]
+    [Tooltip("Fraction of the normal move speed left while held by a tongue (pushing away resists the pull).")]
+    public float grabbedMoveFactor = 0.4f;
+
     public float Health { get; private set; }
     public bool IsDead { get; private set; }
     public bool IsVaulting => vaulting;
+    public TongueZombie Grabber { get; private set; }
+    public bool IsGrabbed => Grabber != null;
 
     CharacterController cc;
     Vector3 knock, lastHitDir = Vector3.forward;
@@ -64,9 +70,15 @@ public class PlayerController : MonoBehaviour
         Vector3 moveDir = mag > 0.01f ? move / mag : Vector3.zero;
 
         if (vaulting) UpdateVault(dt);
-        else if (!(mag >= vaultMinInput && TryStartVault(moveDir)))
+        else if (!(mag >= vaultMinInput && !IsGrabbed && TryStartVault(moveDir)))
         {
             Vector3 vel = move * moveSpeed + knock;
+            if (IsGrabbed)
+            {
+                // Reeled in by the tongue; the stick still pushes back (slowly).
+                Vector3 toG = Grabber.transform.position - transform.position; toG.y = 0f;
+                vel = move * moveSpeed * grabbedMoveFactor + knock + (toG.sqrMagnitude > 0.01f ? toG.normalized * Grabber.pullSpeed : Vector3.zero);
+            }
             vel.y = -6f;
             cc.Move(vel * dt);
             // Footsteps by distance travelled.
@@ -141,7 +153,16 @@ public class PlayerController : MonoBehaviour
         if (DamageNumbers.I) DamageNumbers.I.ShowText(transform.position + Vector3.up * 2.2f, "+" + Mathf.RoundToInt(Health - before), new Color(0.4f, 1f, 0.4f));
     }
 
-    public void TakeDamage(float amount, Vector3 fromDir)
+    public void Grab(TongueZombie by) => Grabber = by;
+
+    public void ReleaseGrab(TongueZombie by)
+    {
+        if (Grabber == by) Grabber = null;
+    }
+
+    public void TakeDamage(float amount, Vector3 fromDir) => TakeDamage(amount, fromDir, 7f);
+
+    public void TakeDamage(float amount, Vector3 fromDir, float knockForce)
     {
         if (IsDead || Time.time < invulnUntil) return;
         invulnUntil = Time.time + invulnerableTime;
@@ -149,7 +170,7 @@ public class PlayerController : MonoBehaviour
         Health = Mathf.Max(0f, Health - amount);
         fromDir.y = 0f;
         lastHitDir = fromDir;
-        knock += fromDir.normalized * 7f;
+        knock += fromDir.normalized * knockForce;
         if (flash) flash.Flash(0.1f);
         GameAudio.Play(SfxId.PlayerHurt, transform.position);
         GameManager.I.OnPlayerHurt();

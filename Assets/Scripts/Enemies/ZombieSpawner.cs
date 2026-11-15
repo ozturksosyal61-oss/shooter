@@ -8,6 +8,17 @@ public class ZombieSpawner : MonoBehaviour
 {
     public Zombie prefab;
     public int prewarm = 50;
+
+    [Header("Special zombies (lab mutations)")]
+    public Zombie shieldPrefab;
+    public Zombie bombPrefab;
+    public Zombie tonguePrefab;
+    public int specialPrewarm = 3;
+    public float shieldHealthMul = 8f, bombHealthMul = 1.3f, tongueHealthMul = 2.4f;
+    public float shieldSpeed = 1.25f, bombSpeed = 2f, tongueSpeed = 2.1f;
+    public float shieldDamageMul = 1.8f;
+    [Tooltip("Relative pick weights when a special spawns: shield, bomb, tongue.")]
+    public Vector3 specialWeights = new Vector3(0.3f, 0.45f, 0.25f);
     public float viewMargin = 0.08f;      // viewport units outside the screen
     public float extraDistance = 1.5f;    // metres beyond the view edge
     public float despawnDistance = 34f;
@@ -15,7 +26,7 @@ public class ZombieSpawner : MonoBehaviour
     public Vector2 walkerSpeed = new Vector2(1.7f, 2.5f);
     public Vector2 runnerSpeed = new Vector2(3.6f, 4.4f);
 
-    Pool<Zombie> pool;
+    Pool<Zombie> pool, shieldPool, bombPool, tonguePool;
     float timer = 1f;
     Camera cam;
     Vector3 lastPlayerPos, heading;
@@ -27,6 +38,9 @@ public class ZombieSpawner : MonoBehaviour
     {
         Zombie.Active.Clear();
         pool = new Pool<Zombie>(prefab, transform, prewarm);
+        if (shieldPrefab) shieldPool = new Pool<Zombie>(shieldPrefab, transform, specialPrewarm);
+        if (bombPrefab) bombPool = new Pool<Zombie>(bombPrefab, transform, specialPrewarm);
+        if (tonguePrefab) tonguePool = new Pool<Zombie>(tonguePrefab, transform, specialPrewarm);
     }
 
     void Update()
@@ -56,12 +70,46 @@ public class ZombieSpawner : MonoBehaviour
         for (int i = 0; i < burst && Zombie.Active.Count < wp.maxAlive; i++)
         {
             if (!TryFindSpawnPoint(player.position, out var pos)) break;
+            if (Random.value < wp.specialChance && TrySpawnSpecial(PickSpecial(wp), pos, wp) != null) continue;
             bool runner = Random.value < wp.runnerChance;
             float speed = (runner ? Random.Range(runnerSpeed.x, runnerSpeed.y) : Random.Range(walkerSpeed.x, walkerSpeed.y)) * wp.speedMultiplier;
             float hp = baseHealth * wp.healthMultiplier * (runner ? 0.6f : 1f);
             pool.Get().Spawn(pos, hp, speed, wp.contactDamage, runner, pool);
         }
     }
+
+    /// <summary>Weighted pick among the special kinds still under their per-wave limit (Walker = none).</summary>
+    ZombieKind PickSpecial(WaveParams wp)
+    {
+        float ws = Zombie.CountKind(ZombieKind.Shield) < wp.maxShield && shieldPool != null ? specialWeights.x : 0f;
+        float wb = Zombie.CountKind(ZombieKind.Bomb) < wp.maxBomb && bombPool != null ? specialWeights.y : 0f;
+        float wt = Zombie.CountKind(ZombieKind.Tongue) < wp.maxTongue && tonguePool != null ? specialWeights.z : 0f;
+        float r = Random.value * (ws + wb + wt);
+        if (ws + wb + wt <= 0f) return ZombieKind.Walker;
+        if (r < ws) return ZombieKind.Shield;
+        if (r < ws + wb) return ZombieKind.Bomb;
+        return ZombieKind.Tongue;
+    }
+
+    /// <summary>Spawns a special zombie at <paramref name="pos"/> tuned for the wave (tests and bots call it directly).</summary>
+    public Zombie TrySpawnSpecial(ZombieKind kind, Vector3 pos, WaveParams wp)
+    {
+        Pool<Zombie> p; float hpMul, spd, dmgMul = 1f;
+        switch (kind)
+        {
+            case ZombieKind.Shield: p = shieldPool; hpMul = shieldHealthMul; spd = shieldSpeed; dmgMul = shieldDamageMul; break;
+            case ZombieKind.Bomb: p = bombPool; hpMul = bombHealthMul; spd = bombSpeed; break;
+            case ZombieKind.Tongue: p = tonguePool; hpMul = tongueHealthMul; spd = tongueSpeed; break;
+            default: return null;
+        }
+        if (p == null) return null;
+        var z = p.Get();
+        z.Spawn(pos, baseHealth * wp.healthMultiplier * hpMul, spd * Mathf.Min(wp.speedMultiplier, 1.25f), wp.contactDamage * dmgMul, false, p);
+        return z;
+    }
+
+    public Zombie SpawnSpecial(ZombieKind kind, Vector3 pos) =>
+        TrySpawnSpecial(kind, pos, WaveDirector.I ? WaveDirector.I.Params : Difficulty.ForWave(1));
 
     void RecycleStragglers(Vector3 playerPos)
     {

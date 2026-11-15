@@ -42,6 +42,7 @@ public class Bullet : MonoBehaviour
         {
             Vector3 dir = vel.normalized;
             if (hit.collider.TryGetComponent(out Zombie z)) z.TakeHit(damage, crit, dir, hit.point);
+            else if (hit.collider.TryGetComponent(out TongueHitbox th)) th.owner.HitTongue(damage, crit, dir, hit.point);
             else
             {
                 if (Fx.I) Fx.I.Spark(hit.point, hit.normal);

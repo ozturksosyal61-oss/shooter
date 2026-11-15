@@ -77,7 +77,8 @@ public class Weapon : MonoBehaviour
             else if (input.HasAimDir) aim = new Vector3(input.AimDir.x, 0f, input.AimDir.y);
             else
             {
-                var z = Zombie.FindNearest(pos, autoAimRange);
+                // Held by a tongue: auto-aim goes for the Dilci.
+                Zombie z = owner.IsGrabbed && owner.Grabber.Targetable ? owner.Grabber : Zombie.FindNearest(pos, autoAimRange);
                 if (z) { aim = z.transform.position - pos; aim.y = 0f; aim.Normalize(); }
                 else aim = moveDir.sqrMagnitude > 0.01f ? moveDir : owner.transform.forward;
             }

@@ -113,6 +113,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 49cbdaf0398f12d4c869c982d4e7e4f5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game::Zombie
+  kind: 0
   model: {fileID: 7873432892812189060}
   animator: {fileID: 4297596592158902270}
   flash: {fileID: 2576268948248806360}
@@ -120,17 +121,23 @@ MonoBehaviour:
   bodyRenderer: {fileID: 2134552492648342175}
   walkerMaterial: {fileID: 2100000, guid: 063186aad0d417345b4d38bb64c103bb, type: 2}
   runnerMaterial: {fileID: 2100000, guid: eee2927296415204ca58327f96da02e2, type: 2}
+  ring: {fileID: 0}
   contactRange: 0.85
   contactCooldown: 0.9
   separationRadius: 0.75
   lookAhead: 1.4
   riseDuration: 0.55
+  riseDepth: 1.9
   screamDuration: 1.1
   walkClipSpeed: 0.51726747
   runClipSpeed: 3.0271118
   walkSpeedFallback: 1.2
   runSpeedFallback: 3.5
   dyingLength: 3.3333335
+  deathThrow: 1
+  turnSpeed: 300
+  score: 10
+  xp: 1
 --- !u!1001 &7696287813222742639
 PrefabInstance:
   m_ObjectHideFlags: 0

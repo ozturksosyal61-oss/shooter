@@ -37,7 +37,18 @@ public static partial class GameSceneBuilder
         public AnimationClip[] walk = new AnimationClip[8], run = new AnimationClip[8];
         public AnimationClip zIdle, zWalk, zRun, zAttack, zPunch, zHit, zDying, zScream;
         public bool screamIsSubstitute;
+        // Special zombies (lab mutations): own rigs, clips retargeted through the humanoid avatar.
+        public Avatar shieldAvatar, bombAvatar, tongueAvatar;
+        public AnimationClip sWalk, sPunch, sRoar, sDying;
+        public AnimationClip bWalk, bRun, bSwell;
+        public AnimationClip tSneak, tThrow, tPull;
     }
+
+    const string ShieldDir = "Assets/Art/Characters/ShieldZombie";
+    const string BombDir = "Assets/Art/Characters/BombZombie";
+    const string TongueDir = "Assets/Art/Characters/TongueZombie";
+    static string Rigged(string dir) => $"{dir}/{System.IO.Path.GetFileName(dir)}_Rigged.fbx";
+    static string BaseColor(string dir) => $"{dir}/Textures/{System.IO.Path.GetFileName(dir)}_BaseColor.png";
 
     // ---------------------------------------------------------------- import
     static Avatar ConfigureRig(string path, bool optimize)
@@ -118,6 +129,22 @@ public static partial class GameSceneBuilder
         bool hasScream = AssetImporter.GetAtPath(Z("zombie scream")) != null;
         a.screamIsSubstitute = !hasScream;
         a.zScream = ConfigureClip(Z(hasScream ? "zombie scream" : "zombie agonizing"), a.zombieAvatar, "ZScream", false, true);
+
+        // The special clips were downloaded on a standard 65-bone Mixamo skeleton -> retarget via the zombie avatar.
+        a.shieldAvatar = ConfigureRig(Rigged(ShieldDir), true);
+        a.bombAvatar = ConfigureRig(Rigged(BombDir), true);
+        a.tongueAvatar = ConfigureRig(Rigged(TongueDir), true);
+        string SA(string dir, string f) => $"{dir}/Anim/{f}.fbx";
+        a.sWalk = ConfigureClip(SA(ShieldDir, "mutant walking"), a.zombieAvatar, "ShieldWalk", true, false);
+        a.sPunch = ConfigureClip(SA(ShieldDir, "mutant punch"), a.zombieAvatar, "ShieldPunch", false, true);
+        a.sRoar = ConfigureClip(SA(ShieldDir, "mutant roaring"), a.zombieAvatar, "ShieldRoar", false, true);
+        a.sDying = ConfigureClip(SA(ShieldDir, "mutant dying"), a.zombieAvatar, "ShieldDying", false, true);
+        a.bWalk = ConfigureClip(SA(BombDir, "drunk walk"), a.zombieAvatar, "BombWalk", true, false);
+        a.bRun = ConfigureClip(SA(BombDir, "bomb running"), a.zombieAvatar, "BombRun", true, false);
+        a.bSwell = ConfigureClip(SA(BombDir, "bomb agonizing"), a.zombieAvatar, "BombSwell", false, true);
+        a.tSneak = ConfigureClip(SA(TongueDir, "sneaking forward"), a.zombieAvatar, "TongueSneak", true, false);
+        a.tThrow = ConfigureClip(SA(TongueDir, "frisbee throw"), a.zombieAvatar, "TongueThrow", false, true);
+        a.tPull = ConfigureClip(SA(TongueDir, "pulling a rope"), a.zombieAvatar, "TonguePull", true, true);
         return a;
     }
 
@@ -226,9 +253,18 @@ public static partial class GameSceneBuilder
         return c;
     }
 
-    static AnimatorController BuildZombieController(CharacterAnims a)
+    static AnimatorController BuildZombieController(CharacterAnims a) =>
+        BuildMonsterController("Zombie", a.zIdle, a.zWalk, a.zRun, a.zScream, a.zAttack, a.zPunch, a.zHit, a.zDying);
+
+    /// <summary>
+    /// Zombie-style controller: Locomotion (Gait 0 idle / 1 walk / 2 run, speed AnimSpeed), Scream, Attack, Punch,
+    /// Hit, Dying + optional extra states (name, clip, return to locomotion when done).
+    /// </summary>
+    static AnimatorController BuildMonsterController(string name, AnimationClip idle, AnimationClip walk, AnimationClip run,
+        AnimationClip scream, AnimationClip attack, AnimationClip punch, AnimationClip hit, AnimationClip dying,
+        params (string name, AnimationClip clip, bool returns)[] extras)
     {
-        var c = NewController("Zombie");
+        var c = NewController(name);
         c.AddParameter("Gait", AnimatorControllerParameterType.Float);
         c.AddParameter(new AnimatorControllerParameter { name = "AnimSpeed", type = AnimatorControllerParameterType.Float, defaultFloat = 1f });
         var sm = c.layers[0].stateMachine;
@@ -237,33 +273,36 @@ public static partial class GameSceneBuilder
         tree.blendType = BlendTreeType.Simple1D;
         tree.blendParameter = "Gait";
         tree.useAutomaticThresholds = false;
-        tree.AddChild(a.zIdle, 0f);
-        tree.AddChild(a.zWalk, 1f);
-        tree.AddChild(a.zRun, 2f);
+        tree.AddChild(idle, 0f);
+        tree.AddChild(walk, 1f);
+        tree.AddChild(run, 2f);
         loco.speedParameterActive = true;
         loco.speedParameter = "AnimSpeed";
         sm.defaultState = loco;
 
-        AnimatorState Add(string n, Motion m) { var s = sm.AddState(n); s.motion = m; return s; }
-        var scream = Add("Scream", a.zScream);
-        var attack = Add("Attack", a.zAttack);
-        var punch = Add("Punch", a.zPunch);
-        Add("Hit", a.zHit);
-        Add("Dying", a.zDying);
-        foreach (var s in new[] { attack, punch })
+        AnimatorState Add(string n, Motion mo) { var st = sm.AddState(n); st.motion = mo; return st; }
+        void Back(AnimatorState st, float exit, float dur)
         {
-            var t = s.AddTransition(loco);
-            t.hasExitTime = true; t.exitTime = 0.85f; t.duration = 0.2f;
+            var t = st.AddTransition(loco);
+            t.hasExitTime = true; t.exitTime = exit; t.duration = dur;
         }
-        var ts = scream.AddTransition(loco);
-        ts.hasExitTime = true; ts.exitTime = 0.95f; ts.duration = 0.25f;
+        Back(Add("Scream", scream), 0.95f, 0.25f);
+        Back(Add("Attack", attack), 0.85f, 0.2f);
+        Back(Add("Punch", punch), 0.85f, 0.2f);
+        Add("Hit", hit);
+        Add("Dying", dying);
+        foreach (var e in extras)
+        {
+            var st = Add(e.name, e.clip);
+            if (e.returns) Back(st, 0.95f, 0.2f);
+        }
         EditorUtility.SetDirty(c);
         return c;
     }
 
     // ---------------------------------------------------------------- models
     /// <summary>Instantiates a rigged FBX as "Model" under <paramref name="root"/>, scaled to <paramref name="height"/>, feet on y=0.</summary>
-    static GameObject AddRiggedModel(Transform root, string fbx, Material mat, float height, AnimatorController controller, bool alwaysAnimate)
+    static GameObject AddRiggedModel(Transform root, string fbx, Material mat, float height, AnimatorController controller, bool alwaysAnimate, float widthMul = 1f)
     {
         var src = LoadGo(fbx);
         var model = (GameObject)PrefabUtility.InstantiatePrefab(src);
@@ -282,7 +321,7 @@ public static partial class GameSceneBuilder
         Bounds b = smrs[0].bounds;
         foreach (var r in smrs) b.Encapsulate(r.bounds);
         float s = height / b.size.y;
-        model.transform.localScale = Vector3.one * s;
+        model.transform.localScale = new Vector3(s * widthMul, s, s * widthMul);
         b = smrs[0].bounds;
         foreach (var r in smrs) b.Encapsulate(r.bounds);
         model.transform.localPosition = new Vector3(0f, -b.min.y, 0f);
@@ -368,6 +407,99 @@ public static partial class GameSceneBuilder
         Debug.Log($"BUILD: zombie walk={z.walkClipSpeed:0.00} run={z.runClipSpeed:0.00} dying={z.dyingLength:0.00}s scream={(a.screamIsSubstitute ? "agonizing (substitute)" : "scream")} {a.zScream.length:0.00}s");
         SetLayer(go, GameLayers.Zombie);
         SavePrefab(go, $"{PrefabDir}/Zombie.prefab");
+    }
+
+    /// <summary>Shared shell of a special zombie prefab: model, capsule, kinematic body, flash, ring, component.</summary>
+    static T MonsterPrefab<T>(string name, string fbx, Mats m, Material mat, Material ringMat, float height, float widthMul,
+        AnimatorController controller, float radius, float capHeight, out GameObject go) where T : Zombie
+    {
+        go = new GameObject(name);
+        var model = AddRiggedModel(go.transform, fbx, mat, height, controller, false, widthMul);
+        var cap = go.AddComponent<CapsuleCollider>();
+        cap.radius = radius; cap.height = capHeight; cap.center = new Vector3(0f, capHeight * 0.5f, 0f);
+        var rb = go.AddComponent<Rigidbody>();
+        rb.isKinematic = true; rb.useGravity = false; rb.interpolation = RigidbodyInterpolation.None;
+        var smr = model.GetComponentInChildren<SkinnedMeshRenderer>();
+        var flash = go.AddComponent<HitFlash>();
+        flash.renderers = new Renderer[] { smr };
+        flash.flashMaterial = m.flash;
+        var ring = Quad("Ring", go.transform, ringMat);
+        ring.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+        ring.transform.localScale = new Vector3(radius * 3.6f, radius * 3.6f, 1f);
+        var z = go.AddComponent<T>();
+        z.model = model.transform;
+        z.animator = model.GetComponent<Animator>();
+        z.flash = flash;
+        z.body = cap;
+        z.bodyRenderer = smr;
+        z.walkerMaterial = mat;
+        z.runnerMaterial = null;
+        z.ring = ring.transform;
+        z.riseDepth = height + 0.1f;
+        return z;
+    }
+
+    static void BuildSpecialZombiePrefabs(Mats m, CharacterAnims a)
+    {
+        // Kalkanli: ~1.4x wider than a walker, slow and heavy.
+        var sc = BuildMonsterController("ShieldZombie", a.zIdle, a.sWalk, a.sWalk, a.sRoar, a.sPunch, a.sPunch, a.zHit, a.sDying);
+        var shield = MonsterPrefab<ShieldZombie>("ShieldZombie", Rigged(ShieldDir), m, m.shieldZombie, m.ringShield, 2.1f, 1.22f, sc, 0.62f, 2f, out var sgo);
+        shield.kind = ZombieKind.Shield;
+        shield.contactRange = 1.4f; shield.contactCooldown = 1.3f; shield.separationRadius = 1.2f; shield.lookAhead = 1.8f;
+        shield.walkClipSpeed = ClipSpeed(a.sWalk); shield.runClipSpeed = shield.walkClipSpeed;
+        shield.walkSpeedFallback = shield.runSpeedFallback = 1.3f;
+        shield.dyingLength = a.sDying.length; shield.deathThrow = 0.3f; shield.turnSpeed = 95f;
+        shield.screamDuration = Mathf.Min(a.sRoar.length * 0.85f, 2.2f);
+        shield.score = 60; shield.xp = 8;
+        SetLayer(sgo, GameLayers.Zombie);
+        SavePrefab(sgo, $"{PrefabDir}/ShieldZombie.prefab");
+
+        // Bombali: short and ~1.3x bloated sideways.
+        var bc = BuildMonsterController("BombZombie", a.zIdle, a.bWalk, a.bRun, a.zScream, a.zAttack, a.zPunch, a.zHit, a.zDying,
+            ("Swell", a.bSwell, false));
+        var bomb = MonsterPrefab<BombZombie>("BombZombie", Rigged(BombDir), m, m.bombZombie, m.ringBomb, 1.65f, 1.3f, bc, 0.55f, 1.6f, out var bgo);
+        bomb.kind = ZombieKind.Bomb;
+        bomb.contactRange = 1.1f; bomb.separationRadius = 1f;
+        bomb.walkClipSpeed = ClipSpeed(a.bWalk); bomb.runClipSpeed = ClipSpeed(a.bRun);
+        bomb.dyingLength = a.zDying.length; bomb.screamDuration = 0.9f;
+        bomb.score = 30; bomb.xp = 5;
+        SetLayer(bgo, GameLayers.Zombie);
+        SavePrefab(bgo, $"{PrefabDir}/BombZombie.prefab");
+
+        // Dilci: ~1.3x taller, lean; tongue lines + hitbox.
+        var tc = BuildMonsterController("TongueZombie", a.zIdle, a.tSneak, a.tSneak, a.zScream, a.zAttack, a.zPunch, a.zHit, a.zDying,
+            ("Throw", a.tThrow, true), ("Pull", a.tPull, false));
+        var tongue = MonsterPrefab<TongueZombie>("TongueZombie", Rigged(TongueDir), m, m.tongueZombie, m.ringTongue, 2.35f, 1f, tc, 0.36f, 2.2f, out var tgo);
+        tongue.kind = ZombieKind.Tongue;
+        tongue.contactRange = 0.95f;
+        tongue.walkClipSpeed = ClipSpeed(a.tSneak); tongue.runClipSpeed = tongue.walkClipSpeed;
+        tongue.dyingLength = a.zDying.length; tongue.deathThrow = 0.8f;
+        tongue.mouthHeight = 2.05f;
+        tongue.score = 45; tongue.xp = 7;
+        LineRenderer Line(string n, Material mat, float w)
+        {
+            var lgo = new GameObject(n);
+            lgo.transform.SetParent(tgo.transform, false);
+            var lr = lgo.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true; lr.positionCount = 2; lr.sharedMaterial = mat;
+            lr.startWidth = lr.endWidth = w; lr.numCapVertices = 4; lr.alignment = LineAlignment.View;
+            lr.textureMode = LineTextureMode.Stretch;
+            lr.shadowCastingMode = ShadowCastingMode.Off; lr.receiveShadows = false;
+            lr.enabled = false;
+            return lr;
+        }
+        tongue.tongueLine = Line("Tongue", m.tongue, 0.17f);
+        tongue.telegraphLine = Line("Telegraph", m.telegraph, 0.08f);
+        var hbGo = new GameObject("TongueHitbox");
+        hbGo.transform.SetParent(tgo.transform, false);
+        var hb = hbGo.AddComponent<CapsuleCollider>();
+        hb.direction = 2; hb.radius = 0.32f; hb.height = 2f; hb.enabled = false;
+        hbGo.AddComponent<TongueHitbox>().owner = tongue;
+        tongue.tongueHitbox = hb;
+        SetLayer(tgo, GameLayers.Zombie);
+        SavePrefab(tgo, $"{PrefabDir}/TongueZombie.prefab");
+
+        Debug.Log($"BUILD: specials shield walk={shield.walkClipSpeed:0.00} roar={a.sRoar.length:0.0}s | bomb walk={bomb.walkClipSpeed:0.00} run={bomb.runClipSpeed:0.00} swell={a.bSwell.length:0.0}s | tongue sneak={tongue.walkClipSpeed:0.00} throw={a.tThrow.length:0.0}s pull={a.tPull.length:0.0}s");
     }
 
     static void BuildPlayerPrefab(Mats m, Bullet bullet, CharacterAnims a)

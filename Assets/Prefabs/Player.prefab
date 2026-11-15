@@ -382,6 +382,7 @@ MonoBehaviour:
   breatherRegen: 5
   maxHealth: 100
   invulnerableTime: 0.4
+  grabbedMoveFactor: 0.4
 --- !u!1 &8317065611463842869
 GameObject:
   m_ObjectHideFlags: 0

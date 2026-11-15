@@ -34,6 +34,17 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | `SFX/low_ammo` | **SYNTH** — two soft 1.3 kHz beeps | this project | — |
 | `SFX/combo_up` | **SYNTH** — bell partials with upward glide (pitched up per multiplier in code) | this project | — |
 | `SFX/heartbeat` | **SYNTH** — lub-dub sine thumps, loopable | this project | — |
+| `SFX/shield_roar_01..02` | **DERIVED** — `zombie_scream_01/03` slowed to 0.62x + synth sub-bass (`Tools/synth_specials.py`) | this project (from CC0) | CC0 |
+| `SFX/shield_ricochet_01..03` | **SYNTH** — metallic partials + falling whistle + click | this project | — |
+| `SFX/bomb_spawn` | **DERIVED** — `zombie_moan_02` at 0.8x + synth gurgle | this project (from CC0) | CC0 |
+| `SFX/bomb_fuse` | **SYNTH** — rising whine with accelerating beeps + gurgle | this project | — |
+| `SFX/bomb_burst` | **DERIVED** — `explosion` layered with a 0.8x copy + filtered noise splash | this project (from CC0) | CC0 |
+| `SFX/tongue_spawn` | **DERIVED** — `zombie_scream_02` at 1.35x + band-passed hiss | this project (from CC0) | CC0 |
+| `SFX/tongue_warn`, `tongue_lash`, `tongue_grab`, `tongue_snap` | **SYNTH** — chirps / falling band-pass whip / wet slap + thump / twang + crack | this project | — |
+| `SFX/shotgun_01..02` | **DERIVED** — `rifle_shot_01/02` at 0.7x + low body thump | this project (from CC0) | CC0 |
+| `SFX/turret_shot` | **DERIVED** — `rifle_shot_01` at 1.3x, high-passed | this project (from CC0) | CC0 |
+| `SFX/grenade_throw`, `level_up`, `card_pick` | **SYNTH** — band-passed whoosh / bell arpeggio / whoosh + ding | this project | — |
+| `SFX/barrel_explode` | **DERIVED** — `explosion` at 0.85x + metallic clang partials | this project (from CC0) | CC0 |
 | `Music/music_calm` | 60 s seamless crossfaded excerpt of *Post Apocalyptic Wastelands [Loop Ready]* — [Horror Atmosphere](https://opengameart.org/content/horror-atmosphere) | Juhani Junkala (SubspaceAudio) | CC0 |
 | `Music/music_intense` | [Fast fight / battle music (looped)](https://opengameart.org/content/fast-fight-battle-music-looped) | xcvg | CC0 |
 
@@ -46,4 +57,5 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | `Assets/Art/Environment/Industrial` | [City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial) | Kenney | CC0 |
 | `Assets/Art/Environment/Survival` | [Survival Kit](https://kenney.nl/assets/survival-kit) | Kenney | CC0 |
 | `Assets/Art/Weapons/Rifle` | Assault Rifle ([poly.pizza/m/Bgvuu4CUMV](https://poly.pizza/m/Bgvuu4CUMV), Ultimate Gun Pack) | Quaternius | CC0 |
+| `Assets/Art/Characters/{ShieldZombie,BombZombie,TongueZombie}` | Special zombie models supplied by the project owner (originals in `_mixamo/Source~/`), decimated to ~20k tris with `Tools/blender_export_mixamo.py`; rig + animations (Mutant Walking/Punch/Roaring/Dying, Drunk Walk, Zombie Running/Agonizing, Sneaking Forward, Frisbee Throw, Pulling A Rope) via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
 | `Assets/Art/Characters/*` | Soldier / Zombie models supplied by the project owner; rig + animations via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
