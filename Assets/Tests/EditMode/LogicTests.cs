@@ -222,6 +222,46 @@ public class CardTests
     }
 
     [Test]
+    public void FirstPicksGuaranteeADamageCard()
+    {
+        var into = new List<CardId>(); var scratch = new List<int>();
+        var rng = new System.Random(3);
+        Func<float> r = () => (float)rng.NextDouble();
+        var levels = Levels();
+        for (int k = 0; k < 2000; k++)
+        {
+            Upgrades.Offer(levels, 3, r, into, scratch, true);
+            Assert.AreEqual(3, into.Count);
+            Assert.AreEqual(3, new HashSet<CardId>(into).Count, "still distinct");
+            bool dmg = false; foreach (var id in into) dmg |= Upgrades.IsDamageCard(id);
+            Assert.IsTrue(dmg, "guaranteed damage card");
+        }
+        // Without the guarantee some offers have none (so the guarantee actually does something).
+        int without = 0;
+        for (int k = 0; k < 2000; k++)
+        {
+            Upgrades.Offer(levels, 3, r, into, scratch, false);
+            bool dmg = false; foreach (var id in into) dmg |= Upgrades.IsDamageCard(id);
+            if (!dmg) without++;
+        }
+        Assert.Greater(without, 0);
+        // All damage cards maxed: the guarantee can't apply and the offer is still full.
+        foreach (var id in Upgrades.DamageCards) levels[(int)id] = 3;
+        Upgrades.Offer(levels, 3, r, into, scratch, true);
+        Assert.AreEqual(3, into.Count);
+        Assert.AreEqual(2, Upgrades.GuaranteedDamagePicks);
+    }
+
+    [Test]
+    public void TurretLimit()
+    {
+        Assert.AreEqual(0, Upgrades.MaxTurrets(0));
+        Assert.AreEqual(1, Upgrades.MaxTurrets(1));
+        Assert.AreEqual(1, Upgrades.MaxTurrets(2));
+        Assert.AreEqual(2, Upgrades.MaxTurrets(3));
+    }
+
+    [Test]
     public void StatFormulasMatchDescriptions()
     {
         // +20/40/60% fire rate

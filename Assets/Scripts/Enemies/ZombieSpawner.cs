@@ -19,8 +19,8 @@ public class ZombieSpawner : MonoBehaviour
     public float shieldDamageMul = 1.8f;
     [Tooltip("Relative pick weights when a special spawns: shield, bomb, tongue.")]
     public Vector3 specialWeights = new Vector3(0.3f, 0.45f, 0.25f);
-    public float viewMargin = 0.08f;      // viewport units outside the screen
-    public float extraDistance = 3f;      // metres beyond the view edge (camera is closer since F6)
+    public float viewMargin = 0.05f;      // viewport units outside the screen
+    public float extraDistance = 1f;      // metres beyond the view edge (camera at 17.5 m since F6.5: keep travel time similar)
     public float despawnDistance = 34f;
     public float baseHealth = 70f;
     public Vector2 walkerSpeed = new Vector2(1.7f, 2.5f);

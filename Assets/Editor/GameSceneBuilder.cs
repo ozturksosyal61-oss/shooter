@@ -31,6 +31,8 @@ public static partial class GameSceneBuilder
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         SetupLayers();
         var t = GenerateTextures();
+        ui = GenerateUiSprites();
+        ConfigureUiFont();
         ConfigureCharacterTexture(SoldierTex);
         ConfigureCharacterTexture(ZombieTex);
         foreach (var dir in new[] { ShieldDir, BombDir, TongueDir }) ConfigureCharacterTexture(BaseColor(dir));
@@ -532,12 +534,38 @@ public static partial class GameSceneBuilder
         muzzle.localPosition = new Vector3(0f, 0.02f, 0.95f);
         var ring = Quad("Ring", root.transform, m.ringSoldier);
         ring.transform.localPosition = new Vector3(0f, 0.03f, 0f);
-        ring.transform.localScale = new Vector3(1.8f, 1.8f, 1f);
+        ring.transform.localScale = new Vector3(2.2f, 2.2f, 1f);
         rs.Add(ring.GetComponent<Renderer>());
         var t = root.AddComponent<Turret>();
         t.head = head;
         t.muzzle = muzzle;
         t.blinkRenderers = rs.ToArray();
+
+        // Status above the turret (world-space, billboarded at runtime): radial timer ring + health bar.
+        var cgo = new GameObject("Status", typeof(RectTransform));
+        cgo.transform.SetParent(root.transform, false);
+        cgo.transform.localPosition = new Vector3(0f, 2.15f, 0f);
+        var canvas = cgo.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.sortingOrder = 0;
+        var crt = (RectTransform)cgo.transform;
+        crt.sizeDelta = new Vector2(200f, 140f);
+        crt.localScale = Vector3.one * 0.006f;
+        var timerBg = Img("TimerBg", crt, ui.ringThick, new Color(0f, 0f, 0f, 0.55f));
+        Anchor(timerBg.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(84f, 84f));
+        var timer = Img("Timer", crt, ui.ringThick, UiOrange);
+        Anchor(timer.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(84f, 84f));
+        timer.type = UnityEngine.UI.Image.Type.Filled; timer.fillMethod = UnityEngine.UI.Image.FillMethod.Radial360;
+        timer.fillOrigin = 2; timer.fillClockwise = false; timer.fillAmount = 1f;
+        var tIcon = Img("Icon", timer.transform, ui.cards[(int)CardId.Turret], UiCream);
+        Anchor(tIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(46f, 46f));
+        var hpFrame = Sliced("Health", crt, ui.panel, UiKhakiDark);
+        Anchor(hpFrame.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(170f, 34f));
+        var hp = Img("Fill", hpFrame.transform, ui.flat, new Color(0.4f, 0.95f, 0.35f));
+        hp.type = UnityEngine.UI.Image.Type.Filled; hp.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal; hp.fillAmount = 1f;
+        hp.rectTransform.anchorMin = Vector2.zero; hp.rectTransform.anchorMax = Vector2.one;
+        hp.rectTransform.offsetMin = new Vector2(7f, 7f); hp.rectTransform.offsetMax = new Vector2(-7f, -7f);
+        t.status = crt; t.healthFill = hp; t.timerFill = timer;
         SavePrefab(root, $"{PrefabDir}/Turret.prefab");
     }
 
@@ -691,7 +719,7 @@ public static partial class GameSceneBuilder
                 // Hazard band: a glowing orange ring on the ground so it reads as "explosive" from the top.
                 var ring = Quad("Warn", root.transform, m.ringBomb);
                 ring.transform.localPosition = new Vector3(0f, 0.03f, 0f);
-                ring.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
+                ring.transform.localScale = new Vector3(1.8f, 1.8f, 1f);
                 ring.transform.SetParent(b.model.transform, true);
             }) };
         e.crate = EnvPrefab(m, "Survival", "box", "Crate", Fit.Height, 1.0f, 1f, V, true);
@@ -793,8 +821,10 @@ public static partial class GameSceneBuilder
         camData.renderPostProcessing = false;
         var rig = camGo.AddComponent<CameraRig>();
         rig.target = player.transform;
-        rig.distance = 14f;
-        camGo.transform.SetPositionAndRotation(Quaternion.Euler(57f, 0f, 0f) * Vector3.back * 14f, Quaternion.Euler(57f, 0f, 0f));
+        // Pulled back from 14 m (F6.5) so more of the street is visible; same angle. Rings/arrows/cutout scaled to match.
+        rig.distance = 17.5f;
+        rig.cutRadius = 0.105f;
+        camGo.transform.SetPositionAndRotation(Quaternion.Euler(57f, 0f, 0f) * Vector3.back * 17.5f, Quaternion.Euler(57f, 0f, 0f));
 
         // Systems
         BuildFx(m);
@@ -806,11 +836,13 @@ public static partial class GameSceneBuilder
         spawner.shieldPrefab = Load<Zombie>("ShieldZombie");
         spawner.bombPrefab = Load<Zombie>("BombZombie");
         spawner.tonguePrefab = Load<Zombie>("TongueZombie");
+        spawner.despawnDistance = 40f; // the wider 17.5 m view reaches ~25 m to the corners
         BuildAudio(player.transform);
         new GameObject("Progression").AddComponent<Progression>();
         var upgrades = new GameObject("Upgrades").AddComponent<Upgrades>();
         upgrades.turretPrefab = Load<Turret>("Turret");
         upgrades.grenadePrefab = LoadGo($"{PrefabDir}/Grenade.prefab");
+        upgrades.cardSprites = ui.cards;
 
         var hud = BuildUI(t, out _);
 
@@ -890,7 +922,19 @@ public static partial class GameSceneBuilder
     }
 
     // ---------------------------------------------------------------- UI
-    static Font UIFont => Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+    /// <summary>Rubik ExtraBold (OFL, static instance of the variable font; full Turkish set). See CREDITS.md.</summary>
+    const string UiFontPath = "Assets/Art/UI/Fonts/Rubik-ExtraBold.ttf";
+    static Font UIFont => AssetDatabase.LoadAssetAtPath<Font>(UiFontPath);
+    static UiSprites ui;
+
+    static void ConfigureUiFont()
+    {
+        var imp = (TrueTypeFontImporter)AssetImporter.GetAtPath(UiFontPath);
+        imp.fontTextureCase = FontTextureCase.Dynamic;
+        imp.includeFontData = true;
+        imp.fontRenderingMode = FontRenderingMode.Smooth;
+        imp.SaveAndReimport();
+    }
 
     static RectTransform Rect(string name, Transform parent)
     {
@@ -929,16 +973,20 @@ public static partial class GameSceneBuilder
         var t = r.gameObject.AddComponent<Text>();
         t.font = UIFont;
         t.fontSize = size;
-        t.fontStyle = FontStyle.Bold;
+        t.fontStyle = FontStyle.Normal; // the font itself is ExtraBold
         t.alignment = align;
         t.color = color;
         t.raycastTarget = false;
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
         t.verticalOverflow = VerticalWrapMode.Overflow;
         t.supportRichText = true;
+        // Theme: thick dark contour + soft drop shadow.
         var o = r.gameObject.AddComponent<Outline>();
-        o.effectColor = new Color(0f, 0f, 0f, 0.7f);
-        o.effectDistance = new Vector2(3f, -3f);
+        o.effectColor = new Color(UiInk.r, UiInk.g, UiInk.b, 0.95f);
+        o.effectDistance = new Vector2(Mathf.Clamp(size * 0.06f, 2f, 5f), -Mathf.Clamp(size * 0.06f, 2f, 5f));
+        var sh = r.gameObject.AddComponent<Shadow>();
+        sh.effectColor = new Color(0f, 0f, 0f, 0.4f);
+        sh.effectDistance = new Vector2(0f, -Mathf.Clamp(size * 0.1f, 3f, 9f));
         return t;
     }
 }

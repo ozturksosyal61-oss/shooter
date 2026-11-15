@@ -506,7 +506,7 @@ public class GameSmokeTest
         try
         {
             // --- Readability setup.
-            Assert.AreEqual(14f, gm.cameraRig.distance, 0.01f, "camera a bit closer");
+            Assert.AreEqual(17.5f, gm.cameraRig.distance, 0.01f, "camera pulled back (F6.5)");
             Assert.NotNull(p.transform.Find("Ring"), "bright ring under the soldier");
             Assert.Greater(Object.FindAnyObjectByType<ThreatIndicators>().normalRange, 0f, "nearby off-screen zombies get arrows");
             var panel = gm.hud.gameOverPanel.GetComponent<UnityEngine.UI.Image>();
@@ -550,6 +550,26 @@ public class GameSmokeTest
             Assert.NotNull(turret, "turret deployed");
             Assert.IsTrue(turret.gameObject.activeSelf);
             Assert.Greater(turret.LifeLeft, 25f);
+            Assert.NotNull(turret.status, "turret has a status display (health + timer)");
+            Assert.AreEqual(1, Turret.Active.Count, "one turret at a time below level 3");
+            // A zombie next to the turret (and far from the player) attacks the turret.
+            {
+                var sp = Object.FindAnyObjectByType<ZombieSpawner>();
+                Vector3 tp = turret.transform.position;
+                Vector3 away = tp - p.transform.position; away.y = 0f;
+                away = away.sqrMagnitude > 0.01f ? away.normalized : Vector3.forward;
+                Teleport(p, ClearSpot(tp, 6f));
+                var zt = sp.TrySpawnSpecial(ZombieKind.Shield, tp + (tp - p.transform.position).normalized * 2f, Difficulty.ForWave(1));
+                float th0 = turret.Health;
+                yield return WaitUntil(() => turret.Health < th0 || !turret.IsDeployed, 15f);
+                Assert.Less(turret.Health, th0, "zombies target the turret too");
+                zt.Despawn();
+                heard.Clear();
+                turret.TakeDamage(9999f);
+                Assert.IsFalse(turret.IsDeployed, "a destroyed turret folds away");
+                Assert.IsTrue(heard.Contains(SfxId.Explosion), "with a small explosion");
+                Assert.AreEqual(0, Turret.Active.Count);
+            }
             for (int i = 0; i < 4; i++) Upgrades.I.Take(CardId.FireRate);
             Assert.AreEqual(3, Upgrades.I.Level(CardId.FireRate), "cards cap at level 3");
             Assert.GreaterOrEqual(Upgrades.I.Owned.Count, 5);

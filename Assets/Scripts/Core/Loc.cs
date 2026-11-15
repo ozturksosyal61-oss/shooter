@@ -92,8 +92,8 @@ public static class Loc
         ["wave.sub.more"] = new[] { "Daha fazlası geliyor!", "More are coming!" },
 
         // --- Tutorial
-        ["tut.left"] = new[] { "SOL TARAF\n<size=34>parmağını koy ve sürükle → HAREKET</size>", "LEFT SIDE\n<size=34>touch and drag → MOVE</size>" },
-        ["tut.right"] = new[] { "SAĞ TARAF\n<size=34>basılı tut → ATEŞ (en yakına nişan)\nsürükle → istediğin yöne</size>", "RIGHT SIDE\n<size=34>hold → FIRE (auto-aim nearest)\ndrag → aim anywhere</size>" },
+        ["tut.left"] = new[] { "SOL TARAF\n<size=34>parmağını koy ve sürükle » HAREKET</size>", "LEFT SIDE\n<size=34>touch and drag » MOVE</size>" },
+        ["tut.right"] = new[] { "SAĞ TARAF\n<size=34>basılı tut » ATEŞ (en yakına nişan)\nsürükle » istediğin yöne</size>", "RIGHT SIDE\n<size=34>hold » FIRE (auto-aim nearest)\ndrag » aim anywhere</size>" },
 
         // --- Game over
         ["over.title"] = new[] { "ÖLDÜN", "YOU DIED" },
@@ -106,7 +106,8 @@ public static class Loc
         },
 
         // --- Card picker
-        ["cards.header"] = new[] { "SEVİYE {0}  ·  bir kart seç", "LEVEL {0}  ·  pick a card" },
+        ["cards.levelup"] = new[] { "SEVİYE ATLADIN!", "LEVEL UP!" },
+        ["cards.header"] = new[] { "Seviye {0}  ·  bir kart seç", "Level {0}  ·  pick a card" },
         ["cards.new"] = new[] { "YENİ", "NEW" },
         ["cards.level"] = new[] { "SEVİYE {0} / {1}", "LEVEL {0} / {1}" },
         ["rarity.common"] = new[] { "SIRADAN", "COMMON" },
@@ -167,7 +168,7 @@ public static class Loc
         ["card.Turret.title"] = new[] { "Taret", "Turret" },
         ["card.Turret.1"] = new[] { "30 sn taret (45 sn'de bir)", "30 s turret (every 45 s)" },
         ["card.Turret.2"] = new[] { "Taret daha hızlı", "Faster turret" },
-        ["card.Turret.3"] = new[] { "Taret çok hızlı", "Much faster turret" },
+        ["card.Turret.3"] = new[] { "Çok hızlı + aynı anda 2 taret", "Much faster + 2 turrets at once" },
         ["card.Turret.icon"] = new[] { "TRT", "TRT" },
         ["card.Grenade.title"] = new[] { "Otomatik Bomba", "Auto Grenade" },
         ["card.Grenade.1"] = new[] { "6 sn'de bir kalabalığa bomba", "Grenade into a crowd every 6 s" },

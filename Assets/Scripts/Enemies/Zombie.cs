@@ -108,6 +108,7 @@ public class Zombie : MonoBehaviour
         speed = moveSpeed;
         damage = contactDamage;
         runner = isRunner;
+        turretTarget = null;
         knock = Vector3.zero;
         punch = 0f;
         attackCd = 0.5f;
@@ -224,13 +225,32 @@ public class Zombie : MonoBehaviour
     /// <summary>Per-frame AI while walking. Default: chase the player and attack on contact.</summary>
     protected virtual void UpdateBehaviour(float dt)
     {
-        var player = GameManager.I.player;
-        Vector3 to = player.transform.position - transform.position; to.y = 0f;
-        float dist = to.magnitude;
+        PickTarget(dt);
+        Vector3 to = ChaseTargetPos - transform.position; to.y = 0f;
+        float dist = to.magnitude - (turretTarget ? turretTarget.radius : 0f);
         gait = dist > contactRange * 0.8f ? (runner ? 2f : 1f) : 0f;
         Chase(dt, speed, dist > contactRange * 0.8f);
         Moan(dt, dist);
         TryContactAttack(dt, dist, to);
+    }
+
+    // ---- Target: the player, or a deployed turret that is clearly closer (ordinary zombies only).
+    protected Turret turretTarget;
+    float retargetT;
+    const float TurretAggroRange = 7f;
+
+    protected Vector3 ChaseTargetPos => turretTarget ? turretTarget.transform.position : GameManager.I.player.transform.position;
+
+    void PickTarget(float dt)
+    {
+        if (turretTarget && !turretTarget.IsDeployed) turretTarget = null;
+        retargetT -= dt;
+        if (retargetT > 0f) return;
+        retargetT = 0.4f + Random.value * 0.2f;
+        var t = Turret.Nearest(transform.position, TurretAggroRange, out float dt2);
+        if (!t) { turretTarget = null; return; }
+        Vector3 toP = GameManager.I.player.transform.position - transform.position; toP.y = 0f;
+        turretTarget = dt2 < toP.magnitude * 0.8f ? t : null;
     }
 
     protected Vector3 ToPlayer(out float dist)
@@ -240,11 +260,19 @@ public class Zombie : MonoBehaviour
         return dist > 0.01f ? to / dist : transform.forward;
     }
 
+    Vector3 ToChaseTarget(out float dist)
+    {
+        if (!turretTarget) return ToPlayer(out dist);
+        Vector3 to = turretTarget.transform.position - transform.position; to.y = 0f;
+        dist = to.magnitude;
+        return dist > 0.01f ? to / dist : transform.forward;
+    }
+
     /// <summary>Moves toward the player with steering, separation, sliding and knockback.</summary>
     protected void Chase(float dt, float moveSpeed, bool advance)
     {
         Vector3 pos = transform.position;
-        Vector3 dir = ToPlayer(out float dist);
+        Vector3 dir = ToChaseTarget(out float dist);
         Vector3 moveDir = advance ? Steer(pos, dir, dt) : Vector3.zero;
         Move(dt, moveDir * moveSpeed, moveSpeed);
         Vector3 face = moveDir.sqrMagnitude > 0.01f && dist > 2f ? moveDir : dir;
@@ -304,13 +332,14 @@ public class Zombie : MonoBehaviour
     {
         var player = GameManager.I.player;
         attackCd -= dt;
-        if (dist < contactRange && attackCd <= 0f && !player.IsDead)
+        if (dist < contactRange && attackCd <= 0f && (turretTarget || !player.IsDead))
         {
             attackCd = contactCooldown;
             // The attack animation starts at the moment of contact; damage lands now.
             animator.CrossFadeInFixedTime(Random.value < 0.5f ? AttackState : PunchState, 0.08f, 0);
             GameAudio.Play(SfxId.ZombieAttack, transform.position);
-            player.TakeDamage(damage, dist > 0.01f ? to / dist : transform.forward);
+            if (turretTarget) turretTarget.TakeDamage(damage);
+            else player.TakeDamage(damage, dist > 0.01f ? to / dist : transform.forward);
         }
     }
 

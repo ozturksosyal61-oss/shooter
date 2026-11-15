@@ -425,7 +425,8 @@ public static partial class GameSceneBuilder
         flash.flashMaterial = m.flash;
         var ring = Quad("Ring", go.transform, ringMat);
         ring.transform.localPosition = new Vector3(0f, 0.04f, 0f);
-        ring.transform.localScale = new Vector3(radius * 3.6f, radius * 3.6f, 1f);
+        // Scaled for the 17.5 m camera (was 3.6× at 14 m).
+        ring.transform.localScale = new Vector3(radius * 4.4f, radius * 4.4f, 1f);
         var z = go.AddComponent<T>();
         z.model = model.transform;
         z.animator = model.GetComponent<Animator>();
@@ -514,7 +515,7 @@ public static partial class GameSceneBuilder
         // Readability: bright ring under the soldier.
         var ring = Quad("Ring", go.transform, m.ringSoldier);
         ring.transform.localPosition = new Vector3(0f, 0.035f, 0f);
-        ring.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
+        ring.transform.localScale = new Vector3(1.9f, 1.9f, 1f); // bright ring, sized for the 17.5 m camera
 
         var rifle = BuildRifle(go.transform, m, out var rGrip, out var lGrip, out var muzzle, out var mf);
         rifle.localPosition = new Vector3(0.1f, 0.95f, 0.2f);

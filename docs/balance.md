@@ -9,6 +9,17 @@ Botlar oyunu gerçek girdi yolundan oynar (`Assets/Tests/PlayMode/PlaytestBot.cs
 
 Çalıştırma (4 bot tek oturumda, ~5 dk): `PLAYTEST_TIMESCALE=8 CAPTURE_DIR=<klasör> Unity.exe -batchmode -nographics -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play ...` → `<klasör>/playtest_<tarz>.txt`. Opsiyonel `PLAYTEST_STRATEGIES`, `PLAYTEST_SEED`, `PLAYTEST_MAXTIME` (varsayılan 400).
 
+## F6.5 — kamera 17.5 m sonrası (2026-11-15)
+
+Kamera 14 → 17.5 m: görüş alanı büyüdü, zombiler görüş dışında doğduğu için daha uzakta doğuyor → oyun belirgin kolaylaştı.
+
+| Ayar | human | İlk hasar |
+|---|---|---|
+| Kamera 17.5 m, spawn margin 0.08 + 3 m, AlivePerWave 5 | 406 / 403 sn (400 sn tavan) | 235 / 200 sn |
+| **+ spawn margin 0.05 + 1 m, AlivePerWave 6 (final)** | **332 sn** (dalga 7) | 96 sn |
+
+Aynı dönemde: taret artık zombilerin hedefi (yakınındaki zombiler ona saldırır, canı biter), ilk 2 kart seçiminde hasar kartı güvencesi. Turret/kite/explore bu turda ölçülmedi (bir sonraki denge turunda).
+
 ## Hızlı bot altyapısı — 8x / 3x doğrulaması (2026-11-15)
 
 Her kare `Time.captureDeltaTime` ile tam 1/60 sn oyun süresi (60 FPS cihaz gibi), botun zamanlayıcıları oyun saatinde. Aynı seed (4242), `-nographics`, 400 sn tavan:

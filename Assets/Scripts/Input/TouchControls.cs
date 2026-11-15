@@ -41,6 +41,8 @@ public class TouchControls : MonoBehaviour
     public bool RestartPressed { get; private set; }
     /// <summary>Index of the level-up card pressed this frame, -1 if none.</summary>
     public int CardPressed { get; private set; } = -1;
+    /// <summary>Card under the pointer / a finger while the picker blocks input (-1 = none).</summary>
+    public int CardHover { get; private set; } = -1;
     /// <summary>Set by modal UI (card picker): gameplay input is suppressed.</summary>
     public bool Blocked { get; set; }
 
@@ -77,6 +79,18 @@ public class TouchControls : MonoBehaviour
         float scale = canvas ? canvas.scaleFactor : 1f;
         if (Blocked)
         {
+            CardHover = -1;
+            if (cardRects != null)
+            {
+                bool any = false; Vector2 hp = Vector2.zero;
+                foreach (var t in ETouch.activeTouches) { hp = t.screenPosition; any = true; break; }
+#if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL
+                if (!any && Mouse.current != null) { hp = Mouse.current.position.ReadValue(); any = true; }
+#endif
+                if (any)
+                    for (int i = 0; i < cardRects.Length; i++)
+                        if (Over(cardRects[i], hp)) { CardHover = i; break; }
+            }
             leftId = rightId = None;
             mouseAim = false;
             Move = Vector2.zero;

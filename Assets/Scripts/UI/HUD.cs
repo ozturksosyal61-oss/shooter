@@ -18,6 +18,10 @@ public class HUD : MonoBehaviour
     [Header("Health")]
     public RectTransform healthFill;
     public Image healthFillImage;
+    [Tooltip("White bar that lags behind the fill after damage.")]
+    public RectTransform healthLag;
+    public Text healthText;
+    public RectTransform healthHeart;
     public Image damageVignette;
 
     [Header("Waves")]
@@ -36,11 +40,16 @@ public class HUD : MonoBehaviour
     public Text reloadLabel;
     public RectTransform reloadButton;
     public Image reloadButtonFill;
+    public GameObject ammoPlate;
 
     [Header("Progression")]
     public RectTransform xpFill;
     public Text levelText;
+    public Text levelNumber;
+    public RectTransform levelBadge;
+    public Image xpGlow;
     public RectTransform cardRow;
+    [Tooltip("Badge template: children Icon (Image), LevelBg/Level (Text), Flash (Image).")]
     public Image cardIconTemplate;
 
     [Header("Misc")]
@@ -65,8 +74,10 @@ public class HUD : MonoBehaviour
     bool tutorialActive, recordActive;
     Vector2 brokenStart;
     int lastLevel = -1;
-    float xpShown, levelPunch;
-    readonly System.Collections.Generic.List<Image> cardIcons = new System.Collections.Generic.List<Image>(16);
+    float xpShown, levelPunch, healthLagShown = 1f, lagHold, heartPunch, lastHealth = -1f;
+    int shownHp = -1;
+    struct Badge { public Image frame, icon, flash; public Text level; public float flashT; }
+    readonly System.Collections.Generic.List<Badge> cardIcons = new System.Collections.Generic.List<Badge>(16);
 
     void Start()
     {
@@ -92,7 +103,9 @@ public class HUD : MonoBehaviour
         if (Upgrades.I) Upgrades.I.Changed -= OnCardChanged;
     }
 
-    /// <summary>Owned cards as small rarity-coloured badges with level pips.</summary>
+    static readonly string[] LevelDigits = { "0", "1", "2", "3", "4", "5" };
+
+    /// <summary>Owned cards as framed rarity-tinted badges: icon, level number in the corner, flash on change.</summary>
     void OnCardChanged(CardId id, int level)
     {
         if (!cardIconTemplate) return;
@@ -101,22 +114,30 @@ public class HUD : MonoBehaviour
         {
             var img = Instantiate(cardIconTemplate, cardRow);
             img.gameObject.SetActive(true);
-            cardIcons.Add(img);
+            var t = img.transform;
+            cardIcons.Add(new Badge
+            {
+                frame = img,
+                icon = t.Find("Icon").GetComponent<Image>(),
+                flash = t.Find("Flash").GetComponent<Image>(),
+                level = t.Find("LevelBg/Level").GetComponent<Text>(),
+                flashT = 1f,
+            });
         }
         for (int i = 0; i < owned.Count; i++)
         {
             var d = Upgrades.Get(owned[i]);
-            var img = cardIcons[i];
-            var rt = img.rectTransform;
-            rt.anchoredPosition = new Vector2(i * 64f, 0f);
+            var b = cardIcons[i];
+            var rt = b.frame.rectTransform;
+            rt.anchoredPosition = new Vector2(34f + i * 76f, -34f);
             Color rc = Upgrades.RarityColors[(int)d.rarity];
-            img.color = new Color(rc.r * 0.35f, rc.g * 0.35f, rc.b * 0.35f, 0.9f);
-            var texts = img.GetComponentsInChildren<Text>(true);
-            texts[0].text = d.Icon;
-            texts[0].color = rc;
+            b.frame.color = Color.Lerp(new Color(0.17f, 0.2f, 0.11f), rc, 0.35f);
+            b.icon.sprite = Upgrades.I.IconOf(owned[i]);
+            b.icon.color = Color.Lerp(rc, Color.white, 0.4f);
             int l = Upgrades.I.Level(owned[i]);
-            texts[1].text = l == 1 ? "•" : l == 2 ? "••" : "•••";
-            if (owned[i] == id) rt.localScale = Vector3.one * 1.4f;
+            b.level.text = LevelDigits[Mathf.Clamp(l, 0, LevelDigits.Length - 1)];
+            if (owned[i] == id) { rt.localScale = Vector3.one * 1.45f; b.flashT = 0f; }
+            cardIcons[i] = b;
         }
     }
 
@@ -209,8 +230,26 @@ public class HUD : MonoBehaviour
     {
         var p = gm.player;
         float h = p ? p.Health / p.maxHealth : 0f;
-        healthShown = Mathf.MoveTowards(healthShown, h, dt * 2f);
+        // Fill snaps quickly; the white "delayed" bar holds for a moment, then drains to the new value.
+        if (p && lastHealth >= 0f && p.Health < lastHealth - 0.01f) { lagHold = 0.45f; heartPunch = 1f; }
+        if (p) lastHealth = p.Health;
+        healthShown = Mathf.MoveTowards(healthShown, h, dt * (h < healthShown ? 6f : 1.5f));
+        if (lagHold > 0f) lagHold -= dt;
+        else healthLagShown = Mathf.MoveTowards(healthLagShown, healthShown, dt * 0.8f);
+        if (healthLagShown < healthShown) healthLagShown = healthShown;
         healthFill.anchorMax = new Vector2(healthShown, 1f);
+        if (healthLag) healthLag.anchorMax = new Vector2(healthLagShown, 1f);
+        if (healthText && p)
+        {
+            int hp = Mathf.CeilToInt(p.Health);
+            if (hp != shownHp) { shownHp = hp; healthText.text = hp.ToString(); }
+        }
+        heartPunch = Mathf.MoveTowards(heartPunch, 0f, dt * 4f);
+        if (healthHeart)
+        {
+            float beat = h < 0.3f && !gm.IsGameOver ? 0.08f * Mathf.Max(0f, Mathf.Sin(Time.unscaledTime * 9f)) : 0f;
+            healthHeart.localScale = Vector3.one * (1f + 0.35f * heartPunch + beat);
+        }
         var waves = WaveDirector.I;
         bool regen = waves && waves.InBreak && h < 1f && !gm.IsGameOver;
         Color baseCol = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.3f, 0.9f, 0.3f), healthShown);
@@ -258,7 +297,12 @@ public class HUD : MonoBehaviour
         {
             // The weapon cluster would show through the game-over panel.
             if (reloadRoot.activeSelf) reloadRoot.SetActive(false);
-            if (ammoText.gameObject.activeSelf) { ammoText.gameObject.SetActive(false); reloadButton.gameObject.SetActive(false); }
+            if (ammoText.gameObject.activeSelf)
+            {
+                ammoText.gameObject.SetActive(false);
+                reloadButton.gameObject.SetActive(false);
+                if (ammoPlate) ammoPlate.SetActive(false);
+            }
             return;
         }
         if (w.Ammo != lastAmmo)
@@ -302,14 +346,33 @@ public class HUD : MonoBehaviour
             if (lastLevel > 0) { levelPunch = 1f; xpShown = 0f; }
             lastLevel = prog.Level;
             levelText.text = Loc.F("hud.level", prog.Level);
+            if (levelNumber) levelNumber.text = prog.Level.ToString();
         }
         xpFill.anchorMax = new Vector2(xpShown, 1f);
-        levelPunch = Mathf.MoveTowards(levelPunch, 0f, dt * 3f);
-        levelText.transform.localScale = Vector3.one * (1f + 0.4f * levelPunch);
+        levelPunch = Mathf.MoveTowards(levelPunch, 0f, dt * 1.5f);
+        levelText.transform.localScale = Vector3.one * (1f + 0.3f * levelPunch);
+        if (levelBadge)
+        {
+            levelBadge.localScale = Vector3.one * (1f + 0.5f * levelPunch);
+            levelBadge.localRotation = Quaternion.Euler(0f, 0f, 360f * levelPunch * levelPunch);
+        }
+        // XP bar glows on level-up (and softly when nearly full).
+        if (xpGlow)
+        {
+            float near = Mathf.Clamp01((prog.Progress01 - 0.85f) / 0.15f) * (0.25f + 0.15f * Mathf.Sin(Time.unscaledTime * 8f));
+            var gc = xpGlow.color; gc.a = Mathf.Max(levelPunch, near); xpGlow.color = gc;
+        }
         for (int i = 0; i < cardIcons.Count; i++)
         {
-            var t = cardIcons[i].rectTransform;
-            t.localScale = Vector3.MoveTowards(t.localScale, Vector3.one, dt * 3f);
+            var b = cardIcons[i];
+            var t = b.frame.rectTransform;
+            t.localScale = Vector3.MoveTowards(t.localScale, Vector3.one, dt * 2.5f);
+            if (b.flashT < 1f)
+            {
+                b.flashT += dt * 2f;
+                b.flash.color = new Color(1f, 1f, 1f, Mathf.Clamp01(1f - b.flashT) * 0.9f);
+                cardIcons[i] = b;
+            }
         }
     }
 

@@ -66,6 +66,16 @@ public class Upgrades : MonoBehaviour
     public static string RarityName(Rarity r) => Loc.T(RarityKeys[(int)r]);
     static readonly float[] RarityWeight = { 60f, 30f, 12f };
 
+    [Tooltip("Card icon per CardId (generated vector art, see GameSceneBuilder.Icons).")]
+    public Sprite[] cardSprites;
+
+    public Sprite IconOf(CardId id) => cardSprites != null && (int)id < cardSprites.Length ? cardSprites[(int)id] : null;
+
+    /// <summary>Cards that raise damage output; the first <see cref="GuaranteedDamagePicks"/> offers always contain one.</summary>
+    public static readonly CardId[] DamageCards = { CardId.Pierce, CardId.FireRate, CardId.DoubleShot, CardId.Crit, CardId.KillBlast, CardId.Shotgun };
+    public const int GuaranteedDamagePicks = 2;
+    public static bool IsDamageCard(CardId id) => Array.IndexOf(DamageCards, id) >= 0;
+
     [Header("Active cards")]
     public Turret turretPrefab;
     public GameObject grenadePrefab;
@@ -75,6 +85,9 @@ public class Upgrades : MonoBehaviour
     public float shotgunDamage = 16f;
     public float turretLife = 30f;
     public float turretEvery = 45f;
+    [Tooltip("Level 3: deploy interval (shorter than the lifetime, so two turrets can stand at once).")]
+    public float turretEveryMax = 24f;
+    public float turretHealth = 160f;
     public float grenadeRadius = 3.2f;
     public float grenadeRange = 12f;
     public float killBlastRadius = 2.6f;
@@ -90,7 +103,7 @@ public class Upgrades : MonoBehaviour
     float baseFireRate, baseReload, baseCrit, baseMaxHealth, baseMove, baseMagnet;
     int baseMag;
     float shotgunT, turretT, grenadeT;
-    Turret turret;
+    readonly Turret[] turrets = new Turret[2];
     Transform[] grenades;
     Vector3[] grenadeFrom, grenadeTo;
     float[] grenadeT0;
@@ -115,8 +128,11 @@ public class Upgrades : MonoBehaviour
         if (WaveDirector.I) WaveDirector.I.WaveCleared += OnWaveCleared;
         if (turretPrefab)
         {
-            turret = Instantiate(turretPrefab);
-            turret.gameObject.SetActive(false);
+            for (int i = 0; i < turrets.Length; i++)
+            {
+                turrets[i] = Instantiate(turretPrefab);
+                turrets[i].gameObject.SetActive(false);
+            }
         }
         if (grenadePrefab)
         {
@@ -154,12 +170,47 @@ public class Upgrades : MonoBehaviour
     public bool CanTake(CardId id) => levels[(int)id] < Get(id).maxLevel;
 
     /// <summary>Up to <paramref name="count"/> distinct cards, rarity-weighted, among those not maxed.</summary>
-    public List<CardId> Offer(int count) => Offer(levels, count, () => UnityEngine.Random.value, offerBuffer, pickBuffer);
+    public List<CardId> Offer(int count) =>
+        Offer(levels, count, () => UnityEngine.Random.value, offerBuffer, pickBuffer, Picks < GuaranteedDamagePicks);
 
     public static float RarityWeightOf(Rarity r) => RarityWeight[(int)r];
 
     /// <summary>Pure offer logic (unit-tested): <paramref name="rand01"/> supplies [0,1) values.</summary>
-    public static List<CardId> Offer(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch)
+    public static List<CardId> Offer(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch, bool guaranteeDamage = false)
+    {
+        Draw(levels, count, rand01, into, scratch);
+        if (guaranteeDamage && into.Count > 0)
+        {
+            bool has = false;
+            foreach (var id in into) if (IsDamageCard(id)) { has = true; break; }
+            if (!has)
+            {
+                // Swap the last card for a weighted damage card that isn't offered yet.
+                var keep = into[into.Count - 1];
+                into.RemoveAt(into.Count - 1);
+                int before = into.Count;
+                DrawDamage(levels, rand01, into, scratch);
+                if (into.Count == before) into.Add(keep); // every damage card maxed: nothing to guarantee
+            }
+        }
+        return into;
+    }
+
+    static void DrawDamage(int[] levels, Func<float> rand01, List<CardId> into, List<int> scratch)
+    {
+        scratch.Clear();
+        for (int i = 0; i < Cards.Length; i++)
+            if (IsDamageCard(Cards[i].id) && levels[i] < Cards[i].maxLevel && !into.Contains(Cards[i].id)) scratch.Add(i);
+        if (scratch.Count == 0) return;
+        float total = 0f;
+        foreach (int i in scratch) total += RarityWeight[(int)Cards[i].rarity];
+        float r = rand01() * total;
+        int chosen = scratch[scratch.Count - 1];
+        foreach (int i in scratch) { r -= RarityWeight[(int)Cards[i].rarity]; if (r <= 0f) { chosen = i; break; } }
+        into.Add(Cards[chosen].id);
+    }
+
+    static void Draw(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch)
     {
         into.Clear();
         scratch.Clear();
@@ -178,7 +229,6 @@ public class Upgrades : MonoBehaviour
             scratch.Remove(chosen);
             into.Add(Cards[chosen].id);
         }
-        return into;
     }
 
     // ---------------------------------------------------------------- stat formulas (pure, unit-tested)
@@ -191,6 +241,15 @@ public class Upgrades : MonoBehaviour
     public static float MagnetMul(int l) => 1f + 0.6f * l;
     public static float KillBlastChance(int l) => l > 0 ? 0.05f + 0.1f * l : 0f;
     public static float ShotgunInterval(int l) => l == 1 ? 1.6f : l == 2 ? 1.25f : 0.95f;
+    /// <summary>At most one turret at a time; two with the card at level 3.</summary>
+    public static int MaxTurrets(int l) => l >= 3 ? 2 : l > 0 ? 1 : 0;
+
+    int DeployedTurrets()
+    {
+        int n = 0;
+        foreach (var t in turrets) if (t && t.IsDeployed) n++;
+        return n;
+    }
 
     public void Take(CardId id)
     {
@@ -256,7 +315,7 @@ public class Upgrades : MonoBehaviour
         }
 
         int tr = Level(CardId.Turret);
-        if (tr > 0 && turret && !turret.gameObject.activeSelf && (turretT -= dt) <= 0f) DeployTurret();
+        if (tr > 0 && (turretT -= dt) <= 0f && DeployedTurrets() < MaxTurrets(tr)) DeployTurret();
 
         int gr = Level(CardId.Grenade);
         if (gr > 0 && (grenadeT -= dt) <= 0f)
@@ -287,14 +346,16 @@ public class Upgrades : MonoBehaviour
 
     void DeployTurret()
     {
+        Turret turret = null;
+        foreach (var t in turrets) if (t && !t.IsDeployed) { turret = t; break; }
         if (!turret) return;
         Vector3 p = player.transform.position;
         Vector3 spot = p - player.transform.forward * 1.4f;
         if (Physics.CheckSphere(spot + Vector3.up * 0.6f, 0.5f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) spot = p;
         spot.y = 0f;
         int l = Level(CardId.Turret);
-        turret.Deploy(spot, turretLife, 6f + 2.5f * (l - 1), 14f + 3f * (l - 1), weapon);
-        turretT = turretEvery;
+        turret.Deploy(spot, turretLife, 6f + 2.5f * (l - 1), 14f + 3f * (l - 1), turretHealth + 40f * (l - 1), weapon);
+        turretT = l >= 3 ? turretEveryMax : turretEvery;
     }
 
     bool TryThrowGrenade()

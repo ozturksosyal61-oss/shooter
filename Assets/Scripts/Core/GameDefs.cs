@@ -69,7 +69,7 @@ public static class Difficulty
     public static float IntervalDecay = 0.83f;
     public static float MinInterval = 0.3f;
     public static int BaseAlive = 12;
-    public static int AlivePerWave = 5;
+    public static int AlivePerWave = 6;
     public static int MaxAliveCap = 70;
     public static float HealthPerWave = 0.18f;
     public static float SpeedPerWave = 0.035f;
