@@ -4,8 +4,39 @@ Botlar oyunu gerçek girdi yolundan oynar (`Assets/Tests/PlayMode/PlaytestBot.cs
 - **turret:** hiç kıpırdamaz, sağ yarıya basılı tutar (auto-aim).
 - **kite (akıllı):** 16 yönü zombi yakınlığı + bina açıklığına göre puanlayıp kaçar, can paketlerini toplar, sakin anda reload yapar, aktif reload'u tatlı noktada basar.
 - **explore:** sürekli kuzeye koşar, çok yaklaşan zombiden sapar, en yakına nişan alır.
+- **human:** kite gibi kaçar ama insan gibi kusurlu: aktif reload'u ~%60 tutturur, tepki gecikmeli.
+- Tüm botlar seviye atlayınca kart ekranında gerçek tıklamayla kart seçer (tarza göre öncelik).
 
 Çalıştırma: `PLAYTEST_STRATEGY=<tarz> PLAYTEST_TIMESCALE=3 PLAYTEST_SHOTS=0 CAPTURE_DIR=<klasör> Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play ...` → `<klasör>/playtest_<tarz>.txt`.
+
+## F6+F7 sonrası — final (2026-11-15)
+
+Difficulty: BaseInterval 1.3, IntervalDecay 0.83, BaseAlive 12, **AlivePerWave 5**, HealthPerWave 0.18,
+BaseDamage 9, **DamagePerWave 1.5**, özel zombi SpecialBase 0.05 + **SpecialPerWave 0.02** (maks 0.25), her 7. dalga özel dalga.
+Timescale 3, her bot 2 koşu (rastgele seed). Koşu süresi üst sınırı 600 sn.
+
+| Bot | Hayatta kalma | Dalga | Kill | İsabet* | Seviye | Özel kill | Takılma | Hedef |
+|---|---|---|---|---|---|---|---|---|
+| turret | **110 / 110 sn** | 3 | 106–117 | %45 | 5 | 0–1 | 0 | 90–120 ✔ |
+| human | **321 / 192 sn** (ort. 256) | 5–7 | 121–243 | %59–76 | 6–9 | 4–18 | 0 | 240–360 ✔ ort., yüksek varyans |
+| explore | **301 / 256 sn** (ort. 279) | 6–7 | 404–498 | %112–117 | 10–11 | 11–28 | 0 | human'ın biraz üstü ✔ |
+| kite | **602 / 605 sn** (sınır) | 12 | 1203–1428 | %114–147 | 17–18 | 155–168 | 0 | human'ın biraz üstü ✘ çok üstünde |
+
+\* %100 üstü isabet: delici / çift mermi kartları tek atışta birden çok isabet sayar.
+
+### Ayar geçmişi
+| Tur | Değişiklik | turret | human | kite | explore |
+|---|---|---|---|---|---|
+| 0 (F6 başlangıç) | AlivePerWave 6, SpecialPerWave 0.025, DamagePerWave 1.2 | 109 | 241 | 206 | 243 |
+| 1 | AlivePerWave 6→5, SpecialPerWave 0.025→0.02 | 102 | 398 | 402 | 190 |
+| 2 (final) | DamagePerWave 1.2→1.5 | 110 / 110 | 321 / 192 | 602 / 605 | 301 / 256 |
+
+### Notlar
+- Tur 0'da kite dalga 5'te 35 eşzamanlı zombide 22 sn içinde öldü (125→0 can) → önce geç dalga yoğunluğu düşürüldü; erken dalgalar (turret) neredeyse aynı kaldı.
+- Tek koşular çok gürültülü (human aynı ayarla 192–398 sn): sonucu kart çekilişi belirliyor. Hasar kartı (delici/çift mermi/ateş hızı) erken gelen koşular 300+ sn, savunma kartlarıyla (can çalma, dalga arası can) gelenler ~190 sn.
+- kite botu %100 aktif reload ve kusursuz kaçışla bir üst sınırdır; ölçekli kartlarla (3 taret, çift mermi) 600 sn'ye ulaşıyor. Kite'ı hedefe çekmek human/turret'i de düşürecek → bırakıldı. Sonraki adımlar için aday: geç dalgada (8+) yoğunluk artışı veya taret/çift mermi kartlarının yığılmasını sınırlamak.
+- Eski "turret 27 sn" ölçümü kart ekranında ateşi bırakmayan bot hatasındandı; düzeltilmiş botla 110 sn.
+- Smoke testleri kart seçmez: `GameSmokeTest.LoadGame` doğal seviye atlamayı kapatır (kart testleri `AddXp(XpToNext)` ile tetikler).
 
 ## F5 sonrası (Difficulty: BaseInterval 1.3, IntervalDecay 0.83, BaseAlive 12, AlivePerWave 6, HealthPerWave 0.18, runner %8/dalga)
 

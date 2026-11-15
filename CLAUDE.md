@@ -17,7 +17,7 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - **Ölüm ekranı:** skor, süre, dalga, kill, en iyi kombo; rekor kırınca "YENİ REKOR!" + jingle; büyük TEKRAR butonu (≤1 sn'de aktif, sadece buton/Enter/Space yeniden başlatır). Rekorlar PlayerPrefs (`best_v2`, `bestWave`, `bestKills`, `bestTime`). İlk açılışta 5 sn sol/sağ kontrol ipucu (`tutorial_done`).
 - **Zombiler engel aşmaz:** etraflarından dolaşırlar (whisker steering). **İleride bazı boss'lar engel aşabilecek** (atlama/ezip geçme) — bu bir boss yeteneği olarak tasarlanır, sıradan zombilere verilmez.
 - **Dalgalar:** `WaveDirector` — dalga (30–45 sn spawn) → 9 sn nefes arası (spawn yok, can 5/sn yenilenir) → daha büyük dalga. Zorluk yalnızca dalga numarasına bağlı (`Difficulty.ForWave`: spawn aralığı, eşzamanlı zombi, can, hız, koşucu oranı, temas hasarı). Denge botlarla yapılır (`docs/balance.md`). **İleride özel zombi / boss dalgaları** eklenecek.
-- **Özel zombiler (F7, laboratuvar mutasyonları, dalga 3'ten itibaren karışık; her 5. dalga "özel dalga"):** ayak altında renkli halka, doğuşta kendi sesi, ekran dışındayken kenar oku (`ThreatIndicators`).
+- **Özel zombiler (F7, laboratuvar mutasyonları, dalga 3'ten itibaren karışık; her 7. dalga "özel dalga"):** ayak altında renkli halka, doğuşta kendi sesi, ekran dışındayken kenar oku (`ThreatIndicators`).
   - **Kalkanlı** (kırmızı, ~1.4x geniş): yavaş, ~8x can; önden gelen mermiyi araba kapısı kalkanı saptırır (metal sekme + kıvılcım), arkadan/yandan normal hasar; yavaş döner → yandan dolaş. Patlamalar kalkanı deler.
   - **Bombalı** (turuncu, ~1.3x şişkin): Drunk Walk, yakında koşar, ~2 m'de ~1 sn şişip patlar (alan hasarı zombilere de); vurularak öldürülünce de patlar, zincirleme patlar.
   - **Dilci** (mor, ~1.3x uzun): 8–10 m'de durur, 0.6 sn kırmızı nişan çizgisi, dil fırlatır; isabette oyuncuyu çeker (ters itmek yavaşlatır), dile/dilciye `breakDamage` hasar → kopar. Yakalıyken auto-aim dilciye kilitlenir.
@@ -118,7 +118,7 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
   - [x] Takılma: ilk kullanımda shader derleme → `Warmup` ile giderildi (soğuk cache'le 255 sn turda 0 takılma)
 - [x] **Faz 7 — Özel zombiler** (2026-11-15)
   - [x] Kalkanlı / Bombalı / Dilci: Mixamo rig + retarget klipler, davranışlar, renkli halka, doğuş sesi, ekran dışı ok
-  - [x] Dalga 3'ten karışık spawn, dalgayla artan oran + tür limiti, her 5. dalga özel dalga
+  - [x] Dalga 3'ten karışık spawn, dalgayla artan oran + tür limiti, her 7. dalga özel dalga
   - [x] Ortak `Explosions` (zombilere + oyuncuya, duck/sarsıntı/haptic), sentez/CC0-türevi sesler (`Tools/synth_specials.py`)
 - [x] **Faz 6 — Roguelite + okunabilirlik** (2026-11-15)
   - [x] XP/seviye, yavaşlayan 3 kart seçimi, 15 kart × 3 seviye, nadirlik renkleri, HUD ikonları

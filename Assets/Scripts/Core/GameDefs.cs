@@ -69,12 +69,12 @@ public static class Difficulty
     public static float IntervalDecay = 0.83f;
     public static float MinInterval = 0.3f;
     public static int BaseAlive = 12;
-    public static int AlivePerWave = 6;
+    public static int AlivePerWave = 5;
     public static int MaxAliveCap = 70;
     public static float HealthPerWave = 0.18f;
     public static float SpeedPerWave = 0.035f;
     public static float BaseDamage = 9f;
-    public static float DamagePerWave = 1.2f;
+    public static float DamagePerWave = 1.5f;
 
     public static WaveParams ForWave(int n)
     {
@@ -101,7 +101,7 @@ public static class Difficulty
     // Special zombies: mixed in from wave 3, more every wave; every 5th wave is a special wave.
     public static int FirstSpecialWave = 3;
     public static float SpecialBase = 0.05f;
-    public static float SpecialPerWave = 0.025f;
+    public static float SpecialPerWave = 0.02f;
     public static float SpecialMax = 0.25f;
     public static int SpecialWaveEvery = 7;
 

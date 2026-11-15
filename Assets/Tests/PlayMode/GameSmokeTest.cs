@@ -56,6 +56,9 @@ public class GameSmokeTest
         SceneManager.LoadScene("Game");
         yield return null;
         yield return null;
+        // Smoke tests don't pick cards: keep kills from opening the (game-pausing) picker.
+        // Card tests trigger level-ups explicitly with AddXp(XpToNext).
+        if (Progression.I) Progression.I.baseXp = 1000000;
     }
 
     static void Teleport(PlayerController p, Vector3 pos)
