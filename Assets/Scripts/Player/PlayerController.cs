@@ -145,6 +145,13 @@ public class PlayerController : MonoBehaviour
 
     public bool NeedsHealth => !IsDead && Health < maxHealth - 1f;
 
+    /// <summary>Silent healing (life steal, regen cards) — no popup.</summary>
+    public void Regen(float amount)
+    {
+        if (IsDead) return;
+        Health = Mathf.Min(maxHealth, Health + amount);
+    }
+
     public void Heal(float amount)
     {
         if (IsDead) return;

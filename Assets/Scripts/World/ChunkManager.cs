@@ -40,6 +40,11 @@ public class ChunkManager : MonoBehaviour
     public GameObject[] roadCars;
     public GameObject[] roadBarricades;
     public GameObject[] burningBarrels;
+    [Tooltip("Red barrels that explode when shot.")]
+    public GameObject[] explosiveBarrels;
+    [Range(0f, 1f)] public float explosiveBarrelShare = 0.6f;
+    [Tooltip("Chance per chunk of an extra explosive barrel on the sidewalk.")]
+    [Range(0f, 1f)] public float sidewalkBarrelChance = 0.3f;
     public GameObject[] roadDecor;
 
     class Chunk
@@ -164,7 +169,13 @@ public class ChunkManager : MonoBehaviour
             float yaw;
             if (roll < 0.55) { prefab = Pick(roadCars, rng); yaw = (alongZ ? 0f : 90f) + (rng.Next(2) * 180f) + Range(rng, -20f, 20f); }
             else if (roll < 0.8) { prefab = Pick(roadBarricades, rng); yaw = (alongZ ? 90f : 0f) + Range(rng, -10f, 10f); }
-            else { prefab = Pick(burningBarrels, rng); yaw = Range(rng, 0f, 360f); across = band == 0 || band == 2 ? Range(rng, 0.6f, 3f) : Size - Range(rng, 0.6f, 3f); }
+            else
+            {
+                bool boom = explosiveBarrels != null && explosiveBarrels.Length > 0 && rng.NextDouble() < explosiveBarrelShare;
+                prefab = boom ? Pick(explosiveBarrels, rng) : Pick(burningBarrels, rng);
+                yaw = Range(rng, 0f, 360f);
+                across = band == 0 || band == 2 ? Range(rng, 0.6f, 3f) : Size - Range(rng, 0.6f, 3f);
+            }
             float a = across;
             TryPlace(ch, prefab, rng, () =>
             {
@@ -193,6 +204,13 @@ public class ChunkManager : MonoBehaviour
                     }
                 }, () => Range(rng, 0f, 360f));
             }
+        }
+
+        // Explosive barrel on a sidewalk corner now and then.
+        if (explosiveBarrels != null && explosiveBarrels.Length > 0 && rng.NextDouble() < sidewalkBarrelChance)
+        {
+            var p = Pick(explosiveBarrels, rng);
+            TryPlace(ch, p, rng, () => new Vector2(rng.Next(2) == 0 ? 4.6f : Size - 4.6f, Range(rng, 5f, 15f)), () => Range(rng, 0f, 360f));
         }
 
         // Decor without colliders (cones, tires).
@@ -281,6 +299,7 @@ public class ChunkManager : MonoBehaviour
         else { go = Instantiate(prefab); prefabOf[go] = prefab; }
         go.transform.SetParent(ch.root, false);
         go.transform.SetLocalPositionAndRotation(new Vector3(p.x, 0f, p.y), Quaternion.Euler(0f, yaw, 0f));
+        if (go.TryGetComponent(out ExplosiveBarrel barrel)) barrel.ResetBarrel();
         ch.items.Add(go);
     }
 

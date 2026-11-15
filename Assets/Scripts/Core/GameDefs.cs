@@ -103,7 +103,7 @@ public static class Difficulty
     public static float SpecialBase = 0.05f;
     public static float SpecialPerWave = 0.025f;
     public static float SpecialMax = 0.25f;
-    public static int SpecialWaveEvery = 5;
+    public static int SpecialWaveEvery = 7;
 
     public static bool IsSpecialWave(int n) => n >= SpecialWaveEvery && n % SpecialWaveEvery == 0;
 

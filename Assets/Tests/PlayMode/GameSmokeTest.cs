@@ -390,8 +390,8 @@ public class GameSmokeTest
             var w3 = Difficulty.ForWave(3);
             Assert.Greater(w3.specialChance, 0f, "specials from wave 3");
             Assert.AreEqual(0f, Difficulty.ForWave(2).specialChance, "no specials before wave 3");
-            Assert.IsTrue(Difficulty.ForWave(5).specialWave, "wave 5 is a special wave");
-            Assert.Greater(Difficulty.ForWave(5).maxBomb, Difficulty.ForWave(4).maxBomb, "special wave raises limits");
+            Assert.IsTrue(Difficulty.ForWave(Difficulty.SpecialWaveEvery).specialWave, "every Nth wave is a special wave");
+            Assert.Greater(Difficulty.ForWave(Difficulty.SpecialWaveEvery).maxBomb, Difficulty.ForWave(Difficulty.SpecialWaveEvery - 1).maxBomb, "special wave raises limits");
 
             Vector3 home = OpenArea(p);
             yield return null;
@@ -487,6 +487,146 @@ public class GameSmokeTest
             GameAudio.OnSfx -= h;
             InputSystem.QueueStateEvent(mouse, new MouseState());
         }
+    }
+
+    [UnityTest, Timeout(300000)]
+    public IEnumerator CardsBarrelsReadability()
+    {
+        yield return LoadGame();
+        var gm = GameManager.I;
+        WaveDirector.I.enabled = false;
+        var p = gm.player;
+        var w = p.weapon;
+        var heard = new System.Collections.Generic.List<SfxId>();
+        System.Action<SfxId, Vector3> h = (id, pos) => heard.Add(id);
+        GameAudio.OnSfx += h;
+        try
+        {
+            // --- Readability setup.
+            Assert.AreEqual(14f, gm.cameraRig.distance, 0.01f, "camera a bit closer");
+            Assert.NotNull(p.transform.Find("Ring"), "bright ring under the soldier");
+            Assert.Greater(Object.FindAnyObjectByType<ThreatIndicators>().normalRange, 0f, "nearby off-screen zombies get arrows");
+            var panel = gm.hud.gameOverPanel.GetComponent<UnityEngine.UI.Image>();
+            Assert.GreaterOrEqual(panel.color.a, 0.75f, "death screen darkening");
+
+            // --- XP → level-up → slowed card pick by tapping a card.
+            var prog = Progression.I;
+            Assert.AreEqual(1, prog.Level);
+            prog.AddXp(prog.XpToNext);
+            Assert.AreEqual(2, prog.Level);
+            yield return null;
+            yield return null;
+            var picker = CardPicker.I;
+            Assert.IsTrue(picker.IsOpen, "card picker opens on level-up");
+            Assert.AreEqual(3, picker.OfferCount);
+            Assert.Less(Time.timeScale, 0.2f * GameManager.TimeScale, "game slows during the pick");
+            Assert.IsTrue(TouchControls.I.Blocked, "gameplay input blocked");
+            Assert.IsTrue(heard.Contains(SfxId.LevelUp));
+            var offered = picker.OfferAt(1);
+            yield return Wait(0.5f);
+            yield return Click(picker.CardScreenPoint(1));
+            Assert.IsFalse(picker.IsOpen, "tapping a card closes the picker");
+            Assert.AreEqual(1, Upgrades.I.Level(offered), "the tapped card is applied");
+            Assert.AreEqual(GameManager.TimeScale, Time.timeScale, 0.001f, "time scale restored");
+            Assert.IsFalse(TouchControls.I.Blocked);
+
+            // --- Card effects.
+            int mag = w.magazineSize;
+            Upgrades.I.Take(CardId.BigMag);
+            Assert.AreEqual(mag + 10, w.magazineSize);
+            float rate = w.fireRate;
+            Upgrades.I.Take(CardId.FireRate);
+            Assert.Greater(w.fireRate, rate);
+            float maxHp = p.maxHealth;
+            Upgrades.I.Take(CardId.MaxHealth);
+            Assert.AreEqual(maxHp + 25f, p.maxHealth, 0.01f);
+            Upgrades.I.Take(CardId.Pierce);
+            Assert.AreEqual(Upgrades.I.Level(CardId.Pierce), w.pierce);
+            Upgrades.I.Take(CardId.Turret);
+            var turret = Object.FindAnyObjectByType<Turret>();
+            Assert.NotNull(turret, "turret deployed");
+            Assert.IsTrue(turret.gameObject.activeSelf);
+            Assert.Greater(turret.LifeLeft, 25f);
+            for (int i = 0; i < 4; i++) Upgrades.I.Take(CardId.FireRate);
+            Assert.AreEqual(3, Upgrades.I.Level(CardId.FireRate), "cards cap at level 3");
+            Assert.GreaterOrEqual(Upgrades.I.Owned.Count, 5);
+
+            // --- Explosive barrel: shot → blast hurts zombies (through shields too).
+            ExplosiveBarrel barrel = null;
+            for (int tries = 0; tries < 6 && barrel == null; tries++)
+            {
+                foreach (var b in ExplosiveBarrel.Active)
+                    if (!b.Exploded && b.gameObject.activeInHierarchy) { barrel = b; break; }
+                if (barrel == null) { Teleport(p, p.transform.position + new Vector3(60f, 0f, 0f)); yield return null; yield return null; }
+            }
+            Assert.NotNull(barrel, "the city should contain explosive barrels");
+            Vector3 bpos = barrel.transform.position;
+            Teleport(p, ClearSpot(bpos, 9f));
+            yield return null;
+            var spawner = Object.FindAnyObjectByType<ZombieSpawner>();
+            var sh = spawner.TrySpawnSpecial(ZombieKind.Shield, bpos + (p.transform.position - bpos).normalized * 1.6f, Difficulty.ForWave(3));
+            yield return WaitUntil(() => sh.Targetable, 8f);
+            float hp0 = sh.Health;
+            float php = p.Health;
+            heard.Clear();
+            barrel.Hit(10f);
+            Assert.IsFalse(barrel.Exploded, "one weak hit is not enough");
+            barrel.Hit(999f);
+            Assert.IsTrue(barrel.Exploded);
+            Assert.IsTrue(heard.Contains(SfxId.BarrelExplode));
+            Assert.Less(sh.Health, hp0, "barrel blast damages zombies");
+            Assert.GreaterOrEqual(p.Health, php - 0.01f, "player outside the radius is safe");
+            Assert.IsFalse(Physics.CheckSphere(bpos + Vector3.up * 0.5f, 0.2f, GameLayers.BlockerMask, QueryTriggerInteraction.Ignore), "exploded barrel no longer blocks");
+            Debug.Log($"SMOKE: barrel blast shield hp {hp0:0}->{sh.Health:0}, cards={Upgrades.I.Picks}");
+        }
+        finally { GameAudio.OnSfx -= h; }
+    }
+
+    /// <summary>F6 visuals with the HUD: card picker, building cut-out, barrels, threat arrows. Explicit; CAPTURE_DIR.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureF6()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var p = gm.player;
+        foreach (var c in new[] { CardId.DoubleShot, CardId.Pierce, CardId.Turret, CardId.MaxHealth, CardId.Lifesteal }) Upgrades.I.Take(c);
+        Upgrades.I.Take(CardId.DoubleShot);
+        yield return Wait(6f);
+        Progression.I.AddXp(Progression.I.XpToNext);
+        yield return Wait(0.6f);
+        PlaytestBot.Shot(Path.Combine(dir, "f6_cards.png"));
+        yield return Click(CardPicker.I.CardScreenPoint(0));
+
+        // Stand right behind (south of) a building so it hides the soldier → circular cut.
+        Fadeable building = null;
+        foreach (var f in Object.FindObjectsByType<Fadeable>(FindObjectsSortMode.None))
+            if (f.gameObject.activeInHierarchy && f.GetComponent<EnvProp>() && f.GetComponent<EnvProp>().radius > 3f) { building = f; break; }
+        if (building)
+        {
+            var b = building.GetComponent<Collider>().bounds;
+            Teleport(p, new Vector3(b.center.x, 0f, b.max.z + 0.8f));
+            yield return Wait(1.2f);
+            PlaytestBot.Shot(Path.Combine(dir, "f6_cutout.png"));
+        }
+        ExplosiveBarrel barrel = null;
+        foreach (var x in ExplosiveBarrel.Active) if (!x.Exploded) { barrel = x; break; }
+        if (barrel)
+        {
+            Teleport(p, ClearSpot(barrel.transform.position, 6f));
+            yield return Wait(1f);
+            PlaytestBot.Shot(Path.Combine(dir, "f6_barrel.png"));
+            barrel.Hit(999f);
+            yield return Wait(0.12f);
+            PlaytestBot.Shot(Path.Combine(dir, "f6_barrel_boom.png"));
+        }
+        var firePos = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
+        SetMouse(firePos, true);
+        yield return Wait(10f);
+        PlaytestBot.Shot(Path.Combine(dir, "f6_play.png"));
+        SetMouse(firePos, false);
+        Debug.Log("CAPTURE: f6 " + dir);
     }
 
     /// <summary>Close-up PNGs of the three special zombies (scale, rings, telegraph). Explicit; CAPTURE_DIR.</summary>

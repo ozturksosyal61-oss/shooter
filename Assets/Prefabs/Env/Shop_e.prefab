@@ -206,4 +206,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Game::Fadeable
   renderers:
   - {fileID: 4329311209848570765}
-  fadeMaterial: {fileID: 2100000, guid: 0fee750d2f4fe2c4ab3370746070356d, type: 2}
+  fadeMaterial: {fileID: 2100000, guid: 1e3af947955cd0d40a2abc4bb3448384, type: 2}

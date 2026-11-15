@@ -6,6 +6,44 @@ public static partial class GameSceneBuilder
 {
     static readonly Color UiGold = new Color(1f, 0.85f, 0.2f);
 
+    static CardPicker BuildCardPicker(Transform root, Tex t)
+    {
+        // The picker lives on an always-active host; only the panel (bg) is toggled.
+        var host = Rect("CardPickerHost", root);
+        Stretch(host);
+        var bg = Img("CardPicker", host, t.white, new Color(0f, 0f, 0f, 0.7f));
+        Stretch(bg.rectTransform);
+        var group = bg.gameObject.AddComponent<CanvasGroup>();
+        var header = Txt("Header", bg.transform, 64, TextAnchor.MiddleCenter, UiGold);
+        Anchor(header.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -375f), new Vector2(1400f, 90f));
+        var p = host.gameObject.AddComponent<CardPicker>();
+        p.group = group; p.header = header;
+        const int n = 3;
+        p.cards = new RectTransform[n]; p.backgrounds = new Image[n]; p.rarityStrips = new Image[n];
+        p.titles = new Text[n]; p.descriptions = new Text[n]; p.levelTexts = new Text[n]; p.icons = new Text[n]; p.rarityTexts = new Text[n];
+        for (int i = 0; i < n; i++)
+        {
+            var card = Img("Card" + i, bg.transform, t.white, new Color(0.1f, 0.1f, 0.12f, 0.96f));
+            Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 470f, -20f), new Vector2(420f, 560f));
+            var strip = Img("Rarity", card.transform, t.white, Color.white);
+            Anchor(strip.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(420f, 14f));
+            var rar = Txt("RarityName", card.transform, 26, TextAnchor.UpperCenter, Color.white);
+            Anchor(rar.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -28f), new Vector2(400f, 34f));
+            var ico = Txt("Icon", card.transform, 110, TextAnchor.MiddleCenter, Color.white);
+            Anchor(ico.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -150f), new Vector2(400f, 150f));
+            var title = Txt("Title", card.transform, 44, TextAnchor.MiddleCenter, Color.white);
+            Anchor(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -10f), new Vector2(400f, 60f));
+            var desc = Txt("Desc", card.transform, 32, TextAnchor.UpperCenter, new Color(0.9f, 0.9f, 0.9f));
+            desc.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Anchor(desc.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, -55f), new Vector2(370f, 140f));
+            var lv = Txt("Level", card.transform, 30, TextAnchor.LowerCenter, Color.white);
+            Anchor(lv.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 24f), new Vector2(400f, 40f));
+            p.cards[i] = card.rectTransform; p.backgrounds[i] = card; p.rarityStrips[i] = strip; p.rarityTexts[i] = rar;
+            p.icons[i] = ico; p.titles[i] = title; p.descriptions[i] = desc; p.levelTexts[i] = lv;
+        }
+        return p;
+    }
+
     static HUD BuildUI(Tex t, out TouchControls controls)
     {
         var canvasGo = new GameObject("HUD", typeof(RectTransform));
@@ -38,6 +76,7 @@ public static partial class GameSceneBuilder
         Anchor(thrTemplate.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(64f, 64f));
         var threats = thrRoot.gameObject.AddComponent<ThreatIndicators>();
         threats.template = thrTemplate;
+        threats.normalRange = 9f;
 
         // Joystick + aim ring
         var joyBase = Img("JoystickBase", root, t.ring, Color.white);
@@ -68,6 +107,27 @@ public static partial class GameSceneBuilder
         Anchor(waveLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(42f, -86f), new Vector2(400f, 44f));
         waveLabel.text = "";
         hud.waveLabel = waveLabel;
+
+        // XP bar + level (under the health bar) and the owned-card icon row
+        var xpBg = Img("XpBar", root, t.white, new Color(0f, 0f, 0f, 0.55f));
+        Anchor(xpBg.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -82f), new Vector2(440f, 14f));
+        var xpFill = Img("Fill", xpBg.transform, t.white, new Color(0.35f, 0.75f, 1f));
+        var xr = xpFill.rectTransform;
+        xr.anchorMin = Vector2.zero; xr.anchorMax = new Vector2(0f, 1f); xr.offsetMin = new Vector2(3f, 3f); xr.offsetMax = new Vector2(-3f, -3f);
+        var lvl = Txt("Level", root, 30, TextAnchor.MiddleLeft, new Color(0.55f, 0.85f, 1f));
+        Anchor(lvl.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(492f, -89f), new Vector2(160f, 40f));
+        lvl.text = "SV 1";
+        hud.xpFill = xr; hud.levelText = lvl;
+        waveLabel.rectTransform.anchoredPosition = new Vector2(42f, -106f);
+        var row = Rect("Cards", root);
+        Anchor(row, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -156f), new Vector2(1000f, 56f));
+        var icon = Img("CardIcon", row, t.white, new Color(0.2f, 0.2f, 0.25f, 0.9f));
+        Anchor(icon.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(56f, 56f));
+        var iconTxt = Txt("Icon", icon.transform, 24, TextAnchor.MiddleCenter, Color.white);
+        Stretch(iconTxt.rectTransform); iconTxt.rectTransform.offsetMin = new Vector2(0f, 10f);
+        var pips = Txt("Pips", icon.transform, 18, TextAnchor.LowerCenter, new Color(1f, 0.85f, 0.2f));
+        Stretch(pips.rectTransform); pips.rectTransform.offsetMin = new Vector2(0f, -2f);
+        hud.cardRow = row; hud.cardIconTemplate = icon;
 
         // Score + combo (top-centre)
         var score = Txt("Score", root, 72, TextAnchor.UpperCenter, Color.white);
@@ -159,7 +219,10 @@ public static partial class GameSceneBuilder
         hud.tutorialGroup = tipsGroup;
 
         // Game over panel
-        var go = Img("GameOver", root, t.white, new Color(0.05f, 0f, 0f, 0.72f));
+        // Level-up card picker (above the HUD, below the game-over panel)
+        var picker = BuildCardPicker(root, t);
+
+        var go = Img("GameOver", root, t.white, new Color(0.02f, 0f, 0f, 0.86f));
         Stretch(go.rectTransform);
         var title = Txt("Title", go.transform, 120, TextAnchor.MiddleCenter, new Color(1f, 0.3f, 0.25f));
         Anchor(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 290f), new Vector2(1000f, 150f));
@@ -184,6 +247,7 @@ public static partial class GameSceneBuilder
         controls.aimBase = aimBase.rectTransform; controls.aimKnob = aimKnob.rectTransform; controls.aimGroup = aimGroup;
         controls.reloadButton = rb.rectTransform;
         controls.restartButton = again.rectTransform;
+        controls.cardRects = picker.cards;
         return hud;
     }
 }

@@ -12,16 +12,19 @@ public class Bullet : MonoBehaviour
     Vector3 castFrom;
     float life, damage, travelled;
     bool crit, first;
+    int pierceLeft;
     Pool<Bullet> pool;
 
-    public void Launch(Vector3 pos, Vector3 castOrigin, Vector3 dir, float speed, float dmg, bool isCrit, Pool<Bullet> p)
+    public void Launch(Vector3 pos, Vector3 castOrigin, Vector3 dir, float speed, float dmg, bool isCrit, Pool<Bullet> p,
+        float lifetime = 0.6f, int pierce = 0)
     {
+        pierceLeft = pierce;
         transform.SetPositionAndRotation(pos, Quaternion.LookRotation(dir));
         // First cast starts from the shooter so zombies hugging the muzzle still get hit.
         castFrom = castOrigin;
         first = true;
         vel = dir * speed;
-        life = 0.6f;
+        life = lifetime;
         damage = dmg;
         crit = isCrit;
         pool = p;
@@ -41,12 +44,26 @@ public class Bullet : MonoBehaviour
             Physics.SphereCast(from, Radius, seg / dist, out var hit, dist, GameLayers.BulletMask, QueryTriggerInteraction.Ignore))
         {
             Vector3 dir = vel.normalized;
-            if (hit.collider.TryGetComponent(out Zombie z)) z.TakeHit(damage, crit, dir, hit.point);
+            if (hit.collider.TryGetComponent(out Zombie z))
+            {
+                // Pierce: keep flying past a zombie we actually damaged (a shield stops the bullet).
+                if (z.TakeHit(damage, crit, dir, hit.point) && pierceLeft > 0)
+                {
+                    pierceLeft--;
+                    damage *= 0.8f;
+                    transform.position = hit.point + dir * 0.9f;
+                    travelled += dist;
+                    UpdateTracer();
+                    return;
+                }
+            }
             else if (hit.collider.TryGetComponent(out TongueHitbox th)) th.owner.HitTongue(damage, crit, dir, hit.point);
             else
             {
                 if (Fx.I) Fx.I.Spark(hit.point, hit.normal);
                 var prop = hit.collider.GetComponentInParent<EnvProp>();
+                var barrel = prop ? prop.GetComponent<ExplosiveBarrel>() : null;
+                if (barrel) barrel.Hit(damage);
                 GameAudio.Play(prop && prop.surface == Surface.Metal ? SfxId.HitMetal : SfxId.HitConcrete, hit.point);
             }
             pool.Release(this);

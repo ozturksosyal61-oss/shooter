@@ -25,6 +25,12 @@ public class Weapon : MonoBehaviour
     public float autoAimRange = 18f;
     public float maxAimAngleToFire = 40f;
     public float cameraKick = 0.12f;
+    [Tooltip("Zombies a bullet passes through (card: Delici Mermi).")]
+    public int pierce;
+    [Tooltip("Extra bullets per shot, fanned out, each at 70% damage (card: Çift Mermi).")]
+    public int extraBullets;
+    public float extraBulletDamage = 0.7f;
+    public float extraBulletSpread = 7f;
 
     [Header("Magazine")]
     public int magazineSize = 40;
@@ -170,6 +176,16 @@ public class Weapon : MonoBehaviour
         }
     }
 
+    /// <summary>Damage multiplier of the next shot (perfect active reload bonus).</summary>
+    public float DamageScale => BonusShots > 0 ? 1f + perfectDamageBonus : 1f;
+
+    /// <summary>Pooled bullet for secondary weapons (shotgun pellets, turret).</summary>
+    public void SpawnBullet(Vector3 start, Vector3 castFrom, Vector3 dir, float speed, float dmg, bool crit, float life, int pierceCount)
+    {
+        if (crit) dmg *= critMultiplier;
+        pool.Get().Launch(start, castFrom, dir, speed, dmg, crit, pool, life, pierceCount);
+    }
+
     Vector3 ScreenToGroundDir(Vector2 screen, Vector3 from)
     {
         if (!cam) cam = Camera.main;
@@ -190,10 +206,22 @@ public class Weapon : MonoBehaviour
         Vector3 dir = Quaternion.Euler(0f, Random.Range(-spreadDeg, spreadDeg), 0f) * aim;
         Vector3 start = muzzle.position;
         Vector3 castFrom = owner.transform.position; castFrom.y = start.y;
-        bool crit = Random.value < critChance;
-        float dmg = damage * Random.Range(1f - damageJitter, 1f + damageJitter) * (crit ? critMultiplier : 1f);
-        if (BonusShots > 0) { BonusShots--; dmg *= 1f + perfectDamageBonus; }
-        pool.Get().Launch(start, castFrom, dir, bulletSpeed, dmg, crit, pool);
+        float scale = DamageScale;
+        if (BonusShots > 0) BonusShots--;
+        for (int b = 0; b <= extraBullets; b++)
+        {
+            bool crit = Random.value < critChance;
+            float dmg = damage * scale * Random.Range(1f - damageJitter, 1f + damageJitter) * (crit ? critMultiplier : 1f);
+            Vector3 d = dir;
+            if (b > 0)
+            {
+                // Fan the extra bullets out alternately left / right.
+                float side = (b % 2 == 1 ? 1f : -1f) * ((b + 1) / 2) * extraBulletSpread;
+                d = Quaternion.Euler(0f, side, 0f) * dir;
+                dmg *= extraBulletDamage;
+            }
+            pool.Get().Launch(start, castFrom, d, bulletSpeed, dmg, crit, pool, 0.6f, pierce);
+        }
 
         if (muzzleFlash)
         {

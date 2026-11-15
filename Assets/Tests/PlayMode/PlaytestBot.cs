@@ -14,9 +14,11 @@ using UnityEngine.TestTools;
 /// Plays full runs with a bot through the real input path (WASD + mouse + R) and records telemetry,
 /// screenshots (with HUD) and frame hitches with profiler markers. Explicit — run with
 ///   -testFilter PlaytestBot.Play
-/// env: PLAYTEST_STRATEGY = turret | kite | explore, PLAYTEST_TIMESCALE (default 1), PLAYTEST_SHOTS=0/1,
+/// env: PLAYTEST_STRATEGY = turret | kite | human | explore, PLAYTEST_TIMESCALE (default 1), PLAYTEST_SHOTS=0/1,
 ///      CAPTURE_DIR = output folder.
-/// "kite" is the smart bot: backs off while circling, collects health packs, uses active reload.
+/// "kite" is the smart bot: backs off while circling, collects health packs, nails every active reload.
+/// "human" moves like kite but hits the active reload only ~60% of the time, aims with a little jitter and reacts
+/// to new targets with a short delay. Every bot picks level-up cards by clicking them (kite/human by priority).
 /// </summary>
 public class PlaytestBot
 {
@@ -63,6 +65,16 @@ public class PlaytestBot
         var w = gm.player.weapon;
 
         int shotsFired = 0, hits = 0, kills = 0, hurts = 0, vaults = 0, reloads = 0, perfect = 0, jams = 0, packs = 0, breaks = 0;
+        int blocks = 0, bombs = 0, barrels = 0, grabs = 0, snaps = 0, levelUps = 0;
+        var cardLog = new StringBuilder();
+        var rng = new System.Random(strat.GetHashCode());
+        bool reloadPlanned = false, reloadWillHit = false;
+        float reloadPressAt = 0f;
+        Zombie aimTarget = null;
+        float targetSince = 0f;
+        Vector3 aimJitter = Vector3.zero;
+        float cardOpenAt = -1f;
+        bool cardClicked = false;
         var frameEvents = new List<SfxId>();
         int fontRebuilds = 0, fontRebuildsFrame = 0;
         System.Action<Font> onFont = f => { fontRebuilds++; };
@@ -82,6 +94,12 @@ public class PlaytestBot
                 case SfxId.ActiveReloadFail: jams++; break;
                 case SfxId.Pickup: packs++; break;
                 case SfxId.ComboBreak: breaks++; break;
+                case SfxId.ShieldBlock: blocks++; break;
+                case SfxId.BombExplode: bombs++; break;
+                case SfxId.BarrelExplode: barrels++; break;
+                case SfxId.TongueGrab: grabs++; break;
+                case SfxId.TongueSnap: snaps++; break;
+                case SfxId.LevelUp: levelUps++; break;
             }
         };
         GameAudio.OnSfx += listen;
@@ -116,16 +134,50 @@ public class PlaytestBot
         {
             while (!gm.IsGameOver && gm.GameTime < maxTime)
             {
+                // Level-up cards: let go of everything and click the chosen card (real pointer path).
+                var picker = CardPicker.I;
+                if (picker && picker.IsOpen)
+                {
+                    InputSystem.QueueStateEvent(kb, new KeyboardState());
+                    if (cardOpenAt < 0f) { cardOpenAt = Time.realtimeSinceStartup; cardClicked = false; }
+                    var cms = new MouseState();
+                    int idx = ChooseCard(picker, strat);
+                    cms.position = picker.CardScreenPoint(idx);
+                    if (!cardClicked && Time.realtimeSinceStartup - cardOpenAt > 0.5f)
+                    {
+                        cms = cms.WithButton(MouseButton.Left, true);
+                        cardClicked = true;
+                        cardLog.Append($"{gm.GameTime:0}s:{picker.OfferAt(idx)} ");
+                    }
+                    InputSystem.QueueStateEvent(mouse, cms);
+                    yield return null;
+                    continue;
+                }
+                if (cardOpenAt >= 0f)
+                {
+                    // Lift the finger once after the pick so a held "fire" press starts again.
+                    InputSystem.QueueStateEvent(mouse, new MouseState());
+                    cardOpenAt = -1f;
+                    yield return null;
+                    continue;
+                }
+
                 var p = gm.player.transform.position;
                 var nearest = Zombie.FindNearest(p, 40f);
                 float near = nearest ? Vector3.Distance(nearest.transform.position, p) : 99f;
+                if (strat == "kite" || strat == "human")
+                {
+                    // A good player shoots a bomb before it gets close (distance logic keeps using the true nearest).
+                    foreach (var z in Zombie.Active)
+                        if (z.Kind == ZombieKind.Bomb && z.Targetable && (z.transform.position - p).sqrMagnitude < 12f * 12f) { nearest = z; break; }
+                }
 
                 Vector3 threat = Vector3.zero;
                 foreach (var z in Zombie.Active)
                 {
                     Vector3 d = p - z.transform.position; d.y = 0f;
                     float m = d.magnitude;
-                    if (m < 12f && m > 0.01f) threat += d / (m * m);
+                    if (m < 12f && m > 0.01f) threat += d / (m * m) * (z.Kind == ZombieKind.Bomb ? 3f : 1f);
                 }
                 wanderT -= Time.unscaledDeltaTime * ts;
                 if (wanderT <= 0f) { wanderT = 3f; wander = Quaternion.Euler(0f, Random.Range(-60f, 60f), 0f) * wander; }
@@ -145,6 +197,31 @@ public class PlaytestBot
                     // Reload in quiet moments; active reload at the sweet spot.
                     if (!w.IsReloading && w.Ammo < w.magazineSize * 0.6f && near > 9f) wantReload = true;
                     if (w.IsReloading && w.ActiveReloadResult == -1 && w.ReloadProgress > w.sweetSpotStart + 0.03f && w.ReloadProgress < w.sweetSpotEnd - 0.03f) wantReload = true;
+                }
+                else if (strat == "human")
+                {
+                    Vector3 pack = Vector3.zero; bool hasPack = false;
+                    foreach (Transform t in Pickups.I.transform)
+                        if (t.gameObject.activeSelf && (t.position - p).sqrMagnitude < 100f) { pack = t.position; hasPack = true; break; }
+                    if (hasPack && gm.player.NeedsHealth && near > 4f) { move = (pack - p); move.y = 0f; move.Normalize(); }
+                    else if (threat.sqrMagnitude > 0.0006f) move = BestEscape(p, lastMove);
+                    else move = wander;
+                    lastMove = move;
+                    if (!w.IsReloading && w.Ammo < w.magazineSize * 0.4f && near > 7f) wantReload = true;
+                    // Active reload: decide once per reload; ~60% land in the sweet spot, the rest press at a wrong moment.
+                    if (w.IsReloading && w.ActiveReloadResult == -1)
+                    {
+                        if (!reloadPlanned)
+                        {
+                            reloadPlanned = true;
+                            reloadWillHit = rng.NextDouble() < 0.6;
+                            float mid = (w.sweetSpotStart + w.sweetSpotEnd) * 0.5f;
+                            reloadPressAt = reloadWillHit ? mid + (float)(rng.NextDouble() - 0.5) * 0.08f
+                                : rng.NextDouble() < 0.5 ? 0.2f + (float)rng.NextDouble() * 0.15f : w.sweetSpotEnd + 0.06f + (float)rng.NextDouble() * 0.15f;
+                        }
+                        if (w.ReloadProgress >= reloadPressAt) wantReload = true;
+                    }
+                    if (!w.IsReloading) reloadPlanned = false;
                 }
                 else if (strat == "explore")
                 {
@@ -167,6 +244,19 @@ public class PlaytestBot
                 {
                     ms.position = new Vector2(Screen.width * 0.6f, Screen.height * 0.5f);
                     ms = ms.WithButton(MouseButton.Left, true);
+                }
+                else if (strat == "human")
+                {
+                    // Reaction time on target switches + small aim error.
+                    if (nearest && near < 15f && !w.IsReloading)
+                    {
+                        if (nearest != aimTarget) { aimTarget = nearest; targetSince = gm.GameTime; aimJitter = new Vector3((float)rng.NextDouble() - 0.5f, 0f, (float)rng.NextDouble() - 0.5f) * 0.9f; }
+                        if (gm.GameTime - targetSince > 0.22f)
+                        {
+                            ms.position = cam.WorldToScreenPoint(nearest.AimPoint + aimJitter);
+                            ms = ms.WithButton(MouseButton.Right, true);
+                        }
+                    }
                 }
                 else if (nearest && near < 16f && !(strat == "kite" && w.IsReloading))
                 {
@@ -220,12 +310,33 @@ public class PlaytestBot
         string summary =
             $"PLAYTEST {strat}: survived={gm.GameTime:0}s wave={WaveDirector.I.Wave} dead={gm.IsGameOver} score={gm.Score} kills={kills} " +
             $"acc={(shotsFired > 0 ? 100f * hits / shotsFired : 0):0}% hurts={hurts} firstHurt={firstHurt:0}s packs={packs} comboBreaks={breaks} " +
-            $"bestCombo={gm.BestCombo} reloads={reloads} perfect={perfect} jams={jams} vaults={vaults} maxAlive={maxAlive} hitches={hitchCount}";
+            $"bestCombo={gm.BestCombo} reloads={reloads} perfect={perfect} jams={jams} vaults={vaults} maxAlive={maxAlive} hitches={hitchCount} " +
+            $"level={Progression.I.Level} picks={Upgrades.I.Picks} specials={gm.SpecialKills} blocks={blocks} bombs={bombs} barrels={barrels} grabs={grabs} snaps={snaps}";
         log.AppendLine(summary);
+        log.AppendLine("cards: " + cardLog);
         log.Append(hitches);
         File.WriteAllText(Path.Combine(dir, $"playtest_{strat}.txt"), log.ToString());
         Debug.Log(summary);
         Debug.Log(hitches.ToString());
+    }
+
+    static readonly CardId[] Priority =
+    {
+        CardId.DoubleShot, CardId.Pierce, CardId.FireRate, CardId.Turret, CardId.Shotgun, CardId.Grenade, CardId.KillBlast,
+        CardId.MaxHealth, CardId.Lifesteal, CardId.BreatherHeal, CardId.Crit, CardId.BigMag, CardId.FastReload, CardId.MoveSpeed, CardId.Magnet,
+    };
+
+    /// <summary>Smart bots take the best card by a fixed priority; the simple bots take the first one.</summary>
+    static int ChooseCard(CardPicker p, string strat)
+    {
+        if (strat != "kite" && strat != "human") return 0;
+        int best = 0, bestRank = int.MaxValue;
+        for (int i = 0; i < p.OfferCount; i++)
+        {
+            int rank = System.Array.IndexOf(Priority, p.OfferAt(i));
+            if (rank < bestRank) { bestRank = rank; best = i; }
+        }
+        return best;
     }
 
     /// <summary>
@@ -245,7 +356,7 @@ public class PlaytestBot
             {
                 Vector3 v = z.transform.position - q; v.y = 0f;
                 float m = Mathf.Max(0.5f, v.magnitude);
-                if (m < 14f) score -= 1f / (m * m);
+                if (m < 14f) score -= 1f / (m * m) * (z.Kind == ZombieKind.Bomb ? 3f : 1f);
             }
             if (Physics.SphereCast(p + Vector3.up * 0.6f, 0.4f, d, out var hit, 4f, GameLayers.BlockerMask))
                 score -= 0.4f * (1f - hit.distance / 4f);
@@ -256,7 +367,7 @@ public class PlaytestBot
     }
 
     /// <summary>Renders the game camera with the HUD composited (canvas temporarily in camera space).</summary>
-    static void Shot(string path)
+    public static void Shot(string path)
     {
         var cam = Camera.main;
         var canvas = Object.FindAnyObjectByType<HUD>().GetComponent<Canvas>();
@@ -273,6 +384,7 @@ public class PlaytestBot
         tex.Apply();
         File.WriteAllBytes(path, tex.EncodeToPNG());
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        Canvas.ForceUpdateCanvases();
         cam.targetTexture = null;
         RenderTexture.active = null;
         Object.Destroy(rt);

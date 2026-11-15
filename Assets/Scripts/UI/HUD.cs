@@ -37,6 +37,12 @@ public class HUD : MonoBehaviour
     public RectTransform reloadButton;
     public Image reloadButtonFill;
 
+    [Header("Progression")]
+    public RectTransform xpFill;
+    public Text levelText;
+    public RectTransform cardRow;
+    public Image cardIconTemplate;
+
     [Header("Misc")]
     public Text fpsText;
     public CanvasGroup tutorialGroup;
@@ -58,6 +64,9 @@ public class HUD : MonoBehaviour
     string[] ammoStrings;
     bool tutorialActive, recordActive;
     Vector2 brokenStart;
+    int lastLevel = -1;
+    float xpShown, levelPunch;
+    readonly System.Collections.Generic.List<Image> cardIcons = new System.Collections.Generic.List<Image>(16);
 
     void Start()
     {
@@ -67,6 +76,8 @@ public class HUD : MonoBehaviour
         tutorialActive = tutorialGroup && PlayerPrefs.GetInt(TutorialKey, 0) == 0;
         if (tutorialGroup) tutorialGroup.alpha = tutorialActive ? 1f : 0f;
         if (WaveDirector.I) WaveDirector.I.WaveStarted += OnWaveStarted;
+        if (Upgrades.I) Upgrades.I.Changed += OnCardChanged;
+        if (cardIconTemplate) cardIconTemplate.gameObject.SetActive(false);
         if (reloadSweetSpot && GameManager.I && GameManager.I.player)
         {
             var w = GameManager.I.player.weapon;
@@ -78,6 +89,35 @@ public class HUD : MonoBehaviour
     void OnDestroy()
     {
         if (WaveDirector.I) WaveDirector.I.WaveStarted -= OnWaveStarted;
+        if (Upgrades.I) Upgrades.I.Changed -= OnCardChanged;
+    }
+
+    /// <summary>Owned cards as small rarity-coloured badges with level pips.</summary>
+    void OnCardChanged(CardId id, int level)
+    {
+        if (!cardIconTemplate) return;
+        var owned = Upgrades.I.Owned;
+        while (cardIcons.Count < owned.Count)
+        {
+            var img = Instantiate(cardIconTemplate, cardRow);
+            img.gameObject.SetActive(true);
+            cardIcons.Add(img);
+        }
+        for (int i = 0; i < owned.Count; i++)
+        {
+            var d = Upgrades.Get(owned[i]);
+            var img = cardIcons[i];
+            var rt = img.rectTransform;
+            rt.anchoredPosition = new Vector2(i * 64f, 0f);
+            Color rc = Upgrades.RarityColors[(int)d.rarity];
+            img.color = new Color(rc.r * 0.35f, rc.g * 0.35f, rc.b * 0.35f, 0.9f);
+            var texts = img.GetComponentsInChildren<Text>(true);
+            texts[0].text = d.icon;
+            texts[0].color = rc;
+            int l = Upgrades.I.Level(owned[i]);
+            texts[1].text = l == 1 ? "•" : l == 2 ? "••" : "•••";
+            if (owned[i] == id) rt.localScale = Vector3.one * 1.4f;
+        }
     }
 
     void OnWaveStarted(int wave)
@@ -110,6 +150,7 @@ public class HUD : MonoBehaviour
         UpdateWaves(dt);
         UpdateWeapon(gm, dt);
         UpdateTutorial(dt);
+        UpdateProgression(dt);
         UpdateFps(dt);
         if (recordActive)
         {
@@ -249,6 +290,27 @@ public class HUD : MonoBehaviour
         reloadButtonFill.fillAmount = 1f - (float)w.Ammo / w.magazineSize;
         float pulse = low && !w.IsReloading ? 1f + 0.08f * Mathf.Sin(Time.unscaledTime * 10f) : 1f;
         reloadButton.localScale = Vector3.one * pulse;
+    }
+
+    void UpdateProgression(float dt)
+    {
+        var prog = Progression.I;
+        if (!prog || !xpFill) return;
+        xpShown = Mathf.MoveTowards(xpShown, prog.Progress01, dt * 2.5f);
+        if (prog.Level != lastLevel)
+        {
+            if (lastLevel > 0) { levelPunch = 1f; xpShown = 0f; }
+            lastLevel = prog.Level;
+            levelText.text = "SV " + prog.Level;
+        }
+        xpFill.anchorMax = new Vector2(xpShown, 1f);
+        levelPunch = Mathf.MoveTowards(levelPunch, 0f, dt * 3f);
+        levelText.transform.localScale = Vector3.one * (1f + 0.4f * levelPunch);
+        for (int i = 0; i < cardIcons.Count; i++)
+        {
+            var t = cardIcons[i].rectTransform;
+            t.localScale = Vector3.MoveTowards(t.localScale, Vector3.one, dt * 3f);
+        }
     }
 
     void UpdateTutorial(float dt)

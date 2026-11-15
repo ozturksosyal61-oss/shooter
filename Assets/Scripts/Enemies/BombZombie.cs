@@ -8,12 +8,12 @@ using UnityEngine;
 public class BombZombie : Zombie
 {
     public float runDistance = 6f;
-    public float runSpeedMul = 1.9f;
+    public float runSpeedMul = 1.7f;
     public float triggerDistance = 2f;
     public float swellTime = 1f;
-    public float blastRadius = 4f;
+    public float blastRadius = 3.6f;
     public float blastZombieDamage = 160f;
-    public float blastPlayerDamage = 34f;
+    public float blastPlayerDamage = 26f;
     [Tooltip("Delay before a bomb killed by another blast goes off (makes chains readable).")]
     public float chainDelay = 0.15f;
 

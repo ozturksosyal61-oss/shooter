@@ -511,6 +511,11 @@ public static partial class GameSceneBuilder
         cc.radius = 0.35f; cc.height = 1.7f; cc.center = new Vector3(0f, 0.85f, 0f);
         cc.stepOffset = 0.25f; cc.skinWidth = 0.04f; cc.minMoveDistance = 0f;
 
+        // Readability: bright ring under the soldier.
+        var ring = Quad("Ring", go.transform, m.ringSoldier);
+        ring.transform.localPosition = new Vector3(0f, 0.035f, 0f);
+        ring.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
+
         var rifle = BuildRifle(go.transform, m, out var rGrip, out var lGrip, out var muzzle, out var mf);
         rifle.localPosition = new Vector3(0.1f, 0.95f, 0.2f);
 

@@ -8,7 +8,10 @@ public class CameraRig : MonoBehaviour
 {
     public Transform target;
     public float pitch = 57f;
-    public float distance = 16f;
+    public float distance = 14f;
+    [Tooltip("Radius of the see-through circle cut into buildings around the soldier (fraction of screen height).")]
+    public float cutRadius = 0.13f;
+    public float cutRim = 0.012f;
     public float smoothTime = 0.12f;
     public float maxShakeOffset = 0.45f;
     public float maxShakeRoll = 2.5f;
@@ -19,6 +22,8 @@ public class CameraRig : MonoBehaviour
     float trauma;
     Vector3 focus, vel, kick;
     static readonly RaycastHit[] Hits = new RaycastHit[8];
+    static readonly int CutCircle = Shader.PropertyToID("_CutCircle");
+    Camera cam;
 
     void OnEnable() => FloatingOrigin.OnShift += OnShift;
     void OnDisable() => FloatingOrigin.OnShift -= OnShift;
@@ -46,6 +51,12 @@ public class CameraRig : MonoBehaviour
         kick = Vector3.Lerp(kick, Vector3.zero, 1f - Mathf.Exp(-kickRecover * udt));
         Apply(trauma * trauma);
         FadeOccluders();
+        if (target)
+        {
+            if (!cam) cam = GetComponent<Camera>();
+            Vector3 vp = cam ? cam.WorldToViewportPoint(target.position + Vector3.up * 1f) : new Vector3(0.5f, 0.5f, 1f);
+            Shader.SetGlobalVector(CutCircle, new Vector4(vp.x, vp.y, cutRadius, cutRim));
+        }
     }
 
     void Apply(float shake)

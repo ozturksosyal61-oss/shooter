@@ -40,6 +40,8 @@ public static partial class GameSceneBuilder
         BuildBulletPrefab(m);
         BuildSplatPrefab(m);
         BuildHealthPackPrefab(m, t);
+        BuildTurretPrefab(m);
+        BuildGrenadePrefab(m);
         BuildZombiePrefab(m, anims);
         BuildSpecialZombiePrefabs(m, anims);
         var env = BuildEnvironmentPrefabs(m);
@@ -357,6 +359,7 @@ public static partial class GameSceneBuilder
         public Material[] ground = new Material[4];
         public readonly Dictionary<string, Material> kit = new Dictionary<string, Material>();
         public readonly Dictionary<string, Material> kitFade = new Dictionary<string, Material>();
+        public Material barrelRed, turretBody, turretDark, grenade;
     }
 
     static Material Mat(string name, string shader, System.Action<Material> setup)
@@ -415,8 +418,14 @@ public static partial class GameSceneBuilder
         {
             var cmap = ConfigureColormap(kit);
             m.kit[kit] = Mat("M_Env_" + kit, simpleLit, x => { x.SetTexture("_BaseMap", cmap); x.SetColor("_BaseColor", Color.white); });
-            m.kitFade[kit] = Mat("M_EnvFade_" + kit, "Game/FxAlpha", x => { x.SetTexture("_BaseMap", cmap); x.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0.28f)); x.SetFloat("_VertexColor", 0f); });
+            AssetDatabase.DeleteAsset($"{MatDir}/M_EnvFade_{kit}.mat");
+            // Occluding buildings get a see-through circle around the soldier instead of fading entirely.
+            m.kitFade[kit] = Mat("M_EnvCut_" + kit, "Game/EnvCutout", x => { x.SetTexture("_BaseMap", cmap); x.SetColor("_BaseColor", Color.white); x.SetColor("_RimColor", new Color(1f, 0.9f, 0.55f)); });
         }
+        m.barrelRed = Mat("M_Env_BarrelRed", simpleLit, x => { x.SetTexture("_BaseMap", m.kit["Survival"].GetTexture("_BaseMap")); x.SetColor("_BaseColor", new Color(1f, 0.28f, 0.2f)); });
+        m.turretBody = Mat("M_Turret", simpleLit, x => { x.SetTexture("_BaseMap", null); x.SetColor("_BaseColor", new Color(0.36f, 0.42f, 0.3f)); });
+        m.turretDark = Mat("M_TurretDark", simpleLit, x => { x.SetTexture("_BaseMap", null); x.SetColor("_BaseColor", new Color(0.13f, 0.14f, 0.15f)); });
+        m.grenade = Mat("M_Grenade", simpleLit, x => { x.SetTexture("_BaseMap", null); x.SetColor("_BaseColor", new Color(0.25f, 0.32f, 0.18f)); });
         return m;
     }
 
@@ -491,6 +500,55 @@ public static partial class GameSceneBuilder
         SavePrefab(root, $"{PrefabDir}/HealthPack.prefab");
     }
 
+    static GameObject Prim(PrimitiveType type, string name, Transform parent, Vector3 pos, Vector3 scale, Material mat, Vector3 euler = default)
+    {
+        var g = GameObject.CreatePrimitive(type);
+        g.name = name;
+        Object.DestroyImmediate(g.GetComponent<Collider>());
+        g.transform.SetParent(parent, false);
+        g.transform.localPosition = pos;
+        g.transform.localEulerAngles = euler;
+        g.transform.localScale = scale;
+        g.GetComponent<MeshRenderer>().sharedMaterial = mat;
+        return g;
+    }
+
+    /// <summary>Sentry: tripod base + rotating head with a twin barrel (no collider; it is not an obstacle).</summary>
+    static void BuildTurretPrefab(Mats m)
+    {
+        var root = new GameObject("Turret");
+        var rs = new List<Renderer>();
+        void R(GameObject g) => rs.Add(g.GetComponent<Renderer>());
+        R(Prim(PrimitiveType.Cylinder, "Base", root.transform, new Vector3(0f, 0.12f, 0f), new Vector3(0.9f, 0.12f, 0.9f), m.turretDark));
+        R(Prim(PrimitiveType.Cylinder, "Post", root.transform, new Vector3(0f, 0.5f, 0f), new Vector3(0.22f, 0.35f, 0.22f), m.turretDark));
+        var head = new GameObject("Head").transform;
+        head.SetParent(root.transform, false);
+        head.localPosition = new Vector3(0f, 0.95f, 0f);
+        R(Prim(PrimitiveType.Cube, "Body", head, Vector3.zero, new Vector3(0.55f, 0.35f, 0.7f), m.turretBody));
+        R(Prim(PrimitiveType.Cylinder, "BarrelL", head, new Vector3(-0.1f, 0.02f, 0.6f), new Vector3(0.08f, 0.3f, 0.08f), m.turretDark, new Vector3(90f, 0f, 0f)));
+        R(Prim(PrimitiveType.Cylinder, "BarrelR", head, new Vector3(0.1f, 0.02f, 0.6f), new Vector3(0.08f, 0.3f, 0.08f), m.turretDark, new Vector3(90f, 0f, 0f)));
+        var muzzle = new GameObject("Muzzle").transform;
+        muzzle.SetParent(head, false);
+        muzzle.localPosition = new Vector3(0f, 0.02f, 0.95f);
+        var ring = Quad("Ring", root.transform, m.ringSoldier);
+        ring.transform.localPosition = new Vector3(0f, 0.03f, 0f);
+        ring.transform.localScale = new Vector3(1.8f, 1.8f, 1f);
+        rs.Add(ring.GetComponent<Renderer>());
+        var t = root.AddComponent<Turret>();
+        t.head = head;
+        t.muzzle = muzzle;
+        t.blinkRenderers = rs.ToArray();
+        SavePrefab(root, $"{PrefabDir}/Turret.prefab");
+    }
+
+    static void BuildGrenadePrefab(Mats m)
+    {
+        var root = new GameObject("Grenade");
+        Prim(PrimitiveType.Sphere, "Body", root.transform, Vector3.zero, new Vector3(0.26f, 0.3f, 0.26f), m.grenade);
+        Prim(PrimitiveType.Cube, "Cap", root.transform, new Vector3(0f, 0.17f, 0f), new Vector3(0.1f, 0.08f, 0.1f), m.turretDark);
+        SavePrefab(root, $"{PrefabDir}/Grenade.prefab");
+    }
+
     static void BuildSplatPrefab(Mats m)
     {
         var go = new GameObject("GooSplat");
@@ -504,7 +562,7 @@ public static partial class GameSceneBuilder
 
     class Env
     {
-        public GameObject[] cars, barricades, burningBarrels, decor;
+        public GameObject[] cars, barricades, burningBarrels, decor, explosiveBarrels;
         public GameObject[] commercial, industrial;
         public GameObject crate, crateLarge, dumpster, streetLight, parasolA, parasolB, tank, tankLarge;
         public GameObject[] containers;
@@ -515,7 +573,8 @@ public static partial class GameSceneBuilder
     /// pivot at bottom centre, kit material, optional box collider / fade / fire.
     /// </summary>
     static GameObject EnvPrefab(Mats m, string kit, string glb, string name, Fit fit, float size, float yScale,
-        int layer, bool collide, bool fadeable = false, bool fire = false, float radiusScale = 1f, Surface surface = Surface.Concrete)
+        int layer, bool collide, bool fadeable = false, bool fire = false, float radiusScale = 1f, Surface surface = Surface.Concrete,
+        Material matOverride = null, System.Action<GameObject, List<Renderer>> post = null)
     {
         var src = LoadGo($"{EnvArt}/{kit}/{glb}.glb");
         if (src == null) throw new System.Exception($"Missing {kit}/{glb}.glb");
@@ -535,7 +594,7 @@ public static partial class GameSceneBuilder
             go.transform.localScale = mf.transform.lossyScale;
             go.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
             var mr = go.AddComponent<MeshRenderer>();
-            mr.sharedMaterials = Enumerable.Repeat(m.kit[kit], Mathf.Max(1, mf.sharedMesh.subMeshCount)).ToArray();
+            mr.sharedMaterials = Enumerable.Repeat(matOverride ? matOverride : m.kit[kit], Mathf.Max(1, mf.sharedMesh.subMeshCount)).ToArray();
             mr.shadowCastingMode = ShadowCastingMode.On;
             renderers.Add(mr);
         }
@@ -568,6 +627,7 @@ public static partial class GameSceneBuilder
         }
         if (fire) AddFire(root.transform, m, new Vector3(0f, b.max.y - 0.05f, 0f), b.extents.x * 0.8f);
         if (!collide) foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+        post?.Invoke(root, renderers);
 
         SetLayer(root, collide ? layer : 0);
         return SavePrefab(root, $"{EnvPrefabDir}/{name}.prefab");
@@ -618,6 +678,22 @@ public static partial class GameSceneBuilder
             .Select(c => EnvPrefab(m, "Cars", c, "Car_" + c, Fit.Length, 4.0f, 0.72f, V, true, surface: Surface.Metal)).ToArray();
         e.barricades = new[] { EnvPrefab(m, "Roads", "construction-barrier", "Barricade", Fit.Length, 2.4f, 0.7f, V, true) };
         e.burningBarrels = new[] { EnvPrefab(m, "Survival", "barrel", "BurningBarrel", Fit.Height, 1.0f, 1f, B, true, fire: true, radiusScale: 1.4f, surface: Surface.Metal) };
+        e.explosiveBarrels = new[] { EnvPrefab(m, "Survival", "barrel", "ExplosiveBarrel", Fit.Height, 1.05f, 1f, B, true, radiusScale: 1.3f,
+            surface: Surface.Metal, matOverride: m.barrelRed, post: (root, rs) =>
+            {
+                var b = root.AddComponent<ExplosiveBarrel>();
+                b.model = root.transform.Find("Model").gameObject;
+                b.colliders = root.GetComponents<Collider>();
+                var f = root.AddComponent<HitFlash>();
+                f.renderers = rs.ToArray();
+                f.flashMaterial = m.flash;
+                b.flash = f;
+                // Hazard band: a glowing orange ring on the ground so it reads as "explosive" from the top.
+                var ring = Quad("Warn", root.transform, m.ringBomb);
+                ring.transform.localPosition = new Vector3(0f, 0.03f, 0f);
+                ring.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
+                ring.transform.SetParent(b.model.transform, true);
+            }) };
         e.crate = EnvPrefab(m, "Survival", "box", "Crate", Fit.Height, 1.0f, 1f, V, true);
         e.crateLarge = EnvPrefab(m, "Survival", "box-large", "CrateLarge", Fit.Height, 1.0f, 1f, V, true);
         e.dumpster = EnvPrefab(m, "Roads", "dumpster", "Dumpster", Fit.Length, 2.2f, 0.85f, V, true, surface: Surface.Metal);
@@ -671,6 +747,7 @@ public static partial class GameSceneBuilder
         chunks.roadCars = env.cars;
         chunks.roadBarricades = env.barricades;
         chunks.burningBarrels = env.burningBarrels;
+        chunks.explosiveBarrels = env.explosiveBarrels;
         chunks.roadDecor = env.decor;
         chunks.districts = new[]
         {
@@ -689,14 +766,14 @@ public static partial class GameSceneBuilder
             new DistrictSettings
             {
                 district = District.Sanayi, ground = m.ground[2], buildings = env.industrial, buildingChance = 0.65f,
-                blockProps = new[] { env.tank, env.tankLarge, env.burningBarrels[0], env.crateLarge, env.containers[0] }, blockPropMin = 1, blockPropMax = 3,
+                blockProps = new[] { env.tank, env.tankLarge, env.burningBarrels[0], env.crateLarge, env.containers[0], env.explosiveBarrels[0], env.explosiveBarrels[0] }, blockPropMin = 1, blockPropMax = 3,
                 sidewalkProps = new[] { env.burningBarrels[0], env.dumpster, env.streetLight },
             },
             new DistrictSettings
             {
                 district = District.Liman, ground = m.ground[3], buildings = new[] { env.industrial[4] }, buildingChance = 0.15f,
                 blockProps = env.containers.Concat(new[] { env.crateLarge, env.tank }).ToArray(), blockPropMin = 2, blockPropMax = 3,
-                sidewalkProps = new[] { env.crate, env.crateLarge },
+                sidewalkProps = new[] { env.crate, env.crateLarge, env.explosiveBarrels[0] },
             },
         };
 
@@ -716,7 +793,8 @@ public static partial class GameSceneBuilder
         camData.renderPostProcessing = false;
         var rig = camGo.AddComponent<CameraRig>();
         rig.target = player.transform;
-        camGo.transform.SetPositionAndRotation(Quaternion.Euler(57f, 0f, 0f) * Vector3.back * 16f, Quaternion.Euler(57f, 0f, 0f));
+        rig.distance = 14f;
+        camGo.transform.SetPositionAndRotation(Quaternion.Euler(57f, 0f, 0f) * Vector3.back * 14f, Quaternion.Euler(57f, 0f, 0f));
 
         // Systems
         BuildFx(m);
@@ -729,6 +807,10 @@ public static partial class GameSceneBuilder
         spawner.bombPrefab = Load<Zombie>("BombZombie");
         spawner.tonguePrefab = Load<Zombie>("TongueZombie");
         BuildAudio(player.transform);
+        new GameObject("Progression").AddComponent<Progression>();
+        var upgrades = new GameObject("Upgrades").AddComponent<Upgrades>();
+        upgrades.turretPrefab = Load<Turret>("Turret");
+        upgrades.grenadePrefab = LoadGo($"{PrefabDir}/Grenade.prefab");
 
         var hud = BuildUI(t, out _);
 

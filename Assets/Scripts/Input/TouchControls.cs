@@ -21,6 +21,8 @@ public class TouchControls : MonoBehaviour
     public CanvasGroup joyGroup, aimGroup;
     public RectTransform reloadButton;
     public RectTransform restartButton;
+    [Tooltip("Level-up cards: while the picker is open every press is routed to them.")]
+    public RectTransform[] cardRects;
 
     [Header("Tuning (canvas units)")]
     public float joyRadius = 110f;
@@ -37,6 +39,10 @@ public class TouchControls : MonoBehaviour
     public bool AnyPressThisFrame { get; private set; }
     public bool ReloadPressed { get; private set; }
     public bool RestartPressed { get; private set; }
+    /// <summary>Index of the level-up card pressed this frame, -1 if none.</summary>
+    public int CardPressed { get; private set; } = -1;
+    /// <summary>Set by modal UI (card picker): gameplay input is suppressed.</summary>
+    public bool Blocked { get; set; }
 
     const int MouseId = -100;
     const int None = int.MinValue;
@@ -63,11 +69,21 @@ public class TouchControls : MonoBehaviour
         AnyPressThisFrame = false;
         ReloadPressed = false;
         RestartPressed = false;
+        CardPressed = -1;
         ReadTouches();
 #if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL
         ReadMouseAndKeyboard();
 #endif
         float scale = canvas ? canvas.scaleFactor : 1f;
+        if (Blocked)
+        {
+            leftId = rightId = None;
+            mouseAim = false;
+            Move = Vector2.zero;
+            FireHeld = HasAimDir = AimAtScreenPoint = false;
+            UpdateVisuals(scale, Vector2.zero, Vector2.zero);
+            return;
+        }
 
         // --- Move (left) ---
         Vector2 joyOffset = Vector2.zero;
@@ -144,6 +160,9 @@ public class TouchControls : MonoBehaviour
             if (k.wKey.isPressed || k.upArrowKey.isPressed) keyMove.y += 1f;
             if (k.spaceKey.wasPressedThisFrame || k.enterKey.wasPressedThisFrame) { AnyPressThisFrame = true; RestartPressed = true; }
             if (k.rKey.wasPressedThisFrame) ReloadPressed = true;
+            if (k.digit1Key.wasPressedThisFrame) CardPressed = 0;
+            if (k.digit2Key.wasPressedThisFrame) CardPressed = 1;
+            if (k.digit3Key.wasPressedThisFrame) CardPressed = 2;
         }
     }
 #endif
@@ -153,6 +172,13 @@ public class TouchControls : MonoBehaviour
 
     void BeginPointer(int id, Vector2 p)
     {
+        if (Blocked)
+        {
+            if (cardRects != null)
+                for (int i = 0; i < cardRects.Length; i++)
+                    if (Over(cardRects[i], p)) { CardPressed = i; break; }
+            return;
+        }
         if (Over(restartButton, p)) { RestartPressed = true; return; }
         if (Over(reloadButton, p)) { ReloadPressed = true; return; }
         if (p.x < Screen.width * 0.5f)

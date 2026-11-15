@@ -230,12 +230,12 @@ MonoBehaviour:
   score: 30
   xp: 5
   runDistance: 6
-  runSpeedMul: 1.9
+  runSpeedMul: 1.7
   triggerDistance: 2
   swellTime: 1
-  blastRadius: 4
+  blastRadius: 3.6
   blastZombieDamage: 160
-  blastPlayerDamage: 34
+  blastPlayerDamage: 26
   chainDelay: 0.15
 --- !u!1001 &6600819778451048476
 PrefabInstance:

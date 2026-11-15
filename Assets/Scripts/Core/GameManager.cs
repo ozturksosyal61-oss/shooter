@@ -29,7 +29,7 @@ public class GameManager : MonoBehaviour
     public float GameTime { get; private set; }
     public RunRecords Records { get; private set; }
 
-    float hitStopUntil;
+    float hitStopUntil, slow = 1f;
     bool hitStopActive;
     bool canRestart;
 
@@ -60,7 +60,7 @@ public class GameManager : MonoBehaviour
         if (hitStopActive && Time.unscaledTime >= hitStopUntil)
         {
             hitStopActive = false;
-            if (!IsGameOver) Time.timeScale = TimeScale;
+            if (!IsGameOver) Time.timeScale = TimeScale * slow;
         }
 
         var input = TouchControls.I;
@@ -143,9 +143,18 @@ public class GameManager : MonoBehaviour
 
     Vector3 PlayerPos => player ? player.transform.position : Vector3.zero;
 
+    /// <summary>Global slow-motion factor (level-up card pick); 1 = normal.</summary>
+    public void SetSlow(float factor)
+    {
+        slow = Mathf.Clamp(factor, 0.01f, 1f);
+        if (!IsGameOver && !hitStopActive) Time.timeScale = TimeScale * slow;
+    }
+
+    public bool IsSlowed => slow < 1f;
+
     public void HitStop(float duration)
     {
-        if (IsGameOver) return;
+        if (IsGameOver || slow < 1f) return;
         hitStopUntil = Mathf.Max(hitStopUntil, Time.unscaledTime + duration);
         hitStopActive = true;
         Time.timeScale = 0.02f * TimeScale;

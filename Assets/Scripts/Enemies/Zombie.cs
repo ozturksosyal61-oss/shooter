@@ -94,6 +94,8 @@ public class Zombie : MonoBehaviour
     public bool IsSpecial => kind >= ZombieKind.Shield;
     public ZombieKind Kind => runner ? ZombieKind.Runner : kind;
     public float Health => hp;
+    /// <summary>The killing blow was an explosion (kill-blast cards don't chain off these).</summary>
+    public bool KilledByExplosion { get; private set; }
     public float MaxHealth => maxHp;
     public virtual Vector3 AimPoint => transform.position + Vector3.up * 1.1f;
 
@@ -391,7 +393,8 @@ public class Zombie : MonoBehaviour
         punch = 1f;
         var gm = GameManager.I;
         if (Fx.I) Fx.I.Hit(point, dir);
-        if (DamageNumbers.I) DamageNumbers.I.Show(point + Vector3.up * 0.4f, Mathf.RoundToInt(amount), crit);
+        // Readability: only critical hits pop a number.
+        if (crit && DamageNumbers.I) DamageNumbers.I.Show(point + Vector3.up * 0.4f, Mathf.RoundToInt(amount), true);
         OnDamaged(amount, explosive);
         if (hp <= 0f) Die(dir, point, explosive);
         else if (!explosive)
@@ -411,6 +414,7 @@ public class Zombie : MonoBehaviour
     {
         state = State.Dying;
         stateT = 0f;
+        KilledByExplosion = explosive;
         body.enabled = false;
         Unregister();
         OnRemoved();
