@@ -1,60 +1,76 @@
-"""Export a low-poly character GLB as a T-pose FBX for Mixamo auto-rigging.
+"""Export a character GLB as a T-pose FBX for Mixamo auto-rigging.
 
 Usage:
-  blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <in.glb> <basecolor.png|-> <out.fbx> [height=1.8] [tris=0]
+  blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <in.glb> <basecolor.png|-> <out.fbx> [height=1.8] [tris=0] [seams] [bake]
 
-basecolor "-": use the GLB's embedded base-color image (saved next to out.fbx as <Name>_BaseColor.png, max 1024).
-tris > 0: weld + collapse-decimate the mesh to about that many triangles.
+basecolor "-": use the GLB's embedded base-color image (written next to out.fbx as <Name>_BaseColor.png, max 1024).
+tris > 0     : weld + collapse-decimate to about that many triangles. UV seams are kept: the collapse
+               quadrics weight edges whose UVs are discontinuous, and fans of 3+ faces are cut first.
+seams        : cut UV seams into mesh boundaries before collapsing (exact UVs on seams; may leave hairline gaps).
+bake         : after decimating, re-unwrap the low-poly mesh and bake the high-poly base color onto it
+               (Cycles, selected-to-active, 1024 diffuse colour) - use when decimation still shifts the texture.
 
-Result: single mesh, origin at the feet (bottom centre), height ~1.8 m, transforms applied,
+Result: single mesh, origin at the feet (bottom centre), given height, transforms applied,
 base-color texture embedded (path_mode=COPY + embed_textures).
 """
-import bpy
+import os
 import sys
+
+import bmesh
+import bpy
 from mathutils import Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
-src, tex_path, dst = argv[0], argv[1], argv[2]
+src, tex_path, dst = argv[0], argv[1], os.path.abspath(argv[2])
 height = float(argv[3]) if len(argv) > 3 else 1.8
 target_tris = int(argv[4]) if len(argv) > 4 else 0
+flags = set(argv[5:])
+do_bake = "bake" in flags
+cut_seams = "seams" in flags
+TEX_SIZE = 1024
+
+
+def tris_of(o):
+    return sum(len(p.vertices) - 2 for p in o.data.polygons)
+
+
+def bounds(o):
+    cs = [o.matrix_world @ v.co for v in o.data.vertices]
+    return (Vector((min(c.x for c in cs), min(c.y for c in cs), min(c.z for c in cs))),
+            Vector((max(c.x for c in cs), max(c.y for c in cs), max(c.z for c in cs))))
+
+
+def base_color_image(o):
+    for m in o.data.materials:
+        if not (m and m.use_nodes):
+            continue
+        b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        if not (b and b.inputs['Base Color'].is_linked):
+            continue
+        n = b.inputs['Base Color'].links[0].from_node
+        while n.type != 'TEX_IMAGE' and any(i.is_linked for i in n.inputs):
+            n = next(i for i in n.inputs if i.is_linked).links[0].from_node
+        if n.type == 'TEX_IMAGE':
+            return n.image
+    return None
+
+
+def select_only(*objs):
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[-1]
+
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 
 meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
-bpy.ops.object.select_all(action='DESELECT')
-for o in meshes:
-    o.select_set(True)
-bpy.context.view_layer.objects.active = meshes[0]
+select_only(*meshes)
 if len(meshes) > 1:
     bpy.ops.object.join()
 obj = bpy.context.view_layer.objects.active
 obj.name = bpy.path.display_name_from_filepath(dst)
-
-# Embedded base-color texture (taken before the materials are replaced).
-if tex_path == "-":
-    import os
-    src_img = None
-    for m in obj.data.materials:
-        if m and m.use_nodes:
-            b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
-            if b and b.inputs['Base Color'].is_linked:
-                n = b.inputs['Base Color'].links[0].from_node
-                while n.type != 'TEX_IMAGE' and n.inputs and any(i.is_linked for i in n.inputs):
-                    n = next(i for i in n.inputs if i.is_linked).links[0].from_node
-                if n.type == 'TEX_IMAGE':
-                    src_img = n.image
-                    break
-    if src_img is None:
-        raise RuntimeError("no embedded base-color image")
-    w, h = src_img.size
-    if max(w, h) > 1024:
-        src_img.scale(min(w, 1024 * w // max(w, h)), min(h, 1024 * h // max(w, h)))
-    tex_path = os.path.join(os.path.dirname(os.path.abspath(dst)), obj.name + "_BaseColor.png")
-    src_img.filepath_raw = tex_path
-    src_img.file_format = 'PNG'
-    src_img.save()
-    print("MIXAMO: base color ->", tex_path, tuple(src_img.size))
 
 # Drop the glTF hierarchy (empties) and bake transforms into the mesh.
 bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
@@ -63,42 +79,109 @@ for o in list(bpy.context.scene.objects):
         bpy.data.objects.remove(o, do_unlink=True)
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-# Optional decimation. Generated meshes come with split vertices and non-manifold fans
-# (edges shared by 3+ faces) that block edge collapse: weld, cut the fans apart, then decimate.
-if target_tris > 0:
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
-    bmesh.ops.split_edges(bm, edges=[e for e in bm.edges if len(e.link_faces) > 2])
-    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
-    bm.to_mesh(obj.data)
-    bm.free()
-    cur = sum(len(p.vertices) - 2 for p in obj.data.polygons)
-    if cur > target_tris:
-        mod = obj.modifiers.new("Decimate", 'DECIMATE')
-        mod.decimate_type = 'COLLAPSE'
-        mod.ratio = target_tris / cur
-        mod.use_collapse_triangulate = True
-        bpy.ops.object.modifier_apply(modifier=mod.name)
-
 # Scale to target height, origin at bottom centre, placed at world origin.
-coords = [obj.matrix_world @ v.co for v in obj.data.vertices]
-mn = Vector((min(c.x for c in coords), min(c.y for c in coords), min(c.z for c in coords)))
-mx = Vector((max(c.x for c in coords), max(c.y for c in coords), max(c.z for c in coords)))
+mn, mx = bounds(obj)
 s = height / (mx.z - mn.z)
 obj.scale = (s, s, s)
 bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-coords = [obj.matrix_world @ v.co for v in obj.data.vertices]
-mn = Vector((min(c.x for c in coords), min(c.y for c in coords), min(c.z for c in coords)))
-mx = Vector((max(c.x for c in coords), max(c.y for c in coords), max(c.z for c in coords)))
-feet = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
-bpy.context.scene.cursor.location = feet
+mn, mx = bounds(obj)
+bpy.context.scene.cursor.location = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
 bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
 obj.location = (0, 0, 0)
 
+src_img = base_color_image(obj)
+if tex_path == "-" and src_img is None:
+    raise RuntimeError("no embedded base-color image")
+src_tris = tris_of(obj)
+
+high = None
+if do_bake:
+    high = obj.copy()
+    high.data = obj.data.copy()
+    high.name = "High"
+    bpy.context.scene.collection.objects.link(high)
+
+# Decimation. Generated meshes come with split vertices and non-manifold fans (edges shared by
+# 3+ faces) that block edge collapse: weld, cut the fans apart, then collapse.
+if target_tris > 0 and src_tris > target_tris:
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6 * height)
+    bmesh.ops.split_edges(bm, edges=[e for e in bm.edges if len(e.link_faces) > 2])
+    if cut_seams:
+        # Hard-cut UV seams so the collapse never interpolates UVs across them (boundaries are kept).
+        uv = bm.loops.layers.uv.active
+        eps = 1e-5
+        seam = []
+        for e in bm.edges:
+            if len(e.link_loops) == 2:
+                l1, l2 = e.link_loops
+                if ((l1[uv].uv - l2.link_loop_next[uv].uv).length > eps or
+                        (l1.link_loop_next[uv].uv - l2[uv].uv).length > eps):
+                    seam.append(e)
+        bmesh.ops.split_edges(bm, edges=seam)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.to_mesh(obj.data)
+    bm.free()
+    mod = obj.modifiers.new("Decimate", 'DECIMATE')
+    mod.decimate_type = 'COLLAPSE'
+    mod.ratio = target_tris / tris_of(obj)
+    mod.use_collapse_triangulate = True
+    select_only(obj)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+
+base = obj.name + "_BaseColor.png"
+if do_bake:
+    # Fresh UVs on the low-poly mesh, then bake the high-poly base colour onto them.
+    for uv in list(obj.data.uv_layers):
+        obj.data.uv_layers.remove(uv)
+    obj.data.uv_layers.new(name="UVMap")
+    select_only(obj)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.004, area_weight=0.0)
+    bpy.ops.uv.pack_islands(rotate=True, margin=0.004)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    baked = bpy.data.images.new(obj.name + "_Baked", TEX_SIZE, TEX_SIZE, alpha=False)
+    bake_mat = bpy.data.materials.new("BakeTarget")
+    bake_mat.use_nodes = True
+    node = bake_mat.node_tree.nodes.new('ShaderNodeTexImage')
+    node.image = baked
+    bake_mat.node_tree.nodes.active = node
+    obj.data.materials.clear()
+    obj.data.materials.append(bake_mat)
+
+    sc = bpy.context.scene
+    sc.render.engine = 'CYCLES'
+    sc.cycles.device = 'CPU'
+    sc.cycles.samples = 4
+    sc.render.bake.use_selected_to_active = True
+    sc.render.bake.use_cage = False
+    sc.render.bake.cage_extrusion = 0.02 * height
+    sc.render.bake.max_ray_distance = 0.06 * height
+    sc.render.bake.margin = 8
+    select_only(high, obj)
+    bpy.ops.object.bake(type='DIFFUSE', pass_filter={'COLOR'})
+    tex_path = os.path.join(os.path.dirname(dst), base)
+    baked.filepath_raw = tex_path
+    baked.file_format = 'PNG'
+    baked.save()
+    bpy.data.objects.remove(high, do_unlink=True)
+    print("MIXAMO: baked base color ->", tex_path)
+elif tex_path == "-":
+    img = src_img.copy()
+    w, h = img.size
+    if max(w, h) > TEX_SIZE:
+        img.scale(w * TEX_SIZE // max(w, h), h * TEX_SIZE // max(w, h))
+    tex_path = os.path.join(os.path.dirname(dst), base)
+    img.filepath_raw = tex_path
+    img.file_format = 'PNG'
+    img.save()
+    print("MIXAMO: base color ->", tex_path, tuple(img.size))
+
 # Material with the base-color texture.
-img = bpy.data.images.load(tex_path)
+img = bpy.data.images.load(tex_path, check_existing=False)
 mat = bpy.data.materials.new(obj.name + "_Mat")
 mat.use_nodes = True
 nt = mat.node_tree
@@ -111,8 +194,9 @@ obj.data.materials.clear()
 obj.data.materials.append(mat)
 
 dims = obj.dimensions
-print(f"MIXAMO: {obj.name} dims=({dims.x:.2f},{dims.y:.2f},{dims.z:.2f}) tris={sum(len(p.vertices) - 2 for p in obj.data.polygons)}")
+print(f"MIXAMO: {obj.name} dims=({dims.x:.2f},{dims.y:.2f},{dims.z:.2f}) tris {src_tris} -> {tris_of(obj)}")
 
+select_only(obj)
 bpy.ops.export_scene.fbx(
     filepath=dst,
     use_selection=False,
