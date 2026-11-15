@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Profiling;
 using UnityEngine;
 
 public enum District { Cadde, Carsi, Sanayi, Liman }
@@ -28,6 +29,7 @@ public class ChunkManager : MonoBehaviour
     const float SidewalkOuter = 5.5f;
 
     public static ChunkManager I { get; private set; }
+    static readonly ProfilerMarker BuildMarker = new ProfilerMarker(ProfilerCategory.Scripts, "Game.ChunkBuild");
 
     public Transform player;
     public int radius = 2;
@@ -102,6 +104,7 @@ public class ChunkManager : MonoBehaviour
         var c = ChunkOf(player.position);
         if (c == center) return;
         center = c;
+        using var _ = BuildMarker.Auto();
 
         toRemove.Clear();
         foreach (var kv in active)

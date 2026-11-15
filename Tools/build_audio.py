@@ -180,6 +180,16 @@ write("kill_streak", clip(K("digital-audio", "powerUp7"), fade_out=0.1), -3.0)
 write("gameover_jingle", clip(K("music-jingles", "jingles_STEEL14"), fade_out=0.2), -2.0)
 write("explosion", clip(K("sci-fi-sounds", "lowFrequency_explosion_000"), fade_out=0.3), -1.0)
 
+write("new_record_jingle", clip(K("music-jingles", "jingles_STEEL02"), fade_out=0.2), -2.0)
+write("pickup", clip(K("interface-sounds", "confirmation_001"), fade_out=0.05), -4.0)
+# Combo break: heavy glass shatter layered with a light one.
+g1 = trim(load(K("impact-sounds", "impactGlass_heavy_000")))
+g2 = trim(load(K("impact-sounds", "impactGlass_light_001")))
+gl = np.zeros(max(len(g1), len(g2) + int(0.04 * SR)))
+gl[: len(g1)] += g1
+gl[int(0.04 * SR): int(0.04 * SR) + len(g2)] += 0.6 * g2
+write("combo_break", fade(gl, 0.08), -2.0)
+
 # ------------------------------------------------------------------ synthesised
 t = lambda d: np.arange(int(d * SR)) / SR
 

@@ -65,6 +65,23 @@ public class DamageNumbers : MonoBehaviour
         t.transform.SetAsLastSibling();
     }
 
+    /// <summary>Free-form popup (e.g. "+25" health).</summary>
+    public void ShowText(Vector3 worldPos, string text, Color color)
+    {
+        int i = next;
+        next = (next + 1) % texts.Length;
+        world[i] = worldPos;
+        drift[i] = Vector2.zero;
+        born[i] = Time.unscaledTime;
+        crit[i] = true;
+        var t = texts[i];
+        t.text = text;
+        t.color = color;
+        t.fontSize = 50;
+        t.gameObject.SetActive(true);
+        t.transform.SetAsLastSibling();
+    }
+
     void LateUpdate()
     {
         if (!cam) cam = Camera.main;

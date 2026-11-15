@@ -301,7 +301,6 @@ public class Zombie : MonoBehaviour
         knock = Vector3.ClampMagnitude(knock + dir * (crit ? 4.5f : 3f), 7f);
         punch = 1f;
         var gm = GameManager.I;
-        gm.RegisterHit();
         if (Fx.I) Fx.I.Hit(point, dir);
         if (DamageNumbers.I) DamageNumbers.I.Show(point + Vector3.up * 0.4f, Mathf.RoundToInt(amount), crit);
         if (hp <= 0f) Die(dir, point);
@@ -334,7 +333,8 @@ public class Zombie : MonoBehaviour
         animator.CrossFadeInFixedTime(HitState, 0.05f, 0);
 
         var gm = GameManager.I;
-        gm.RegisterKill();
+        gm.RegisterKill(runner);
+        if (Pickups.I) Pickups.I.MaybeDrop(transform.position);
         gm.HitStop(0.06f);
         gm.Shake(0.3f);
         GameAudio.Play(SfxId.Hit, point);

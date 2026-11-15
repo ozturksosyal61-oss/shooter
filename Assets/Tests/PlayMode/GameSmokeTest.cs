@@ -18,12 +18,26 @@ public class GameSmokeTest
         InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
         mouse = InputSystem.AddDevice<Mouse>();
         mouse.MakeCurrent();
+        PlayerPrefs.SetInt("tutorial_done", 1);
+        GameManager.TimeScale = 1f;
     }
 
     [TearDown]
     public void TearDown()
     {
         if (mouse != null) InputSystem.RemoveDevice(mouse);
+        GameManager.TimeScale = 1f;
+    }
+
+    static Vector2 ScreenPos(RectTransform rt) => RectTransformUtility.WorldToScreenPoint(null, rt.position);
+
+    IEnumerator Click(Vector2 pos)
+    {
+        SetMouse(pos, true);
+        yield return null;
+        yield return null;
+        SetMouse(pos, false);
+        yield return null;
     }
 
     void SetMouse(Vector2 pos, bool left)
@@ -53,9 +67,10 @@ public class GameSmokeTest
         Physics.SyncTransforms();
     }
 
-    [UnityTest]
+    [UnityTest, Timeout(600000)]
     public IEnumerator SpawnShootDieRestart()
     {
+        GameManager.TimeScale = 3f; // waves make a run long; simulate faster
         yield return LoadGame();
         var gm = GameManager.I;
         Assert.NotNull(gm, "GameManager missing");
@@ -92,21 +107,24 @@ public class GameSmokeTest
 
         // Stand still and let the zombies win.
         float t0 = Time.realtimeSinceStartup;
-        while (!gm.IsGameOver && Time.realtimeSinceStartup - t0 < 120f) yield return null;
+        while (!gm.IsGameOver && Time.realtimeSinceStartup - t0 < 240f) yield return null;
         Debug.Log($"SMOKE: gameover={gm.IsGameOver} time={gm.GameTime:0.0} score={gm.Score}");
         Assert.IsTrue(gm.IsGameOver, "player should eventually die");
 
-        yield return Wait(2.5f);
+        // The game-over panel (with the TEKRAR button) must be usable within 1 s.
+        yield return Wait(1f);
+        var hud = Object.FindAnyObjectByType<HUD>();
+        Assert.IsTrue(hud.gameOverPanel.activeSelf, "game over panel within 1 s");
+        Debug.Log("SMOKE: gameover stats: " + hud.gameOverStats.text.Replace("\n", " | "));
+        yield return Wait(1.5f);
         float cutoff = MusicDirector.I.calmFilter.cutoffFrequency;
         Debug.Log($"SMOKE: music cutoff after death={cutoff:0}");
         Assert.Less(cutoff, 3000f, "music should be low-passed on death");
-        SetMouse(firePos, true);
+        yield return Click(firePos); // tapping elsewhere must not restart
+        Assert.AreSame(gm, GameManager.I, "only the TEKRAR button restarts");
+        yield return Click(ScreenPos(hud.restartButton));
         yield return null;
-        yield return null;
-        SetMouse(firePos, false);
-        yield return null;
-        yield return null;
-        Assert.AreNotSame(gm, GameManager.I, "tap should restart the scene");
+        Assert.AreNotSame(gm, GameManager.I, "TEKRAR should restart the scene");
         Assert.IsFalse(GameManager.I.IsGameOver);
         Debug.Log("SMOKE: restart ok");
     }
@@ -180,7 +198,7 @@ public class GameSmokeTest
         yield return LoadGame();
         var gm = GameManager.I;
         var w = gm.player.weapon;
-        Assert.AreEqual(30, w.Ammo);
+        Assert.AreEqual(40, w.Ammo);
         var anim = gm.player.rig.Animator;
         Assert.IsTrue(anim.isHuman && anim.avatar.isValid, "soldier avatar should be a valid humanoid");
         Debug.Log($"SMOKE: humanScale={anim.humanScale:0.00} run={gm.player.rig.RunSpeed:0.00}");
@@ -199,16 +217,88 @@ public class GameSmokeTest
         while (w.IsReloading && Time.realtimeSinceStartup - t0 < 3f) yield return null;
         float took = Time.realtimeSinceStartup - t0 + 0.5f;
         Debug.Log($"SMOKE: reload took ~{took:0.00}s ammo={w.Ammo}");
-        Assert.AreEqual(30, w.Ammo);
+        Assert.AreEqual(40, w.Ammo);
 
-        // Tactical reload: fire ~20 rounds, release, wait > 1 s.
+        // Tactical reload: fire until below half, release, wait > 1 s.
         SetMouse(firePos, true);
-        while (w.Ammo > 12) yield return null;
+        while (w.Ammo > 15) yield return null;
         SetMouse(firePos, false);
         Assert.IsFalse(w.IsReloading);
         yield return Wait(1.3f);
-        Assert.IsTrue(w.IsReloading || w.Ammo == 30, "tactical reload after 1 s idle with < half magazine");
+        Assert.IsTrue(w.IsReloading || w.Ammo == 40, "tactical reload after 1 s idle with < half magazine");
         Debug.Log("SMOKE: tactical reload ok");
+    }
+
+    [UnityTest]
+    public IEnumerator ManualAndActiveReload()
+    {
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var w = gm.player.weapon;
+        var hud = Object.FindAnyObjectByType<HUD>();
+        var button = ScreenPos(hud.reloadButton);
+
+        // Spend a few rounds, then tap the reload button.
+        var firePos = new Vector2(Screen.width * 0.6f, Screen.height * 0.5f);
+        SetMouse(firePos, true);
+        while (w.Ammo > 34) yield return null;
+        SetMouse(firePos, false);
+        yield return Click(button);
+        Assert.IsTrue(w.IsReloading, "reload button starts a reload");
+
+        // Active reload: tap again inside the sweet spot.
+        while (w.ReloadProgress < (w.sweetSpotStart + w.sweetSpotEnd) * 0.5f) yield return null;
+        yield return Click(button);
+        Debug.Log($"SMOKE: active reload result={w.ActiveReloadResult} ammo={w.Ammo} bonus={w.BonusShots}");
+        Assert.AreEqual(1, w.ActiveReloadResult, "perfect active reload");
+        Assert.IsFalse(w.IsReloading);
+        Assert.AreEqual(40, w.Ammo);
+        Assert.AreEqual(40, w.BonusShots);
+
+        // A mistimed tap jams: the reload takes longer.
+        SetMouse(firePos, true);
+        while (w.Ammo > 30) yield return null;
+        SetMouse(firePos, false);
+        yield return Click(button);
+        yield return Click(button); // immediately = too early
+        Assert.AreEqual(0, w.ActiveReloadResult, "early tap jams");
+        Debug.Log("SMOKE: manual/active reload ok");
+    }
+
+    [UnityTest, Timeout(300000)]
+    public IEnumerator WavesBreatherAndCombo()
+    {
+        GameManager.TimeScale = 4f;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var waves = WaveDirector.I;
+        Assert.NotNull(waves, "WaveDirector missing");
+        SetMouse(new Vector2(Screen.width * 0.6f, Screen.height * 0.5f), true); // keep shooting to survive
+        while (waves.Wave < 1) yield return null;
+        Assert.IsFalse(waves.InBreak);
+        float waveLen = waves.Params.duration;
+
+        // Combo: kill-based steps, broken by damage.
+        for (int i = 0; i < 5; i++) gm.RegisterKill(false);
+        Assert.AreEqual(2, gm.Multiplier, "5 kills → x2");
+        gm.player.TakeDamage(30f, Vector3.forward);
+        Assert.AreEqual(0, gm.Combo, "damage breaks the combo");
+        Assert.AreEqual(1, gm.Multiplier);
+
+        // Breather: spawning stops and health regenerates.
+        while (!waves.InBreak && !gm.IsGameOver) yield return null;
+        Assert.IsFalse(gm.IsGameOver, "player should survive wave 1 while shooting");
+        SetMouse(new Vector2(Screen.width * 0.6f, Screen.height * 0.5f), false);
+        Debug.Log($"SMOKE: wave 1 lasted ~{waveLen}s, breather {waves.PhaseTimeLeft:0.0}s, hp={gm.player.Health:0}");
+        foreach (var z in Zombie.Active.ToArray()) z.Despawn();
+        float hp0 = gm.player.Health;
+        float t0 = Time.realtimeSinceStartup;
+        while (Time.realtimeSinceStartup - t0 < 1.2f) yield return null; // ~4.8 s game time
+        Assert.AreEqual(0, Zombie.Active.Count, "no spawns during the breather");
+        Assert.Greater(gm.player.Health, hp0, "health regenerates during the breather");
+        while (waves.InBreak && !gm.IsGameOver) yield return null;
+        Assert.AreEqual(2, waves.Wave);
+        Debug.Log($"SMOKE: wave 2 started, hp={gm.player.Health:0}");
     }
 
     [UnityTest]

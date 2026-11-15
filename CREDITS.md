@@ -27,6 +27,9 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | `SFX/zombie_death_01..04` | *zombieDeath1-4* — same pack | ArcadeParty | CC0 |
 | `SFX/player_hurt_01..04` | *humanYell1-4* — same pack | ArcadeParty | CC0 |
 | `SFX/player_death_01..02` | *humanDeath1-2* — same pack | ArcadeParty | CC0 |
+| `SFX/combo_break` | Layer of *impactGlass_heavy_000* + *impactGlass_light_001* — Kenney Impact Sounds | Kenney | CC0 |
+| `SFX/pickup` | *confirmation_001* — Kenney Interface Sounds | Kenney | CC0 |
+| `SFX/new_record_jingle` | *jingles_STEEL02* — Kenney Music Jingles | Kenney | CC0 |
 | `SFX/dry_fire` | **SYNTH** — filtered noise click + 3.3 kHz ping | this project | — |
 | `SFX/low_ammo` | **SYNTH** — two soft 1.3 kHz beeps | this project | — |
 | `SFX/combo_up` | **SYNTH** — bell partials with upward glide (pitched up per multiplier in code) | this project | — |

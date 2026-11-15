@@ -44,20 +44,22 @@ public class ZombieSpawner : MonoBehaviour
 
         RecycleStragglers(player.position);
 
+        var waves = WaveDirector.I;
+        if (waves && waves.InBreak) return; // breather: no spawning
+
         timer -= Time.deltaTime;
         if (timer > 0f) return;
-        float t = gm.GameTime;
-        timer = Difficulty.SpawnInterval(t) * Random.Range(0.7f, 1.3f);
-        int maxAlive = Difficulty.MaxAlive(t);
-        int burst = Difficulty.BurstSize(t);
+        var wp = waves ? waves.Params : Difficulty.ForWave(1);
+        timer = wp.spawnInterval * Random.Range(0.7f, 1.3f);
+        int burst = wp.burst + (Random.value < 0.3f ? 1 : 0);
 
-        for (int i = 0; i < burst && Zombie.Active.Count < maxAlive; i++)
+        for (int i = 0; i < burst && Zombie.Active.Count < wp.maxAlive; i++)
         {
             if (!TryFindSpawnPoint(player.position, out var pos)) break;
-            bool runner = Random.value < Difficulty.RunnerChance(t);
-            float speed = (runner ? Random.Range(runnerSpeed.x, runnerSpeed.y) : Random.Range(walkerSpeed.x, walkerSpeed.y)) * Difficulty.SpeedMultiplier(t);
-            float hp = baseHealth * Difficulty.HealthMultiplier(t) * (runner ? 0.6f : 1f);
-            pool.Get().Spawn(pos, hp, speed, Difficulty.ContactDamage(t), runner, pool);
+            bool runner = Random.value < wp.runnerChance;
+            float speed = (runner ? Random.Range(runnerSpeed.x, runnerSpeed.y) : Random.Range(walkerSpeed.x, walkerSpeed.y)) * wp.speedMultiplier;
+            float hp = baseHealth * wp.healthMultiplier * (runner ? 0.6f : 1f);
+            pool.Get().Spawn(pos, hp, speed, wp.contactDamage, runner, pool);
         }
     }
 

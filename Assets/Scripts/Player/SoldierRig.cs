@@ -102,6 +102,22 @@ public class SoldierRig : MonoBehaviour
         anim.CrossFadeInFixedTime(ReloadState, 0.1f, 1);
     }
 
+    /// <summary>Perfect active reload: snap back to aiming right away.</summary>
+    public void FinishReloadEarly()
+    {
+        if (!reloading) return;
+        reloading = false;
+        anim.CrossFadeInFixedTime(AimState, 0.08f, 1);
+    }
+
+    /// <summary>Jammed active reload: the reload pose lasts a bit longer.</summary>
+    public void ExtendReload(float seconds)
+    {
+        if (!reloading) return;
+        reloadDuration += seconds;
+        anim.SetFloat(ReloadSpeed, reloadClipLength / Mathf.Max(0.1f, reloadDuration));
+    }
+
     public void Die(Vector3 hitFromDir)
     {
         if (dead) return;

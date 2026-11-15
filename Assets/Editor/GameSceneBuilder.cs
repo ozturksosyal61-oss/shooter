@@ -38,6 +38,7 @@ public static partial class GameSceneBuilder
         var anims = ImportCharacterAnimations();
         BuildBulletPrefab(m);
         BuildSplatPrefab(m);
+        BuildHealthPackPrefab(m, t);
         BuildZombiePrefab(m, anims);
         var env = BuildEnvironmentPrefabs(m);
         AssetDatabase.SaveAssets();
@@ -419,6 +420,38 @@ public static partial class GameSceneBuilder
         SavePrefab(go, $"{PrefabDir}/Bullet.prefab");
     }
 
+    /// <summary>Medkit: white box with a red cross on top (bobs via Pickups) + a green ground glow.</summary>
+    static void BuildHealthPackPrefab(Mats m, Tex t)
+    {
+        const string lit = "Universal Render Pipeline/Simple Lit";
+        var white = Mat("M_Pickup_White", lit, x => { x.SetColor("_BaseColor", new Color(0.95f, 0.95f, 0.92f)); x.SetTexture("_BaseMap", null); });
+        var red = Mat("M_Pickup_Red", lit, x => { x.SetColor("_BaseColor", new Color(0.9f, 0.12f, 0.1f)); x.SetTexture("_BaseMap", null); });
+        var glow = Mat("M_PickupGlow", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", new Color(0.3f, 1f, 0.4f, 0.8f)); x.SetFloat("_VertexColor", 0f); });
+
+        var root = new GameObject("HealthPack");
+        var visual = new GameObject("Visual").transform;
+        visual.SetParent(root.transform, false);
+        visual.localPosition = new Vector3(0f, 0.45f, 0f);
+        GameObject Box(string n, Transform parent, Vector3 pos, Vector3 size, Material mat)
+        {
+            var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            b.name = n;
+            Object.DestroyImmediate(b.GetComponent<Collider>());
+            b.transform.SetParent(parent, false);
+            b.transform.localPosition = pos;
+            b.transform.localScale = size;
+            b.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            return b;
+        }
+        Box("Case", visual, Vector3.zero, new Vector3(0.6f, 0.42f, 0.6f), white);
+        Box("CrossA", visual, new Vector3(0f, 0.215f, 0f), new Vector3(0.42f, 0.02f, 0.13f), red);
+        Box("CrossB", visual, new Vector3(0f, 0.215f, 0f), new Vector3(0.13f, 0.02f, 0.42f), red);
+        var g = Quad("Glow", root.transform, glow);
+        g.transform.localPosition = new Vector3(0f, 0.03f, 0f);
+        g.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
+        SavePrefab(root, $"{PrefabDir}/HealthPack.prefab");
+    }
+
     static void BuildSplatPrefab(Mats m)
     {
         var go = new GameObject("GooSplat");
@@ -648,11 +681,21 @@ public static partial class GameSceneBuilder
 
         // Systems
         BuildFx(m);
+        new GameObject("WaveDirector").AddComponent<WaveDirector>();
+        var pickups = new GameObject("Pickups").AddComponent<Pickups>();
+        pickups.healthPackPrefab = LoadGo($"{PrefabDir}/HealthPack.prefab");
         var spawner = new GameObject("ZombieSpawner").AddComponent<ZombieSpawner>();
         spawner.prefab = Load<Zombie>("Zombie");
         BuildAudio(player.transform);
 
         var hud = BuildUI(t, out _);
+
+        var warm = new GameObject("Warmup").AddComponent<Warmup>();
+        warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })
+            .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g))).ToArray();
+        warm.skinnedSample = LoadGo(ZombieRigged);
+        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash };
+        warm.font = UIFont;
 
         var gm = new GameObject("GameManager").AddComponent<GameManager>();
         gm.player = player;
@@ -772,129 +815,5 @@ public static partial class GameSceneBuilder
         o.effectColor = new Color(0f, 0f, 0f, 0.7f);
         o.effectDistance = new Vector2(3f, -3f);
         return t;
-    }
-
-    static HUD BuildUI(Tex t, out TouchControls controls)
-    {
-        var canvasGo = new GameObject("HUD", typeof(RectTransform));
-        var canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 1f;
-        var root = canvasGo.transform;
-
-        // Damage vignette
-        var vig = Img("DamageVignette", root, t.vignette, new Color(0.85f, 0.05f, 0.05f, 0f));
-        Stretch(vig.rectTransform);
-
-        // Joystick (bottom-left anchored, positioned in screen/scale units)
-        var joyBase = Img("JoystickBase", root, t.ring, Color.white);
-        Anchor(joyBase.rectTransform, Vector2.zero, new Vector2(0.5f, 0.5f), new Vector2(260f, 240f), new Vector2(260f, 260f));
-        var joyGroup = joyBase.gameObject.AddComponent<CanvasGroup>();
-        joyGroup.alpha = 0.25f; joyGroup.blocksRaycasts = false; joyGroup.interactable = false;
-        var joyKnob = Img("Knob", joyBase.transform, t.disc, new Color(1f, 1f, 1f, 0.8f));
-        Anchor(joyKnob.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(110f, 110f));
-
-        var aimBase = Img("AimBase", root, t.ring, new Color(1f, 0.45f, 0.35f, 1f));
-        Anchor(aimBase.rectTransform, Vector2.zero, new Vector2(0.5f, 0.5f), new Vector2(1600f, 240f), new Vector2(200f, 200f));
-        var aimGroup = aimBase.gameObject.AddComponent<CanvasGroup>();
-        aimGroup.alpha = 0f; aimGroup.blocksRaycasts = false; aimGroup.interactable = false;
-        var aimKnob = Img("Knob", aimBase.transform, t.disc, new Color(1f, 0.5f, 0.4f, 0.85f));
-        Anchor(aimKnob.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(80f, 80f));
-
-        // Health bar
-        var hpBg = Img("HealthBar", root, t.white, new Color(0f, 0f, 0f, 0.55f));
-        Anchor(hpBg.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -40f), new Vector2(440f, 36f));
-        var hpFill = Img("Fill", hpBg.transform, t.white, new Color(0.3f, 0.9f, 0.3f));
-        var fr = hpFill.rectTransform;
-        fr.anchorMin = Vector2.zero; fr.anchorMax = Vector2.one; fr.offsetMin = new Vector2(4f, 4f); fr.offsetMax = new Vector2(-4f, -4f);
-        fr.pivot = new Vector2(0f, 0.5f);
-        var hpLabel = Txt("Label", hpBg.transform, 24, TextAnchor.MiddleLeft, Color.white);
-        Stretch(hpLabel.rectTransform); hpLabel.rectTransform.offsetMin = new Vector2(14f, 0f);
-        hpLabel.text = "CAN";
-
-        // Score + combo
-        var score = Txt("Score", root, 72, TextAnchor.UpperCenter, Color.white);
-        Anchor(score.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -24f), new Vector2(600f, 90f));
-        score.text = "0";
-
-        var comboRoot = Rect("Combo", root);
-        Anchor(comboRoot, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -115f), new Vector2(400f, 110f));
-        var mult = Txt("Multiplier", comboRoot, 60, TextAnchor.UpperCenter, new Color(1f, 0.85f, 0.2f));
-        Anchor(mult.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(400f, 64f));
-        mult.text = "x1";
-        var comboTxt = Txt("ComboCount", comboRoot, 28, TextAnchor.UpperCenter, Color.white);
-        Anchor(comboTxt.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(400f, 32f));
-        var barBg = Img("ComboBarBg", comboRoot, t.white, new Color(0f, 0f, 0f, 0.5f));
-        Anchor(barBg.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -100f), new Vector2(220f, 10f));
-        var bar = Img("Bar", barBg.transform, t.white, new Color(1f, 0.85f, 0.2f));
-        bar.rectTransform.anchorMin = Vector2.zero; bar.rectTransform.anchorMax = Vector2.one;
-        bar.rectTransform.offsetMin = bar.rectTransform.offsetMax = Vector2.zero;
-        comboRoot.gameObject.SetActive(false);
-
-        // FPS
-        var fps = Txt("FPS", root, 28, TextAnchor.UpperRight, new Color(1f, 1f, 1f, 0.8f));
-        Anchor(fps.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-30f, -30f), new Vector2(240f, 40f));
-        fps.text = "-- FPS";
-
-        // Ammo counter + reload bar (top-right, under the FPS counter)
-        var ammo = Txt("Ammo", root, 64, TextAnchor.UpperRight, Color.white);
-        Anchor(ammo.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-30f, -80f), new Vector2(360f, 80f));
-        ammo.text = "30<size=30> / 30</size>";
-        var reloadRoot = Rect("Reload", root);
-        Anchor(reloadRoot, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-30f, -165f), new Vector2(260f, 60f));
-        var reloadLabel = Txt("Label", reloadRoot, 26, TextAnchor.UpperRight, new Color(1f, 0.85f, 0.2f));
-        Anchor(reloadLabel.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(260f, 30f));
-        reloadLabel.text = "ŞARJÖR DEĞİŞİYOR";
-        var reloadBg = Img("BarBg", reloadRoot, t.white, new Color(0f, 0f, 0f, 0.55f));
-        Anchor(reloadBg.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(0f, -36f), new Vector2(260f, 12f));
-        var reloadBar = Img("Bar", reloadBg.transform, t.white, new Color(1f, 0.85f, 0.2f));
-        reloadBar.rectTransform.anchorMin = Vector2.zero; reloadBar.rectTransform.anchorMax = new Vector2(0f, 1f);
-        reloadBar.rectTransform.offsetMin = reloadBar.rectTransform.offsetMax = Vector2.zero;
-        reloadRoot.gameObject.SetActive(false);
-
-        // Game over
-        var go = Img("GameOver", root, t.white, new Color(0.05f, 0f, 0f, 0.65f));
-        Stretch(go.rectTransform);
-        var title = Txt("Title", go.transform, 120, TextAnchor.MiddleCenter, new Color(1f, 0.3f, 0.25f));
-        Anchor(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 170f), new Vector2(1000f, 150f));
-        title.text = "ÖLDÜN";
-        var goScore = Txt("Score", go.transform, 56, TextAnchor.UpperCenter, Color.white);
-        Anchor(goScore.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, 60f), new Vector2(1000f, 400f));
-        go.gameObject.SetActive(false);
-
-        controls = canvasGo.AddComponent<TouchControls>();
-        controls.canvas = canvas;
-        controls.joyBase = joyBase.rectTransform; controls.joyKnob = joyKnob.rectTransform; controls.joyGroup = joyGroup;
-        controls.aimBase = aimBase.rectTransform; controls.aimKnob = aimKnob.rectTransform; controls.aimGroup = aimGroup;
-
-        // Damage numbers
-        var dnRoot = Rect("DamageNumbers", root);
-        Stretch(dnRoot);
-        var dnTemplate = Txt("Number", dnRoot, 38, TextAnchor.MiddleCenter, Color.white);
-        Anchor(dnTemplate.rectTransform, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(200f, 70f));
-        var dn = dnRoot.gameObject.AddComponent<DamageNumbers>();
-        dn.template = dnTemplate;
-        dnRoot.SetSiblingIndex(1);
-
-        var hud = canvasGo.AddComponent<HUD>();
-        hud.scoreText = score;
-        hud.multiplierText = mult;
-        hud.comboText = comboTxt;
-        hud.comboRoot = comboRoot;
-        hud.comboBar = bar.rectTransform;
-        hud.healthFill = fr;
-        hud.healthFillImage = hpFill;
-        hud.damageVignette = vig;
-        hud.fpsText = fps;
-        hud.ammoText = ammo;
-        hud.reloadRoot = reloadRoot.gameObject;
-        hud.reloadBar = reloadBar.rectTransform;
-        hud.gameOverPanel = go.gameObject;
-        hud.gameOverScoreText = goScore;
-        return hud;
     }
 }

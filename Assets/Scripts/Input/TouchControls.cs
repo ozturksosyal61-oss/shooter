@@ -7,8 +7,10 @@ using ETouchPhase = UnityEngine.InputSystem.TouchPhase;
 /// <summary>
 /// Left half: floating joystick (move). Right half: hold = fire, drag direction = aim (360°).
 /// Editor/desktop: left mouse button simulates a finger on whichever half it is pressed,
-/// WASD moves, right mouse button fires toward the cursor.
+/// WASD moves, right mouse button fires toward the cursor, R reloads, Enter/Space restarts.
+/// On-screen buttons (reload, restart) swallow the touch that lands on them.
 /// </summary>
+[DefaultExecutionOrder(-100)]
 public class TouchControls : MonoBehaviour
 {
     public static TouchControls I { get; private set; }
@@ -17,6 +19,8 @@ public class TouchControls : MonoBehaviour
     public Canvas canvas;
     public RectTransform joyBase, joyKnob, aimBase, aimKnob;
     public CanvasGroup joyGroup, aimGroup;
+    public RectTransform reloadButton;
+    public RectTransform restartButton;
 
     [Header("Tuning (canvas units)")]
     public float joyRadius = 110f;
@@ -31,6 +35,8 @@ public class TouchControls : MonoBehaviour
     public bool AimAtScreenPoint { get; private set; }
     public Vector2 AimScreenPoint { get; private set; }
     public bool AnyPressThisFrame { get; private set; }
+    public bool ReloadPressed { get; private set; }
+    public bool RestartPressed { get; private set; }
 
     const int MouseId = -100;
     const int None = int.MinValue;
@@ -55,6 +61,8 @@ public class TouchControls : MonoBehaviour
     void Update()
     {
         AnyPressThisFrame = false;
+        ReloadPressed = false;
+        RestartPressed = false;
         ReadTouches();
 #if UNITY_EDITOR || UNITY_STANDALONE || UNITY_WEBGL
         ReadMouseAndKeyboard();
@@ -134,13 +142,19 @@ public class TouchControls : MonoBehaviour
             if (k.dKey.isPressed || k.rightArrowKey.isPressed) keyMove.x += 1f;
             if (k.sKey.isPressed || k.downArrowKey.isPressed) keyMove.y -= 1f;
             if (k.wKey.isPressed || k.upArrowKey.isPressed) keyMove.y += 1f;
-            if (k.spaceKey.wasPressedThisFrame) AnyPressThisFrame = true;
+            if (k.spaceKey.wasPressedThisFrame || k.enterKey.wasPressedThisFrame) { AnyPressThisFrame = true; RestartPressed = true; }
+            if (k.rKey.wasPressedThisFrame) ReloadPressed = true;
         }
     }
 #endif
 
+    static bool Over(RectTransform rt, Vector2 p) =>
+        rt && rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(rt, p, null);
+
     void BeginPointer(int id, Vector2 p)
     {
+        if (Over(restartButton, p)) { RestartPressed = true; return; }
+        if (Over(reloadButton, p)) { ReloadPressed = true; return; }
         if (p.x < Screen.width * 0.5f)
         {
             if (leftId == None) { leftId = id; leftOrigin = leftCur = p; }

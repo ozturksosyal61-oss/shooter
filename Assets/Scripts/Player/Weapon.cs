@@ -2,7 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Rifle: aim (drag / screen point / nearest-zombie auto-aim), pooled bullets from the muzzle,
-/// 30-round magazine with automatic and tactical reloads (no firing while reloading).
+/// 40-round magazine: automatic, tactical and manual reloads (no firing while reloading).
+/// Active reload: pressing reload again inside the sweet spot finishes instantly and buffs the next magazine;
+/// missing it jams the gun for a moment.
 /// </summary>
 public class Weapon : MonoBehaviour
 {
@@ -25,16 +27,26 @@ public class Weapon : MonoBehaviour
     public float cameraKick = 0.12f;
 
     [Header("Magazine")]
-    public int magazineSize = 30;
+    public int magazineSize = 40;
     public float reloadTime = 1.5f;
     [Tooltip("Idle time after releasing the trigger before a tactical reload starts.")]
     public float tacticalReloadDelay = 1f;
     [Range(0f, 1f)] public float tacticalReloadBelow = 0.5f;
 
+    [Header("Active reload")]
+    [Range(0f, 1f)] public float sweetSpotStart = 0.42f;
+    [Range(0f, 1f)] public float sweetSpotEnd = 0.6f;
+    public float jamPenalty = 0.6f;
+    public float perfectDamageBonus = 0.15f;
+
     public bool IsFiring { get; private set; }
     public bool IsReloading { get; private set; }
     public float ReloadProgress => IsReloading ? Mathf.Clamp01(reloadT / reloadTime) : 0f;
     public int Ammo { get; private set; }
+    /// <summary>-1 = not tried, 0 = jammed, 1 = perfect (for HUD feedback during the current reload).</summary>
+    public int ActiveReloadResult { get; private set; } = -1;
+    /// <summary>Remaining shots that carry the perfect-reload damage bonus.</summary>
+    public int BonusShots { get; private set; }
     public Vector3 AimDir { get; private set; }
     public float Recoil { get; private set; }
 
@@ -72,6 +84,7 @@ public class Weapon : MonoBehaviour
         }
         AimDir = aim;
 
+        if (input && input.ReloadPressed) OnReloadButton();
         UpdateMagazine(dt);
 
         // Dry trigger: pulling the trigger while the magazine is being swapped (once per pull).
@@ -125,8 +138,35 @@ public class Weapon : MonoBehaviour
         IsReloading = true;
         reloadT = 0f;
         idleT = 0f;
+        ActiveReloadResult = -1;
+        BonusShots = 0;
         if (rig) rig.PlayReload(reloadTime);
         GameAudio.Play(SfxId.ReloadStart, owner.transform.position);
+    }
+
+    /// <summary>Reload button: starts a reload, or during a reload attempts the active reload.</summary>
+    public void OnReloadButton()
+    {
+        if (owner.IsDead) return;
+        if (!IsReloading) { StartReload(); return; }
+        if (ActiveReloadResult != -1) return;
+        float p = ReloadProgress;
+        if (p >= sweetSpotStart && p <= sweetSpotEnd)
+        {
+            ActiveReloadResult = 1;
+            reloadT = reloadTime; // finishes this frame
+            BonusShots = magazineSize;
+            if (rig) rig.FinishReloadEarly();
+            GameAudio.Play(SfxId.ActiveReloadPerfect, owner.transform.position, 1.5f);
+            if (DamageNumbers.I) DamageNumbers.I.ShowText(owner.transform.position + Vector3.up * 2.3f, "MÜKEMMEL!", new Color(1f, 0.85f, 0.2f));
+        }
+        else
+        {
+            ActiveReloadResult = 0;
+            reloadT -= jamPenalty;
+            if (rig) rig.ExtendReload(jamPenalty);
+            GameAudio.Play(SfxId.ActiveReloadFail, owner.transform.position);
+        }
     }
 
     Vector3 ScreenToGroundDir(Vector2 screen, Vector3 from)
@@ -151,6 +191,7 @@ public class Weapon : MonoBehaviour
         Vector3 castFrom = owner.transform.position; castFrom.y = start.y;
         bool crit = Random.value < critChance;
         float dmg = damage * Random.Range(1f - damageJitter, 1f + damageJitter) * (crit ? critMultiplier : 1f);
+        if (BonusShots > 0) { BonusShots--; dmg *= 1f + perfectDamageBonus; }
         pool.Get().Launch(start, castFrom, dir, bulletSpeed, dmg, crit, pool);
 
         if (muzzleFlash)

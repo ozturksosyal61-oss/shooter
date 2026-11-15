@@ -13,6 +13,10 @@ public class PlayerController : MonoBehaviour
     public float turnSpeed = 1080f;
 
     [Header("Vault")]
+    [Tooltip("Vault only when the joystick is pushed at least this far…")]
+    public float vaultMinInput = 0.9f;
+    [Tooltip("…and the move direction is within this angle of the obstacle face normal.")]
+    public float vaultMaxAngle = 35f;
     public float vaultBaseDuration = 0.2f;
     public float vaultDurationPerMeter = 0.06f;
 
@@ -20,6 +24,8 @@ public class PlayerController : MonoBehaviour
     public float strideLength = 1.25f;
 
     [Header("Health")]
+    [Tooltip("HP per second during the breather between waves (paused right after taking damage).")]
+    public float breatherRegen = 5f;
     public float maxHealth = 100f;
     public float invulnerableTime = 0.4f;
 
@@ -29,7 +35,7 @@ public class PlayerController : MonoBehaviour
 
     CharacterController cc;
     Vector3 knock, lastHitDir = Vector3.forward;
-    float invulnUntil, stride;
+    float invulnUntil, stride, lastDamageTime = -10f;
 
     // vault
     bool vaulting;
@@ -58,7 +64,7 @@ public class PlayerController : MonoBehaviour
         Vector3 moveDir = mag > 0.01f ? move / mag : Vector3.zero;
 
         if (vaulting) UpdateVault(dt);
-        else if (!(mag > 0.5f && TryStartVault(moveDir)))
+        else if (!(mag >= vaultMinInput && TryStartVault(moveDir)))
         {
             Vector3 vel = move * moveSpeed + knock;
             vel.y = -6f;
@@ -71,6 +77,9 @@ public class PlayerController : MonoBehaviour
                 GameAudio.Play(SfxId.Footstep, transform.position, 1f, Mathf.Lerp(0.5f, 1f, mag));
             }
         }
+        var waves = WaveDirector.I;
+        if (waves && waves.InBreak && Health < maxHealth && Time.time - lastDamageTime > 2f)
+            Health = Mathf.Min(maxHealth, Health + breatherRegen * dt);
         if (GameAudio.I)
         {
             float h = Health / maxHealth;
@@ -94,7 +103,7 @@ public class PlayerController : MonoBehaviour
 
     bool TryStartVault(Vector3 dir)
     {
-        if (!Vault.TryCompute(transform.position, dir, cc.radius, cc.radius + 0.3f, out var land, out var top)) return false;
+        if (!Vault.TryCompute(transform.position, dir, cc.radius, cc.radius + 0.3f, out var land, out var top, vaultMaxAngle)) return false;
         vaulting = true;
         vStart = transform.position;
         vEnd = land;
@@ -122,10 +131,21 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public bool NeedsHealth => !IsDead && Health < maxHealth - 1f;
+
+    public void Heal(float amount)
+    {
+        if (IsDead) return;
+        float before = Health;
+        Health = Mathf.Min(maxHealth, Health + amount);
+        if (DamageNumbers.I) DamageNumbers.I.ShowText(transform.position + Vector3.up * 2.2f, "+" + Mathf.RoundToInt(Health - before), new Color(0.4f, 1f, 0.4f));
+    }
+
     public void TakeDamage(float amount, Vector3 fromDir)
     {
         if (IsDead || Time.time < invulnUntil) return;
         invulnUntil = Time.time + invulnerableTime;
+        lastDamageTime = Time.time;
         Health = Mathf.Max(0f, Health - amount);
         fromDir.y = 0f;
         lastHitDir = fromDir;

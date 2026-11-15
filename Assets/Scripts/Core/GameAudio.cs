@@ -8,6 +8,7 @@ public enum SfxId
     ReloadStart, ReloadEnd, ZombieScream,
     HitConcrete, HitMetal, ZombieMoan, Footstep, VaultLand, MagOut, MagIn, Bolt,
     DryFire, LowAmmo, ComboUp, KillStreak, UiClick, Explosion,
+    ComboBreak, WaveStart, WaveClear, Pickup, ActiveReloadPerfect, ActiveReloadFail, NewRecord,
 }
 
 [Serializable]

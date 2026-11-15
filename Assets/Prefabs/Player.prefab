@@ -348,10 +348,14 @@ MonoBehaviour:
   autoAimRange: 18
   maxAimAngleToFire: 40
   cameraKick: 0.12
-  magazineSize: 30
+  magazineSize: 40
   reloadTime: 1.5
   tacticalReloadDelay: 1
   tacticalReloadBelow: 0.5
+  sweetSpotStart: 0.42
+  sweetSpotEnd: 0.6
+  jamPenalty: 0.6
+  perfectDamageBonus: 0.15
 --- !u!114 &5961805834129898778
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -370,9 +374,12 @@ MonoBehaviour:
   flash: {fileID: 2262536897514986889}
   moveSpeed: 6.2
   turnSpeed: 1080
+  vaultMinInput: 0.9
+  vaultMaxAngle: 35
   vaultBaseDuration: 0.2
   vaultDurationPerMeter: 0.06
   strideLength: 1.25
+  breatherRegen: 5
   maxHealth: 100
   invulnerableTime: 0.4
 --- !u!1 &8317065611463842869

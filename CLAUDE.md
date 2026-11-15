@@ -13,9 +13,13 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - **Kontroller:**
   - Ekranın **sol yarısı**: yarı saydam **floating joystick** (dokunulan yerde belirir) → hareket.
   - Ekranın **sağ yarısı**: **basılı tut = ateş**. Sürükleme varsa nişan sürükleme yönünde (360°); sürükleme yoksa **en yakın zombiye otomatik nişan**.
-- **Hareket:** Alçak engellere (kasa, araba, barikat, çöp konteyneri) koşunca **otomatik vault** — vault **yalnızca oyuncuya** özgü.
+- **Hareket:** Alçak engellere (kasa, araba, barikat, çöp konteyneri) koşunca **otomatik vault** — yalnızca joystick ≥ %90 itilmişken ve hareket yönü engel yüzeyine ±35° dikken. Vault **yalnızca oyuncuya** özgü.
+- **Ölüm ekranı:** skor, süre, dalga, kill, en iyi kombo; rekor kırınca "YENİ REKOR!" + jingle; büyük TEKRAR butonu (≤1 sn'de aktif, sadece buton/Enter/Space yeniden başlatır). Rekorlar PlayerPrefs (`best_v2`, `bestWave`, `bestKills`, `bestTime`). İlk açılışta 5 sn sol/sağ kontrol ipucu (`tutorial_done`).
 - **Zombiler engel aşmaz:** etraflarından dolaşırlar (whisker steering). **İleride bazı boss'lar engel aşabilecek** (atlama/ezip geçme) — bu bir boss yeteneği olarak tasarlanır, sıradan zombilere verilmez.
-- **Zorluk:** zamanla belirgin artar (`Difficulty` sınıfı: spawn aralığı, eşzamanlı zombi, can, hız, koşucu oranı, temas hasarı). **İleride özel zombi / boss dalgaları** eklenecek (zaman veya skor eşiğinde tetiklenen dalgalar).
+- **Dalgalar:** `WaveDirector` — dalga (30–45 sn spawn) → 9 sn nefes arası (spawn yok, can 5/sn yenilenir) → daha büyük dalga. Zorluk yalnızca dalga numarasına bağlı (`Difficulty.ForWave`: spawn aralığı, eşzamanlı zombi, can, hız, koşucu oranı, temas hasarı). Denge botlarla yapılır (`docs/balance.md`). **İleride özel zombi / boss dalgaları** eklenecek.
+- **Can:** nefes arasında yenilenme + zombilerden düşük ihtimalle can paketi (`Pickups`, %5 / can < %50 iken %12, mıknatıs 5 m, +25).
+- **Kombo:** kill bazlı, 3 sn pencere; çarpan basamakları `GameManager.MultiplierSteps` (5, 12, 22, 35, 50, 70, 95, 125, 160 kill → x2…x10). Hasar almak komboyu kırar (cam sesi + çarpan sallanıp düşer). Skor: kill 10/15 × çarpan, dalga bonusu 50 × dalga.
+- **Silah:** 40'lık şarjör; otomatik / taktik / elle reload (sağ alttaki DOLDUR butonu, editörde R). **Aktif reload:** reload sırasında tatlı noktada (%42–60) tekrar basınca anında biter + sonraki şarjör %15 hasar; yanlış anda basınca 0.6 sn tutukluk.
 - **Görsel:** Çizgi film tarzı asker + zombi; kamera ~55–60° eğik, oyuncuyu takip eder.
 - **Skor + kombo** sistemi (ardışık öldürmeler çarpan verir).
 - **Öncelik: vuruş hissi** — hit flash, knockback, kamera sarsıntısı, hit-stop, partikül, ses.
@@ -32,9 +36,9 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - Ortam: `Assets/Art/Environment/{Cars,Survival,Roads,Commercial,Industrial}` — Kenney (CC0, lisanslar klasörlerde) GLB'leri + kit başına `Textures/colormap.png`. Builder bunları düzleştirip gerçek boyuta ölçekler → `Assets/Prefabs/Env/*.prefab` (pivot alt-orta, BoxCollider, `EnvProp.radius`, yüksekler `Fadeable`). Toplam ~3 MB.
 - Mixamo: `_mixamo/{Soldier,Zombie}.fbx` (T-pose, 1.8 m, origin ayakta, doku gömülü). Yeniden üret: `blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <glb> <basecolor.png> <out.fbx> 1.8`.
 - Script'ler `Game` asmdef'inde:
-  - Core: GameManager, Pool, GameDefs (layer'lar, `Vault`, `Difficulty`), Haptics, GameAudio (+`AudioPrefs`), MusicDirector, ListenerFollow
+  - Core: GameManager, WaveDirector, Pool, GameDefs (layer'lar, `Vault`, `WaveParams`, `Difficulty`), Haptics, GameAudio (+`AudioPrefs`), MusicDirector, ListenerFollow, Warmup
   - Input: TouchControls · Player: PlayerController, SoldierRig (Animator + IK + silah yerleşimi), Weapon (şarjör/reload), Bullet · Enemies: Zombie, ZombieSpawner
-  - World: ChunkManager (sonsuz şehir), FloatingOrigin, EnvProp, Fadeable · FX: CameraRig, Fx, HitFlash · UI: HUD, DamageNumbers
+  - World: ChunkManager (sonsuz şehir), FloatingOrigin, EnvProp, Fadeable, Pickups · FX: CameraRig, Fx, HitFlash · UI: HUD, DamageNumbers
 - **Sonsuz dünya:** 20x20 m chunk = bir şehir bloğu (kenarlarda yarım 7 m yol + sarı orta şerit/yaya geçidi, kaldırım, 9x9 iç alan). Oyuncu etrafında 5x5 aktif, chunk ve objeler pool'lu, seed'li (`ChunkManager.seed`, `randomSeed`). Mahalle = seed'li Perlin (`DistrictAt`): Cadde / Çarşı / Sanayi / Liman, her birinin zemin dokusu ve obje seti `DistrictSettings`'te. Yollarda araba/barikat/yanan varil, iç alanda bina veya prop.
 - **Floating origin:** oyuncu 120 m'yi geçince tüm root objeler chunk katı kadar kaydırılır (`FloatingOrigin.OnShift` event'i; dünya pozisyonu tutan sistemler buna abone). Global konum: `FloatingOrigin.ToGlobal`.
 - Spawn: kamera viewport'unun hemen dışı (yere izdüşüm), oyuncunun hareket yönüne ağırlıklı; 34 m'den uzakta kalan zombiler geri dönüştürülür.
@@ -45,13 +49,23 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - Müzik: `MusicDirector` iki loop katmanı (calm ↔ intense) yakındaki zombi sayısı + kombo + ateşe göre crossfade; `Duck()`; ölümde `AudioLowPassFilter` ile ~550 Hz'e boğulur.
 - Mixer: `Assets/Audio/GameMixer.mixer` (Master → Music / SFX / UI), exposed `MasterVolume/MusicVolume/SfxVolume/UiVolume`; kayıtlı ayarlar `AudioPrefs.Set/Get/Apply` (PlayerPrefs `vol_*`, 0..1 → dB). Mixer'ı builder internal `AudioMixerController` API'sıyla reflection üzerinden üretir.
 - Ses import: SFX mono + Vorbis q0.5, ≤1 sn → Decompress On Load, uzun → Compressed In Memory; müzik Streaming q0.4. Ses dosyalarını yeniden üretmek: `python Tools/build_audio.py <indirilen_paketler> .` (numpy, scipy, soundfile).
-- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart (+ölümde müzik low-pass), VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload, AudioHooks; `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
+- **Takılma önleme:** `Warmup` ilk karede tüm materyalleri (quad + skinned örnek) gizli RT'ye bir kez render eder ve UI font atlasını doldurur → ilk kullanımda shader/PSO derleme takılması yok. Şüpheli yollar `ProfilerMarker`'lı (`Game.ChunkBuild`, `Game.PoolGrow`); `PlaytestBot` 100 ms üstü kareleri marker değerleriyle loglar.
+- Test hızlandırma: `GameManager.TimeScale` (oyunda 1; botlar/testler 3–4 yapar). `TouchControls` en önce çalışır (`DefaultExecutionOrder(-100)`); ekrandaki butonlar (DOLDUR, TEKRAR) üstlerine düşen dokunuşu yutar.
+- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart (+ölümde müzik low-pass, TEKRAR butonu), VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload, ManualAndActiveReload, WavesBreatherAndCombo, AudioHooks; `PlaytestBot.Play` [Explicit] denge/oyun testi botu (bkz. `docs/balance.md`); `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
 
 ## Kurallar
 - Kullanıcıya onay sorma; adımları kendin yap.
 - **Push yok** (yalnızca yerel commit).
 - İş bitince **kısa rapor** ver.
 - Unity batchmode: `"C:/Program Files/Unity/Hub/Editor/6000.6.7f1/Editor/Unity.exe" -batchmode -nographics -projectPath . -executeMethod X.Y -quit -logFile <log>` (Unity editörü açıkken çalışmaz).
+
+## Yol haritası
+Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
+- **F5 — Oyun döngüsü:** dalgalar + nefes arası, can yenilenmesi/paketi, kill bazlı kombo, 40'lık şarjör + elle/aktif reload, sıkı vault, zengin ölüm ekranı, ilk açılış ipucu, takılma düzeltmesi.
+- **F6 — Roguelite + okunabilirlik:** dalga/kill eşiğinde 3 kart seçimi (yükseltmeler), patlayan varil, kamera/oyuncu halkası/ekran dışı ok/toplu hasar sayısı/dairesel bina kesiti.
+- **F7 — Özel zombiler:** patlayan, tüküren, kalkanlı (özgün tasarım).
+- **F8 — Şehir çeşitliliği + hedefler:** kavşaksız caddeler, park/meydan/simge yapılar, mahalle renk tonu; telsiz mesajları, işaret fişeği noktaları, helikopter iniş hedefi.
+- **Sonra:** ana menü, ayarlar (AudioPrefs hazır), meta ilerleme (silah açma, görevler).
 
 ## İlerleme
 - [x] Proje kurulumu: URP, glTFast, Input System, Player Settings (landscape, bundle id), klasörler, Game sahnesi, git
@@ -84,7 +98,17 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
   - [x] Sentez: boş tetik, düşük mermi uyarısı, kombo ding (çarpanla yükselen pitch), kalp atışı (can < %30)
   - [x] Müzik: calm/intense katmanları yoğunluğa göre, ducking, ölümde low-pass
   - [x] Pooling (24 voice), voice limit, varyasyon, 3D rolloff, haptic senkronu, AudioMixer + kayıtlı volume
-- [ ] Ayarlar menüsü (AudioPrefs hazır), patlayan varil (Explosion sesi + duck hazır)
+- [x] **Faz 5 — Oyun döngüsü** (2026-11-15)
+  - [x] `docs/playtest-01.md` (oyuncu incelemesi) + yol haritası
+  - [x] Dalgalar + nefes arası + "DALGA N" banner'ı + geri sayım; zorluk dalgaya bağlı, botlarla dengelendi (sabit ~100 sn, akıllı 507 sn)
+  - [x] Can: nefes arası yenilenme + mıknatıslı can paketi
+  - [x] Kill bazlı kombo, zorlaşan çarpan basamakları, hasar alınca kırılma (cam sesi + düşen çarpan), küçük skor değerleri
+  - [x] 40'lık şarjör, DOLDUR butonu, aktif reload (tatlı nokta / tutukluk)
+  - [x] Sıkı vault (≥%90 itme, ±35°)
+  - [x] Ölüm ekranı (istatistik, rekor kutlaması, TEKRAR), ilk açılış ipucu
+  - [x] Takılma: ilk kullanımda shader derleme → `Warmup` ile giderildi (soğuk cache'le 255 sn turda 0 takılma)
+- [ ] F6: roguelite kartlar, patlayan varil (Explosion sesi + duck hazır), okunabilirlik
+- [ ] F7: özel zombiler · F8: şehir çeşitliliği + telsiz/fişek/helikopter · sonra menü/ayarlar (AudioPrefs hazır)/meta
 - [ ] Özel zombi / boss dalgaları (laboratuvar mutasyonları, özgün tasarım; bazıları engel aşabilir)
 - [ ] Cihazda performans profili (60 FPS hedefi, 70 zombi), gerekirse GPU instancing/LOD
 - [ ] Silah çeşitleri / power-up, dalga yapısı, ana menü

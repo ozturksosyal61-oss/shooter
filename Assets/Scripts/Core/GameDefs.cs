@@ -17,15 +17,18 @@ public static class GameLayers
 
 public static class Vault
 {
-    /// <summary>Finds a landing point on the far side of a vaultable obstacle in front of <paramref name="pos"/>.</summary>
-    public static bool TryCompute(Vector3 pos, Vector3 dir, float radius, float probe, out Vector3 land, out float top)
+    /// <summary>
+    /// Finds a landing point on the far side of a vaultable obstacle in front of <paramref name="pos"/>.
+    /// Only when <paramref name="dir"/> is within <paramref name="maxAngle"/> degrees of the obstacle's face normal.
+    /// </summary>
+    public static bool TryCompute(Vector3 pos, Vector3 dir, float radius, float probe, out Vector3 land, out float top, float maxAngle = 60f)
     {
         land = default; top = 0f;
         Vector3 origin = pos + Vector3.up * 0.45f;
         if (!Physics.SphereCast(origin, radius * 0.8f, dir, out var hit, probe, GameLayers.VaultableMask, QueryTriggerInteraction.Ignore))
             return false;
         Vector3 n = hit.normal; n.y = 0f;
-        if (n.sqrMagnitude < 0.01f || Vector3.Dot(-n.normalized, dir) < 0.5f) return false;
+        if (n.sqrMagnitude < 0.01f || Vector3.Dot(-n.normalized, dir) < Mathf.Cos(maxAngle * Mathf.Deg2Rad)) return false;
 
         var col = hit.collider;
         Vector3 far = hit.point + dir * 8f; far.y = 0.45f;
@@ -40,16 +43,48 @@ public static class Vault
     }
 }
 
-/// <summary>Difficulty as a function of survival time (seconds). Ramps hard: ~5 minutes is very dense.</summary>
+/// <summary>Tuning for one wave. Everything scales with the wave number — no time-based walls.</summary>
+public struct WaveParams
+{
+    public int wave;
+    public float duration;
+    public float spawnInterval;
+    public int maxAlive;
+    public int burst;
+    public float healthMultiplier;
+    public float speedMultiplier;
+    public float runnerChance;
+    public float contactDamage;
+}
+
 public static class Difficulty
 {
-    static float Ramp(float t, float seconds) => Mathf.Pow(Mathf.Clamp01(t / seconds), 0.8f);
+    // Balanced with PlaytestBot (see docs/balance). Tweak here, re-run the bots.
+    public static float BaseInterval = 1.3f;
+    public static float IntervalDecay = 0.83f;
+    public static float MinInterval = 0.3f;
+    public static int BaseAlive = 12;
+    public static int AlivePerWave = 6;
+    public static int MaxAliveCap = 70;
+    public static float HealthPerWave = 0.18f;
+    public static float SpeedPerWave = 0.035f;
+    public static float BaseDamage = 9f;
+    public static float DamagePerWave = 1.2f;
 
-    public static float SpawnInterval(float t) => Mathf.Lerp(1.3f, 0.12f, Ramp(t, 240f));
-    public static int MaxAlive(float t) => Mathf.RoundToInt(Mathf.Lerp(10f, 90f, Ramp(t, 300f)));
-    public static float HealthMultiplier(float t) => 1f + t / 120f;                 // +50% per minute
-    public static float SpeedMultiplier(float t) => 1f + Mathf.Min(t / 300f, 0.6f);  // up to +60%
-    public static float RunnerChance(float t) => Mathf.Clamp01((t - 40f) / 240f) * 0.4f;
-    public static int BurstSize(float t) => 1 + Mathf.FloorToInt(t / 60f) + (Random.value < 0.3f ? 1 : 0);
-    public static float ContactDamage(float t) => 12f + t / 30f;
+    public static WaveParams ForWave(int n)
+    {
+        int k = Mathf.Max(0, n - 1);
+        return new WaveParams
+        {
+            wave = n,
+            duration = Mathf.Min(30f + k * 3f, 45f),
+            spawnInterval = Mathf.Max(MinInterval, BaseInterval * Mathf.Pow(IntervalDecay, k)),
+            maxAlive = Mathf.Min(BaseAlive + AlivePerWave * k, MaxAliveCap),
+            burst = 1 + k / 2,
+            healthMultiplier = 1f + HealthPerWave * k,
+            speedMultiplier = Mathf.Min(1f + SpeedPerWave * k, 1.45f),
+            runnerChance = Mathf.Clamp((n - 1) * 0.08f, 0f, 0.45f),
+            contactDamage = BaseDamage + DamagePerWave * k,
+        };
+    }
 }

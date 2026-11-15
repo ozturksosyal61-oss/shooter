@@ -172,6 +172,14 @@ public static partial class GameSceneBuilder
         E(SfxId.UiClick, "ui_click", 0.7f, 2, ui: true, pitchVar: 0.03f),
         E(SfxId.GameOver, "gameover_jingle", 0.9f, 1, ui: true, pitchVar: 0f, volVar: 0f),
         E(SfxId.Explosion, "explosion", 1f, 2, spatial: 0.6f, haptic: true, hk: Haptics.Kind.Heavy, duck: true, maxDist: 50f),
+        // Game loop.
+        E(SfxId.ComboBreak, "combo_break", 0.9f, 1, ui: true, pitchVar: 0.03f),
+        E(SfxId.WaveStart, "explosion", 0.5f, 1, ui: true, pitchVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Medium),
+        E(SfxId.WaveClear, "kill_streak", 0.6f, 1, ui: true, pitchVar: 0f),
+        E(SfxId.Pickup, "pickup", 0.8f, 2, ui: true, haptic: true, hk: Haptics.Kind.Light),
+        E(SfxId.ActiveReloadPerfect, "combo_up", 0.8f, 1, ui: true, pitchVar: 0f, haptic: true, hk: Haptics.Kind.Medium),
+        E(SfxId.ActiveReloadFail, "dry_fire", 1f, 1, spatial: 0f),
+        E(SfxId.NewRecord, "new_record_jingle", 0.9f, 1, ui: true, pitchVar: 0f, volVar: 0f),
     };
 
     // ---------------------------------------------------------------- scene objects
