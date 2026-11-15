@@ -165,7 +165,7 @@ public class Weapon : MonoBehaviour
             BonusShots = magazineSize;
             if (rig) rig.FinishReloadEarly();
             GameAudio.Play(SfxId.ActiveReloadPerfect, owner.transform.position, 1.5f);
-            if (DamageNumbers.I) DamageNumbers.I.ShowText(owner.transform.position + Vector3.up * 2.3f, "MÜKEMMEL!", new Color(1f, 0.85f, 0.2f));
+            if (DamageNumbers.I) DamageNumbers.I.ShowText(owner.transform.position + Vector3.up * 2.3f, Loc.T("hud.perfect"), new Color(1f, 0.85f, 0.2f));
         }
         else
         {

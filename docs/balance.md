@@ -7,7 +7,24 @@ Botlar oyunu gerçek girdi yolundan oynar (`Assets/Tests/PlayMode/PlaytestBot.cs
 - **human:** kite gibi kaçar ama insan gibi kusurlu: aktif reload'u ~%60 tutturur, tepki gecikmeli.
 - Tüm botlar seviye atlayınca kart ekranında gerçek tıklamayla kart seçer (tarza göre öncelik).
 
-Çalıştırma: `PLAYTEST_STRATEGY=<tarz> PLAYTEST_TIMESCALE=3 PLAYTEST_SHOTS=0 CAPTURE_DIR=<klasör> Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play ...` → `<klasör>/playtest_<tarz>.txt`.
+Çalıştırma (4 bot tek oturumda, ~5 dk): `PLAYTEST_TIMESCALE=8 CAPTURE_DIR=<klasör> Unity.exe -batchmode -nographics -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play ...` → `<klasör>/playtest_<tarz>.txt`. Opsiyonel `PLAYTEST_STRATEGIES`, `PLAYTEST_SEED`, `PLAYTEST_MAXTIME` (varsayılan 400).
+
+## Hızlı bot altyapısı — 8x / 3x doğrulaması (2026-11-15)
+
+Her kare `Time.captureDeltaTime` ile tam 1/60 sn oyun süresi (60 FPS cihaz gibi), botun zamanlayıcıları oyun saatinde. Aynı seed (4242), `-nographics`, 400 sn tavan:
+
+| Bot | 8x | 3x | Gerçek hız (8x / 3x) |
+|---|---|---|---|
+| turret | 116 sn | 106 sn | 3.8x / 2.2x |
+| human | 251 sn | 290 sn | 4.3x / 2.2x |
+| kite | 296 sn | 209 sn | 3.3x / 2.1x |
+| explore | 400+ sn (sağ) | 267 sn | 3.7x / 2.0x |
+| **4 bot toplam süre** | **306 sn** | **433 sn** | |
+
+- Turret ayrıca tek başına: 105 / 107 sn. Fark, aynı ayarla iki koşu arasındaki oynamadan büyük değil (ör. human 192–398 sn), yani 8x sistematik bir sapma getirmiyor. Kart çekilişi ve spawn zamanlaması tam deterministik değil, tek koşu yine gürültülü.
+- Gerçek hız işlemciye bağlı (~4x). 8 yalnızca üst sınır, kare adımı büyütülmez (aksi hâlde mermi/çarpışma doğruluğu bozulur).
+- Önceki tablolar 3x + 60 FPS kare sınırıyla ölçüldü (kare başına ~0.05 sn), yenileri 1/60 sn adımla. Küçük fark olabilir.
+
 
 ## F6+F7 sonrası — final (2026-11-15)
 

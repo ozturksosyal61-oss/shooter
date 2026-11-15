@@ -101,7 +101,7 @@ public static partial class GameSceneBuilder
         fr.pivot = new Vector2(0f, 0.5f);
         var hpLabel = Txt("Label", hpBg.transform, 24, TextAnchor.MiddleLeft, Color.white);
         Stretch(hpLabel.rectTransform); hpLabel.rectTransform.offsetMin = new Vector2(14f, 0f);
-        hpLabel.text = "CAN";
+        L(hpLabel, "hud.health");
         hud.healthFill = fr; hud.healthFillImage = hpFill;
         var waveLabel = Txt("WaveLabel", root, 34, TextAnchor.UpperLeft, UiGold);
         Anchor(waveLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(42f, -86f), new Vector2(400f, 44f));
@@ -116,7 +116,7 @@ public static partial class GameSceneBuilder
         xr.anchorMin = Vector2.zero; xr.anchorMax = new Vector2(0f, 1f); xr.offsetMin = new Vector2(3f, 3f); xr.offsetMax = new Vector2(-3f, -3f);
         var lvl = Txt("Level", root, 30, TextAnchor.MiddleLeft, new Color(0.55f, 0.85f, 1f));
         Anchor(lvl.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(492f, -89f), new Vector2(160f, 40f));
-        lvl.text = "SV 1";
+        lvl.text = Loc.F("hud.level", 1);
         hud.xpFill = xr; hud.levelText = lvl;
         waveLabel.rectTransform.anchoredPosition = new Vector2(42f, -106f);
         var row = Rect("Cards", root);
@@ -180,7 +180,7 @@ public static partial class GameSceneBuilder
         rbFill.type = Image.Type.Filled; rbFill.fillMethod = Image.FillMethod.Radial360; rbFill.fillOrigin = 2; rbFill.fillAmount = 0f;
         var rbLabel = Txt("Label", rb.transform, 30, TextAnchor.MiddleCenter, Color.white);
         Stretch(rbLabel.rectTransform);
-        rbLabel.text = "DOLDUR";
+        L(rbLabel, "hud.reload_button");
         hud.reloadButton = rb.rectTransform; hud.reloadButtonFill = rbFill;
 
         var ammo = Txt("Ammo", root, 64, TextAnchor.LowerRight, Color.white);
@@ -212,10 +212,10 @@ public static partial class GameSceneBuilder
         Anchor(divider.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -170f), new Vector2(4f, 420f));
         var leftTip = Txt("Left", tips, 46, TextAnchor.MiddleCenter, Color.white);
         Anchor(leftTip.rectTransform, new Vector2(0.25f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -170f), new Vector2(800f, 200f));
-        leftTip.text = "SOL TARAF\n<size=34>parmağını koy ve sürükle → HAREKET</size>";
+        L(leftTip, "tut.left");
         var rightTip = Txt("Right", tips, 46, TextAnchor.MiddleCenter, Color.white);
         Anchor(rightTip.rectTransform, new Vector2(0.75f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -170f), new Vector2(800f, 200f));
-        rightTip.text = "SAĞ TARAF\n<size=34>basılı tut → ATEŞ (en yakına nişan)\nsürükle → istediğin yöne</size>";
+        L(rightTip, "tut.right");
         hud.tutorialGroup = tipsGroup;
 
         // Game over panel
@@ -235,7 +235,7 @@ public static partial class GameSceneBuilder
         Anchor(again.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -230f), new Vector2(560f, 170f));
         var againLabel = Txt("Label", again.transform, 84, TextAnchor.MiddleCenter, new Color(0.15f, 0.08f, 0.05f));
         Stretch(againLabel.rectTransform);
-        againLabel.text = "TEKRAR";
+        L(againLabel, "over.again");
         againLabel.GetComponent<Outline>().effectColor = new Color(1f, 1f, 1f, 0.3f);
         go.gameObject.SetActive(false);
         hud.gameOverPanel = go.gameObject; hud.gameOverTitle = title; hud.gameOverStats = stats; hud.recordText = record;
@@ -249,5 +249,12 @@ public static partial class GameSceneBuilder
         controls.restartButton = again.rectTransform;
         controls.cardRects = picker.cards;
         return hud;
+    }
+
+    /// <summary>Static label bound to a Loc key (text set now and on language change).</summary>
+    static void L(Text t, string key)
+    {
+        t.text = Loc.T(key);
+        t.gameObject.AddComponent<LocText>().key = key;
     }
 }

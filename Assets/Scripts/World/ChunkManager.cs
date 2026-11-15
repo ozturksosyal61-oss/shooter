@@ -70,10 +70,14 @@ public class ChunkManager : MonoBehaviour
 
     public int ActiveChunkCount => active.Count;
 
+    /// <summary>Non-zero: forces this seed on the next load (tests/bots compare runs on the same city).</summary>
+    public static int SeedOverride;
+
     void Awake()
     {
         I = this;
-        if (randomSeed) seed = UnityEngine.Random.Range(1, 1_000_000);
+        if (SeedOverride != 0) seed = SeedOverride;
+        else if (randomSeed) seed = UnityEngine.Random.Range(1, 1_000_000);
         var r = new System.Random(seed);
         noiseOffset = new Vector2((float)r.NextDouble() * 1000f, (float)r.NextDouble() * 1000f);
         groundMesh = BuildGroundMesh();

@@ -72,7 +72,7 @@ public class CardPicker : MonoBehaviour
         openT = 0f;
         group.gameObject.SetActive(true);
         group.alpha = 0f;
-        header.text = "SEVİYE " + Progression.I.Level + "  ·  bir kart seç";
+        header.text = Loc.F("cards.header", Progression.I.Level);
         for (int i = 0; i < cards.Length; i++)
         {
             bool on = i < offer.Count;
@@ -83,13 +83,13 @@ public class CardPicker : MonoBehaviour
             Color rc = Upgrades.RarityColors[(int)d.rarity];
             backgrounds[i].color = Color.Lerp(new Color(0.08f, 0.09f, 0.11f, 0.96f), rc, 0.18f);
             rarityStrips[i].color = rc;
-            titles[i].text = d.title;
-            descriptions[i].text = d.desc[Mathf.Clamp(next - 1, 0, d.desc.Length - 1)];
-            levelTexts[i].text = next == 1 ? "YENİ" : "SEVİYE " + next + " / " + d.maxLevel;
+            titles[i].text = d.Title;
+            descriptions[i].text = d.Desc(next);
+            levelTexts[i].text = next == 1 ? Loc.T("cards.new") : Loc.F("cards.level", next, d.maxLevel);
             levelTexts[i].color = next == 1 ? new Color(0.5f, 1f, 0.5f) : Color.white;
-            icons[i].text = d.icon;
+            icons[i].text = d.Icon;
             icons[i].color = rc;
-            rarityTexts[i].text = Upgrades.RarityNames[(int)d.rarity];
+            rarityTexts[i].text = Upgrades.RarityName(d.rarity);
             rarityTexts[i].color = rc;
             cards[i].localScale = Vector3.one * 0.4f;
         }
@@ -106,7 +106,7 @@ public class CardPicker : MonoBehaviour
         GameAudio.Play(SfxId.CardPick, GameManager.I.player.transform.position);
         var d = Upgrades.Get(id);
         if (DamageNumbers.I)
-            DamageNumbers.I.ShowText(GameManager.I.player.transform.position + Vector3.up * 2.4f, d.title.ToUpperInvariant(), Upgrades.RarityColors[(int)d.rarity]);
+            DamageNumbers.I.ShowText(GameManager.I.player.transform.position + Vector3.up * 2.4f, Loc.Upper(d.Title), Upgrades.RarityColors[(int)d.rarity]);
         Close();
     }
 

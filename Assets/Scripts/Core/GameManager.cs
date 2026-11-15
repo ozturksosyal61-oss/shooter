@@ -85,7 +85,7 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
-    static int MultiplierFor(int combo)
+    public static int MultiplierFor(int combo)
     {
         int m = 1;
         for (int i = 1; i < MultiplierSteps.Length; i++) if (combo >= MultiplierSteps[i]) m = i + 1;

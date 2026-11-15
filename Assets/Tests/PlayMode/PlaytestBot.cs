@@ -14,8 +14,16 @@ using UnityEngine.TestTools;
 /// Plays full runs with a bot through the real input path (WASD + mouse + R) and records telemetry,
 /// screenshots (with HUD) and frame hitches with profiler markers. Explicit — run with
 ///   -testFilter PlaytestBot.Play
-/// env: PLAYTEST_STRATEGY = turret | kite | human | explore, PLAYTEST_TIMESCALE (default 1), PLAYTEST_SHOTS=0/1,
-///      CAPTURE_DIR = output folder.
+/// All strategies run one after another in ONE Unity session (one test case each):
+///   -testFilter PlaytestBot.Play   (or -testCategory Balance)
+/// env: PLAYTEST_STRATEGIES = comma list (default turret,human,kite,explore), PLAYTEST_TIMESCALE (default 8),
+///      PLAYTEST_MAXTIME (default 400 s game time), PLAYTEST_SEED (fixed city/spawn seed, default random),
+///      PLAYTEST_SHOTS=1 for screenshots (default off), CAPTURE_DIR = output folder.
+/// High time scales stay physics-compatible and reproducible: Time.captureDeltaTime fixes every frame to exactly
+/// 1/60 s of game time (below fixedDeltaTime 0.02, like a 60 fps device) whatever the machine's real frame rate, and
+/// the frame cap is 60·timescale. So results don't depend on the time scale (same seed ⇒ same run); the time scale
+/// only sets the upper bound of the speed-up. Bot timers use game/unscaled-capture time, never wall clock.
+/// Runs fine with -nographics (much faster). The summary prints the achieved speed-up.
 /// "kite" is the smart bot: backs off while circling, collects health packs, nails every active reload.
 /// "human" moves like kite but hits the active reload only ~60% of the time, aims with a little jitter and reacts
 /// to new targets with a short delay. Every bot picks level-up cards by clicking them (kite/human by priority).
@@ -40,25 +48,42 @@ public class PlaytestBot
     public void TearDown()
     {
         GameManager.TimeScale = 1f;
+        Time.maximumDeltaTime = 0.3333333f;
+        Time.captureDeltaTime = 0f;
+        ChunkManager.SeedOverride = 0;
         InputSystem.RemoveDevice(mouse);
         InputSystem.RemoveDevice(kb);
     }
 
     static string Env(string k, string d) => System.Environment.GetEnvironmentVariable(k) ?? d;
 
-    [UnityTest, Explicit, Timeout(1800000)]
-    public IEnumerator Play()
+    static IEnumerable<string> Strategies() =>
+        Env("PLAYTEST_STRATEGIES", Env("PLAYTEST_STRATEGY", "turret,human,kite,explore"))
+            .Split(new[] { ',', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+
+    static float EnvF(string k, float d) =>
+        float.Parse(Env(k, d.ToString(System.Globalization.CultureInfo.InvariantCulture)), System.Globalization.CultureInfo.InvariantCulture);
+
+    [UnityTest, Explicit, Category("Balance"), Timeout(1800000)]
+    public IEnumerator Play([ValueSource(nameof(Strategies))] string strat)
     {
-        string strat = Env("PLAYTEST_STRATEGY", "kite");
         string dir = Env("CAPTURE_DIR", Application.temporaryCachePath);
-        float ts = float.Parse(Env("PLAYTEST_TIMESCALE", "1"), System.Globalization.CultureInfo.InvariantCulture);
-        bool shots = Env("PLAYTEST_SHOTS", "1") == "1";
-        const float maxTime = 600f;
+        float ts = EnvF("PLAYTEST_TIMESCALE", 8f);
+        bool shots = Env("PLAYTEST_SHOTS", "0") == "1";
+        float maxTime = EnvF("PLAYTEST_MAXTIME", 400f);
+        int seed = int.Parse(Env("PLAYTEST_SEED", "0"));
 
         GameManager.TimeScale = ts;
+        ChunkManager.SeedOverride = seed;
+        if (seed != 0) Random.InitState(seed);
         PlayerPrefs.SetInt("tutorial_done", Env("PLAYTEST_TUTORIAL", "0") == "1" ? 0 : 1);
         SceneManager.LoadScene("Game");
         yield return null;
+        // GameManager caps the game at 60 fps; at timescale N allow 60·N so a frame is still ~1/60 s of game time.
+        Application.targetFrameRate = Mathf.RoundToInt(60f * Mathf.Max(1f, ts));
+        Time.captureDeltaTime = 1f / (60f * Mathf.Max(1f, ts)); // × timeScale ⇒ exactly 1/60 s game time per frame
+        Time.maximumDeltaTime = 0.05f;
+        float realStart = Time.realtimeSinceStartup;
         yield return null;
         var gm = GameManager.I;
         var cam = Camera.main;
@@ -139,11 +164,11 @@ public class PlaytestBot
                 if (picker && picker.IsOpen)
                 {
                     InputSystem.QueueStateEvent(kb, new KeyboardState());
-                    if (cardOpenAt < 0f) { cardOpenAt = Time.realtimeSinceStartup; cardClicked = false; }
+                    if (cardOpenAt < 0f) { cardOpenAt = Time.unscaledTime; cardClicked = false; }
                     var cms = new MouseState();
                     int idx = ChooseCard(picker, strat);
                     cms.position = picker.CardScreenPoint(idx);
-                    if (!cardClicked && Time.realtimeSinceStartup - cardOpenAt > 0.5f)
+                    if (!cardClicked && Time.unscaledTime - cardOpenAt > picker.inputDelay + 0.15f)
                     {
                         cms = cms.WithButton(MouseButton.Left, true);
                         cardClicked = true;
@@ -234,8 +259,8 @@ public class PlaytestBot
                 if (move.z < -0.35f) keys.Add(Key.S);
                 if (move.x > 0.35f) keys.Add(Key.D);
                 if (move.x < -0.35f) keys.Add(Key.A);
-                rPulse -= Time.unscaledDeltaTime;
-                if (wantReload && !rDown && rPulse <= 0f) { keys.Add(Key.R); rDown = true; rPulse = 0.1f; }
+                rPulse -= Time.unscaledDeltaTime * ts; // game time, so R pacing is the same at any time scale
+                if (wantReload && !rDown && rPulse <= 0f) { keys.Add(Key.R); rDown = true; rPulse = 0.3f; }
                 else rDown = false;
                 InputSystem.QueueStateEvent(kb, new KeyboardState(keys.ToArray()));
 
@@ -307,8 +332,9 @@ public class PlaytestBot
             foreach (var (_, r) in recs) r.Dispose();
         }
 
+        float realSec = Time.realtimeSinceStartup - realStart;
         string summary =
-            $"PLAYTEST {strat}: survived={gm.GameTime:0}s wave={WaveDirector.I.Wave} dead={gm.IsGameOver} score={gm.Score} kills={kills} " +
+            $"PLAYTEST {strat}: ts={ts:0} speedup={gm.GameTime / Mathf.Max(0.01f, realSec):0.0}x real={realSec:0}s survived={gm.GameTime:0}s wave={WaveDirector.I.Wave} dead={gm.IsGameOver} score={gm.Score} kills={kills} " +
             $"acc={(shotsFired > 0 ? 100f * hits / shotsFired : 0):0}% hurts={hurts} firstHurt={firstHurt:0}s packs={packs} comboBreaks={breaks} " +
             $"bestCombo={gm.BestCombo} reloads={reloads} perfect={perfect} jams={jams} vaults={vaults} maxAlive={maxAlive} hitches={hitchCount} " +
             $"level={Progression.I.Level} picks={Upgrades.I.Picks} specials={gm.SpecialKills} blocks={blocks} bombs={bombs} barrels={barrels} grabs={grabs} snaps={snaps}";

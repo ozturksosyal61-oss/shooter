@@ -112,7 +112,7 @@ public class HUD : MonoBehaviour
             Color rc = Upgrades.RarityColors[(int)d.rarity];
             img.color = new Color(rc.r * 0.35f, rc.g * 0.35f, rc.b * 0.35f, 0.9f);
             var texts = img.GetComponentsInChildren<Text>(true);
-            texts[0].text = d.icon;
+            texts[0].text = d.Icon;
             texts[0].color = rc;
             int l = Upgrades.I.Level(owned[i]);
             texts[1].text = l == 1 ? "•" : l == 2 ? "••" : "•••";
@@ -122,10 +122,10 @@ public class HUD : MonoBehaviour
 
     void OnWaveStarted(int wave)
     {
-        waveBanner.text = "DALGA " + wave;
+        waveBanner.text = Loc.F("hud.wave", wave);
         bool special = WaveDirector.I && WaveDirector.I.Params.specialWave;
-        waveSubBanner.text = special ? "ÖZEL DALGA — mutantlar geliyor!" : wave == 1 ? "Devriye başladı"
-            : wave == Difficulty.FirstSpecialWave ? "Dikkat: laboratuvar mutantları!" : "Daha fazlası geliyor!";
+        waveSubBanner.text = Loc.T(special ? "wave.sub.special" : wave == 1 ? "wave.sub.first"
+            : wave == Difficulty.FirstSpecialWave ? "wave.sub.first_special" : "wave.sub.more");
         waveSubBanner.color = special ? new Color(1f, 0.35f, 0.3f) : Gold;
         bannerT = 0f;
     }
@@ -176,7 +176,7 @@ public class HUD : MonoBehaviour
             if (combo > lastCombo) comboPunch = Mathf.Max(comboPunch, 0.6f);
             lastCombo = combo;
             comboRoot.gameObject.SetActive(combo > 0);
-            if (combo > 0) comboText.text = combo + " KİLL";
+            if (combo > 0) comboText.text = Loc.F("hud.combo_kills", combo);
         }
         if (mult != lastMult)
         {
@@ -223,7 +223,7 @@ public class HUD : MonoBehaviour
     {
         var waves = WaveDirector.I;
         if (!waves) return;
-        if (waves.Wave != lastWave && waves.Wave > 0) { lastWave = waves.Wave; waveLabel.text = "DALGA " + waves.Wave; }
+        if (waves.Wave != lastWave && waves.Wave > 0) { lastWave = waves.Wave; waveLabel.text = Loc.F("hud.wave", waves.Wave); }
 
         // Intro banner: pop in, hold, fade.
         bannerT += dt;
@@ -244,7 +244,7 @@ public class HUD : MonoBehaviour
             if (sec != lastBreak)
             {
                 lastBreak = sec;
-                breakText.text = "DALGA " + (waves.Wave + 1) + " · " + sec + "\n<size=26>Nefes al — can yenileniyor</size>";
+                breakText.text = Loc.F("hud.breather", waves.Wave + 1, sec);
             }
             breakText.transform.localScale = Vector3.one * (1f + 0.08f * Mathf.Max(0f, 1f - Mathf.Repeat(waves.PhaseTimeLeft, 1f) * 4f));
         }
@@ -283,7 +283,7 @@ public class HUD : MonoBehaviour
             reloadBar.anchorMax = new Vector2(w.ReloadProgress, 1f);
             int r = w.ActiveReloadResult;
             reloadBarImage.color = r == 0 ? new Color(1f, 0.3f, 0.25f) : Color.white;
-            reloadLabel.text = r == 0 ? "TUTUKLUK!" : "ŞARJÖR · doğru anda tekrar bas";
+            reloadLabel.text = Loc.T(r == 0 ? "hud.jam" : "hud.reload_hint");
             reloadLabel.color = r == 0 ? new Color(1f, 0.35f, 0.3f) : Gold;
         }
         // Reload button: fills as the magazine empties, pulses when low.
@@ -301,7 +301,7 @@ public class HUD : MonoBehaviour
         {
             if (lastLevel > 0) { levelPunch = 1f; xpShown = 0f; }
             lastLevel = prog.Level;
-            levelText.text = "SV " + prog.Level;
+            levelText.text = Loc.F("hud.level", prog.Level);
         }
         xpFill.anchorMax = new Vector2(xpShown, 1f);
         levelPunch = Mathf.MoveTowards(levelPunch, 0f, dt * 3f);
@@ -347,12 +347,10 @@ public class HUD : MonoBehaviour
     {
         gameOverPanel.SetActive(true);
         breakText.gameObject.SetActive(false);
-        gameOverTitle.text = "ÖLDÜN";
-        gameOverStats.text =
-            $"SKOR  <b>{score}</b>   <size=30>(en iyi {rec.bestScore})</size>\n" +
-            $"<size=40>Süre {Time2(time)}   ·   Dalga {wave}   ·   {kills} kill   ·   En iyi kombo {bestCombo}</size>";
+        gameOverTitle.text = Loc.T("over.title");
+        gameOverStats.text = Loc.F("over.stats", score, rec.bestScore, Time2(time), wave, kills, bestCombo);
         recordActive = rec.newScore;
         recordText.gameObject.SetActive(rec.newScore);
-        recordText.text = "YENİ REKOR!";
+        recordText.text = Loc.T("over.record");
     }
 }

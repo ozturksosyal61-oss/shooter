@@ -1,7 +1,12 @@
-# Zombie Shooter — OZT Digital
+# Son Devriye: Zombi Avı — OZT Digital
 
 Unity 6000.6.7f1 · URP 17.6 · glTFast · Input System (yalnızca yeni sistem) · Android + iOS
-Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
+Bundle id: `com.oztdigital.zombieshooter` (değişmez) · Sahne: `Assets/Scenes/Game.unity`
+
+## Ad ve dil
+- **Tam / mağaza adı:** "Son Devriye: Zombi Avı". **Ana ekran adı** (Player Settings Product Name → iOS CFBundleDisplayName, Android label): "Son Devriye".
+- İlk sürüm **Türkçe**; ileride **İngilizce** "Last Patrol: Zombie Shooter" (ana ekran "Last Patrol").
+- **Tüm oyun içi metinler tek localization tablosundan:** `Assets/Scripts/Core/Loc.cs` (`Loc.T(key)`, `Loc.F(key, args)`, `Loc.Upper` Türkçe i/İ uyumlu; sütunlar tr/en; dil PlayerPrefs `lang`). Sabit UI etiketleri `LocText` (builder'da `L(text, key)`). Kodda/builder'da oyuncuya görünen düz string yazma — anahtar ekle. Kart metinleri `card.<CardId>.title/.1/.2/.3` (+ opsiyonel `.icon`). Yeni karakter gerekirse `Warmup.Glyphs`'e ekle.
 
 ## Kurgu — "Son Devriye"
 - Düşmüş bir şehirde hayatta kalan **tek asker**. Telsizden söz verilen kurtarma helikopteri bir türlü gelmiyor; asker devriyeye devam ediyor.
@@ -44,7 +49,7 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - Ortam: `Assets/Art/Environment/{Cars,Survival,Roads,Commercial,Industrial}` — Kenney (CC0, lisanslar klasörlerde) GLB'leri + kit başına `Textures/colormap.png`. Builder bunları düzleştirip gerçek boyuta ölçekler → `Assets/Prefabs/Env/*.prefab` (pivot alt-orta, BoxCollider, `EnvProp.radius`, yüksekler `Fadeable`). Toplam ~3 MB.
 - Mixamo: `_mixamo/{Soldier,Zombie}.fbx` (T-pose, 1.8 m, origin ayakta, doku gömülü). Yeniden üret: `blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <glb> <basecolor.png|-> <out.fbx> <boy> [üçgen] [seams] [bake]` (`-` = gömülü doku; `seams` UV dikişlerini korur, `bake` yüksekten düşüğe diffuse bake).
 - Script'ler `Game` asmdef'inde:
-  - Core: GameManager (+`Killed` event, `SetSlow`), WaveDirector, Pool, GameDefs (layer'lar, `Vault`, `WaveParams`, `Difficulty` + özel zombi oran/limitleri), Explosions (ortak alan hasarı + `OnExplosion`), Progression (XP/seviye), Upgrades (kartlar + aktif kartlar), Haptics, GameAudio (+`AudioPrefs`), MusicDirector, ListenerFollow, Warmup
+  - Core: Loc (localization tablosu), GameManager (+`Killed` event, `SetSlow`), WaveDirector, Pool, GameDefs (layer'lar, `Vault`, `WaveParams`, `Difficulty` + özel zombi oran/limitleri), Explosions (ortak alan hasarı + `OnExplosion`), Progression (XP/seviye), Upgrades (kartlar + aktif kartlar), Haptics, GameAudio (+`AudioPrefs`), MusicDirector, ListenerFollow, Warmup
   - Input: TouchControls (`Blocked`, `CardPressed`) · Player: PlayerController (+dil yakalaması `Grab`), SoldierRig, Weapon (şarjör/reload, `pierce`, `extraBullets`, `SpawnBullet`), Bullet (delme), Turret
   - Enemies: Zombie (taban; `UpdateBehaviour`/`Deflects`/`OnKilled` kancaları, `kind`, `score`, `xp`), ShieldZombie, BombZombie, TongueZombie (+TongueHitbox), ZombieSpawner (tür başına pool, `TrySpawnSpecial`)
   - World: ChunkManager (sonsuz şehir, patlayan varil yerleşimi), FloatingOrigin, EnvProp, Fadeable (kesik materyaline geçer), ExplosiveBarrel, Pickups · FX: CameraRig, Fx (+`Explosion`), HitFlash · UI: HUD (+XP/seviye/kart ikonları), DamageNumbers, CardPicker, ThreatIndicators
@@ -59,13 +64,19 @@ Bundle id: `com.oztdigital.zombieshooter` · Sahne: `Assets/Scenes/Game.unity`
 - Mixer: `Assets/Audio/GameMixer.mixer` (Master → Music / SFX / UI), exposed `MasterVolume/MusicVolume/SfxVolume/UiVolume`; kayıtlı ayarlar `AudioPrefs.Set/Get/Apply` (PlayerPrefs `vol_*`, 0..1 → dB). Mixer'ı builder internal `AudioMixerController` API'sıyla reflection üzerinden üretir.
 - Ses import: SFX mono + Vorbis q0.5, ≤1 sn → Decompress On Load, uzun → Compressed In Memory; müzik Streaming q0.4. Ses dosyalarını yeniden üretmek: `python Tools/build_audio.py <indirilen_paketler> .` (numpy, scipy, soundfile).
 - **Takılma önleme:** `Warmup` ilk karede tüm materyalleri (quad + skinned örnek) gizli RT'ye bir kez render eder ve UI font atlasını doldurur → ilk kullanımda shader/PSO derleme takılması yok. Şüpheli yollar `ProfilerMarker`'lı (`Game.ChunkBuild`, `Game.PoolGrow`); `PlaytestBot` 100 ms üstü kareleri marker değerleriyle loglar.
-- Test hızlandırma: `GameManager.TimeScale` (oyunda 1; botlar/testler 3–4 yapar). `TouchControls` en önce çalışır (`DefaultExecutionOrder(-100)`); ekrandaki butonlar (DOLDUR, TEKRAR) üstlerine düşen dokunuşu yutar.
-- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart (+ölümde müzik low-pass, TEKRAR butonu), VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload, ManualAndActiveReload, WavesBreatherAndCombo, AudioHooks, SpecialZombies, CardsBarrelsReadability; [Explicit] CaptureSpecials / CaptureF6 (HUD'lu PNG); `PlaytestBot.Play` [Explicit] denge/oyun testi botu (bkz. `docs/balance.md`); `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
+- Test hızlandırma: `GameManager.TimeScale` (oyunda 1; smoke testleri 3–4, botlar 8). `TouchControls` en önce çalışır (`DefaultExecutionOrder(-100)`); ekrandaki butonlar (DOLDUR, TEKRAR) üstlerine düşen dokunuşu yutar.
+- PlayMode testleri `Assets/Tests/PlayMode/GameSmokeTest.cs`: SpawnShootDieRestart (+ölümde müzik low-pass, TEKRAR butonu), VaultOverObstacle, FloatingOriginAndChunks, MagazineAndReload, ManualAndActiveReload, WavesBreatherAndCombo, AudioHooks, SpecialZombies, CardsBarrelsReadability; [Explicit] CaptureSpecials / CaptureF6 (HUD'lu PNG); `PlaytestBot.Play(strateji)` [Explicit, Category Balance] denge botları (bkz. Kurallar → test kuralları, `docs/balance.md`); smoke testleri kart seçmez (`LoadGame` doğal seviye atlamayı kapatır); `CaptureScreens` [Explicit] gameplay + yakın çekim PNG'leri alır (env `CAPTURE_DEBUG=1` tüfeği kırmızı boyar ve konumunu loglar) (`-testFilter GameSmokeTest.CaptureScreens`, env `CAPTURE_DIR`, `-nographics` olmadan). Çalıştır: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults <xml> -logFile <log>`.
 
 ## Kurallar
 - Kullanıcıya onay sorma; adımları kendin yap.
 - **Push yok** (yalnızca yerel commit).
 - İş bitince **kısa rapor** ver.
+- **Ağa hazır mimari:** yeni sistemleri ileride host-authoritative co-op'a taşınabilecek şekilde yaz: oyun mantığı (state + kurallar) görselden/sesten ayrı (görsel event dinler, state'i değiştirmez); rastgelelik seed'li ve sistem başına kendi `System.Random`'ı (`UnityEngine.Random` yalnız kozmetik efektlerde); state tek noktadan (manager/servis) değişir, girdi komut olarak gelir (dokunuş → niyet: hareket vektörü, nişan, ateş, reload). Saf formüller statik ve test edilebilir (`Difficulty`, `Upgrades.*Mul`, `Upgrades.Offer`, `GameManager.MultiplierFor`).
+- **Test kuralları (süre):**
+  - Her fazda yalnızca **EditMode birim testleri + PlayMode smoke testleri** (~1.5 dk). EditMode: `Assets/Tests/EditMode/LogicTests.cs` (zorluk formülü, XP eğrisi, kombo basamakları, kart teklif/nadirlik/formüller, localization tablosu) — formül/kart/XP mantığı değişince buraya test ekle.
+  - **Bot denge testleri yalnızca dengeyi etkileyen değişikliklerde** (zombi, kart, hasar, spawn, silah).
+  - Botlar **tek Unity oturumunda sırayla** (`PlaytestBot.Play` parametreli: turret, human, kite, explore), ekran görüntüsü kapalı, `-nographics`, **timescale 8** (`Time.captureDeltaTime` her kareyi tam 1/60 sn oyun süresine sabitler → fizik adımıyla (0.02) uyumlu ve timescale'den bağımsız; timescale yalnızca hız üst sınırı, bu makinede gerçekte ~4x, 4 bot ≈ 5 dk), **400 sn tavan**. 8x ile 3x aynı seed'le doğrulandı (fark koşu varyansı içinde, bkz. `docs/balance.md`). Komut: `PLAYTEST_TIMESCALE=8 CAPTURE_DIR=<klasör> Unity.exe -batchmode -nographics -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play -testResults <xml> -logFile <log>`; opsiyonel `PLAYTEST_STRATEGIES=turret,human`, `PLAYTEST_SEED=<n>`, `PLAYTEST_MAXTIME`, `PLAYTEST_SHOTS=1`.
+  - Aynı anda tek Unity; her koşudan sonra süreç kapanmış olmalı.
 - Unity batchmode: `"C:/Program Files/Unity/Hub/Editor/6000.6.7f1/Editor/Unity.exe" -batchmode -nographics -projectPath . -executeMethod X.Y -quit -logFile <log>` (Unity editörü açıkken çalışmaz).
 
 ## Yol haritası
@@ -74,7 +85,11 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
 - **F6 — Roguelite + okunabilirlik:** ✔ (2026-11-15)
 - **F7 — Özel zombiler:** ✔ Kalkanlı, Bombalı, Dilci (2026-11-15). Sonra: boss'lar (engel aşabilen).
 - **F8 — Şehir çeşitliliği + hedefler:** kavşaksız caddeler, park/meydan/simge yapılar, mahalle renk tonu; telsiz mesajları, işaret fişeği noktaları, helikopter iniş hedefi.
-- **Sonra:** ana menü, ayarlar (AudioPrefs hazır), meta ilerleme (silah açma, görevler).
+- **Boss dalgaları:** 10. dalgadan sonra; laboratuvar mutasyonları, özgün tasarım, bazıları engel aşar (atlama/ezip geçme).
+- **Kampanya + sonsuz mod:** kampanya haritası, bölüm hedefleri (hayatta kal / bölgeye ulaş / fişek yak / kurtar), bölüm başına 1–3 yıldız; mevcut oyun "sonsuz mod" olarak kalır.
+- **Mağaza:** kazanılan para (oyun içi) + ücretli para; **kozmetik / kolaylık ağırlıklı, pay-to-win yok** (güç satılmaz); ödüllü reklam (ör. ölümde devam, ödül ikiye katlama).
+- **Co-op (ileride, 2–4 kişi):** önce oda kodu ile, sonra Game Center / Google Play Games eşleştirme; host-authoritative (bkz. Kurallar → ağa hazır mimari).
+- **Sonra:** ana menü, ayarlar (AudioPrefs + dil seçimi hazır), meta ilerleme (silah açma, görevler).
 
 ## İlerleme
 - [x] Proje kurulumu: URP, glTFast, Input System, Player Settings (landscape, bundle id), klasörler, Game sahnesi, git

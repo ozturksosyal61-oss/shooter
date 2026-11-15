@@ -14,7 +14,7 @@ public class Warmup : MonoBehaviour
     public Font font;
     public int[] fontSizes = { 24, 26, 28, 30, 34, 36, 38, 40, 46, 48, 50, 54, 60, 64, 70, 72, 84, 110, 120 };
 
-    const string Glyphs = "0123456789x/+-!:·.,()%•♥»<>*o ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZabcçdefgğhıijklmnoöprsştuüvyzFPS—→";
+    const string Glyphs = "0123456789x/+-!:·.,()%•♥»<>*o ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZabcçdefgğhıijklmnoöpqrsştuüvwxyzFPS—→";
 
     void Start()
     {
@@ -26,7 +26,8 @@ public class Warmup : MonoBehaviour
             }
 
         var cam = Camera.main;
-        if (!cam) { Destroy(gameObject); return; }
+        // No GPU (batchmode -nographics bots): nothing to compile, and render textures can't be created.
+        if (!cam || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) { Destroy(gameObject); return; }
         var root = new GameObject("WarmupObjects").transform;
         root.SetPositionAndRotation(cam.transform.position + cam.transform.forward * 3f, cam.transform.rotation);
 

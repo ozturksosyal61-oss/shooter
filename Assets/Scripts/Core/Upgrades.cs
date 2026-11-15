@@ -13,12 +13,15 @@ public enum Rarity { Common, Rare, Epic }
 public struct CardDef
 {
     public CardId id;
-    public string title;
     public string icon;
     public Rarity rarity;
     public int maxLevel;
-    /// <summary>One line per level (index 0 = level 1).</summary>
-    public string[] desc;
+
+    // Text comes from the Loc table: card.<id>.title, card.<id>.<level>, optional card.<id>.icon.
+    public string Title => Loc.T("card." + id + ".title");
+    /// <summary>Description of level <paramref name="level"/> (1-based, clamped).</summary>
+    public string Desc(int level) => Loc.T("card." + id + "." + Mathf.Clamp(level, 1, maxLevel));
+    public string Icon => Loc.Has("card." + id + ".icon") ? Loc.T("card." + id + ".icon") : icon;
 }
 
 /// <summary>
@@ -31,25 +34,25 @@ public class Upgrades : MonoBehaviour
 
     public static readonly CardDef[] Cards =
     {
-        Def(CardId.Pierce, "Delici Mermi", ">>", Rarity.Rare, 3, "Mermi 1 zombiden geçer", "Mermi 2 zombiden geçer", "Mermi 3 zombiden geçer"),
-        Def(CardId.FireRate, "Hızlı Tetik", "»", Rarity.Common, 3, "+%20 ateş hızı", "+%40 ateş hızı", "+%60 ateş hızı"),
-        Def(CardId.BigMag, "Geniş Şarjör", "+10", Rarity.Common, 3, "Şarjör +10", "Şarjör +20", "Şarjör +30"),
-        Def(CardId.FastReload, "Seri Doldurma", "R", Rarity.Common, 3, "Reload %20 hızlı", "Reload %36 hızlı", "Reload %49 hızlı"),
-        Def(CardId.DoubleShot, "Çift Mermi", "II", Rarity.Epic, 3, "+1 mermi (her biri %70 hasar)", "+2 mermi", "+3 mermi"),
-        Def(CardId.Crit, "Keskin Nişan", "!", Rarity.Common, 3, "+%10 kritik şansı", "+%20 kritik şansı", "+%30 kritik şansı"),
-        Def(CardId.KillBlast, "Patlayan Leş", "*", Rarity.Rare, 3, "Kill'de %15 patlama", "Kill'de %25 patlama", "Kill'de %35 patlama"),
-        Def(CardId.MaxHealth, "Zırh", "+25", Rarity.Common, 3, "Maks can +25 (ve iyileşir)", "Maks can +50", "Maks can +75"),
-        Def(CardId.Lifesteal, "Can Çalma", "♥", Rarity.Rare, 3, "Her kill +1 can", "Her kill +2 can", "Her kill +3 can"),
-        Def(CardId.MoveSpeed, "Çeviklik", "HIZ", Rarity.Common, 3, "+%10 hareket hızı", "+%20 hareket hızı", "+%30 hareket hızı"),
-        Def(CardId.Magnet, "Mıknatıs", "U", Rarity.Common, 3, "Can paketi menzili +%60", "Menzil +%120", "Menzil +%180"),
-        Def(CardId.Shotgun, "Pompalı", "PMP", Rarity.Epic, 3, "Yakındakilere otomatik pompalı", "Pompalı daha sık", "Pompalı çok sık"),
-        Def(CardId.Turret, "Taret", "TRT", Rarity.Epic, 3, "30 sn taret (45 sn'de bir)", "Taret daha hızlı", "Taret çok hızlı"),
-        Def(CardId.Grenade, "Otomatik Bomba", "o", Rarity.Rare, 3, "6 sn'de bir kalabalığa bomba", "5 sn'de bir, daha güçlü", "4 sn'de bir, en güçlü"),
-        Def(CardId.BreatherHeal, "Nefes", "+", Rarity.Rare, 3, "Dalga arası tam can", "+ dalgada 0.5 can/sn", "+ dalgada 1 can/sn"),
+        Def(CardId.Pierce, ">>", Rarity.Rare, 3),
+        Def(CardId.FireRate, "»", Rarity.Common, 3),
+        Def(CardId.BigMag, "+10", Rarity.Common, 3),
+        Def(CardId.FastReload, "R", Rarity.Common, 3),
+        Def(CardId.DoubleShot, "II", Rarity.Epic, 3),
+        Def(CardId.Crit, "!", Rarity.Common, 3),
+        Def(CardId.KillBlast, "*", Rarity.Rare, 3),
+        Def(CardId.MaxHealth, "+25", Rarity.Common, 3),
+        Def(CardId.Lifesteal, "♥", Rarity.Rare, 3),
+        Def(CardId.MoveSpeed, "HIZ", Rarity.Common, 3),
+        Def(CardId.Magnet, "U", Rarity.Common, 3),
+        Def(CardId.Shotgun, "PMP", Rarity.Epic, 3),
+        Def(CardId.Turret, "TRT", Rarity.Epic, 3),
+        Def(CardId.Grenade, "o", Rarity.Rare, 3),
+        Def(CardId.BreatherHeal, "+", Rarity.Rare, 3),
     };
 
-    static CardDef Def(CardId id, string title, string icon, Rarity r, int max, params string[] desc) =>
-        new CardDef { id = id, title = title, icon = icon, rarity = r, maxLevel = max, desc = desc };
+    static CardDef Def(CardId id, string icon, Rarity r, int max) =>
+        new CardDef { id = id, icon = icon, rarity = r, maxLevel = max };
 
     public static CardDef Get(CardId id) => Cards[(int)id];
 
@@ -59,7 +62,8 @@ public class Upgrades : MonoBehaviour
         new Color(0.25f, 0.6f, 1f),      // rare
         new Color(0.75f, 0.35f, 1f),     // epic
     };
-    public static readonly string[] RarityNames = { "SIRADAN", "NADİR", "EPİK" };
+    public static readonly string[] RarityKeys = { "rarity.common", "rarity.rare", "rarity.epic" };
+    public static string RarityName(Rarity r) => Loc.T(RarityKeys[(int)r]);
     static readonly float[] RarityWeight = { 60f, 30f, 12f };
 
     [Header("Active cards")]
@@ -150,27 +154,43 @@ public class Upgrades : MonoBehaviour
     public bool CanTake(CardId id) => levels[(int)id] < Get(id).maxLevel;
 
     /// <summary>Up to <paramref name="count"/> distinct cards, rarity-weighted, among those not maxed.</summary>
-    public List<CardId> Offer(int count)
+    public List<CardId> Offer(int count) => Offer(levels, count, () => UnityEngine.Random.value, offerBuffer, pickBuffer);
+
+    public static float RarityWeightOf(Rarity r) => RarityWeight[(int)r];
+
+    /// <summary>Pure offer logic (unit-tested): <paramref name="rand01"/> supplies [0,1) values.</summary>
+    public static List<CardId> Offer(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch)
     {
-        offerBuffer.Clear();
-        pickBuffer.Clear();
-        for (int i = 0; i < Cards.Length; i++) if (CanTake(Cards[i].id)) pickBuffer.Add(i);
-        while (offerBuffer.Count < count && pickBuffer.Count > 0)
+        into.Clear();
+        scratch.Clear();
+        for (int i = 0; i < Cards.Length; i++) if (levels[(int)Cards[i].id] < Cards[i].maxLevel) scratch.Add(i);
+        while (into.Count < count && scratch.Count > 0)
         {
             float total = 0f;
-            foreach (int i in pickBuffer) total += RarityWeight[(int)Cards[i].rarity];
-            float r = UnityEngine.Random.value * total;
-            int chosen = pickBuffer[pickBuffer.Count - 1];
-            foreach (int i in pickBuffer)
+            foreach (int i in scratch) total += RarityWeight[(int)Cards[i].rarity];
+            float r = rand01() * total;
+            int chosen = scratch[scratch.Count - 1];
+            foreach (int i in scratch)
             {
                 r -= RarityWeight[(int)Cards[i].rarity];
                 if (r <= 0f) { chosen = i; break; }
             }
-            pickBuffer.Remove(chosen);
-            offerBuffer.Add(Cards[chosen].id);
+            scratch.Remove(chosen);
+            into.Add(Cards[chosen].id);
         }
-        return offerBuffer;
+        return into;
     }
+
+    // ---------------------------------------------------------------- stat formulas (pure, unit-tested)
+    public static float FireRateMul(int l) => 1f + 0.2f * l;
+    public static float ReloadMul(int l) => Mathf.Pow(0.8f, l);
+    public static float CritChance(float baseCrit, int l) => Mathf.Min(0.9f, baseCrit + 0.1f * l);
+    public static int MagazineSize(int baseMag, int l) => baseMag + 10 * l;
+    public static float MaxHealth(float baseHp, int l) => baseHp + 25f * l;
+    public static float MoveMul(int l) => 1f + 0.1f * l;
+    public static float MagnetMul(int l) => 1f + 0.6f * l;
+    public static float KillBlastChance(int l) => l > 0 ? 0.05f + 0.1f * l : 0f;
+    public static float ShotgunInterval(int l) => l == 1 ? 1.6f : l == 2 ? 1.25f : 0.95f;
 
     public void Take(CardId id)
     {
@@ -191,15 +211,15 @@ public class Upgrades : MonoBehaviour
 
     void Recompute()
     {
-        weapon.fireRate = baseFireRate * (1f + 0.2f * Level(CardId.FireRate));
-        weapon.reloadTime = baseReload * Mathf.Pow(0.8f, Level(CardId.FastReload));
-        weapon.critChance = Mathf.Min(0.9f, baseCrit + 0.1f * Level(CardId.Crit));
-        weapon.magazineSize = baseMag + 10 * Level(CardId.BigMag);
+        weapon.fireRate = baseFireRate * FireRateMul(Level(CardId.FireRate));
+        weapon.reloadTime = baseReload * ReloadMul(Level(CardId.FastReload));
+        weapon.critChance = CritChance(baseCrit, Level(CardId.Crit));
+        weapon.magazineSize = MagazineSize(baseMag, Level(CardId.BigMag));
         weapon.pierce = Level(CardId.Pierce);
         weapon.extraBullets = Level(CardId.DoubleShot);
-        player.maxHealth = baseMaxHealth + 25f * Level(CardId.MaxHealth);
-        player.moveSpeed = baseMove * (1f + 0.1f * Level(CardId.MoveSpeed));
-        if (Pickups.I) Pickups.I.magnetRadius = baseMagnet * (1f + 0.6f * Level(CardId.Magnet));
+        player.maxHealth = MaxHealth(baseMaxHealth, Level(CardId.MaxHealth));
+        player.moveSpeed = baseMove * MoveMul(Level(CardId.MoveSpeed));
+        if (Pickups.I) Pickups.I.magnetRadius = baseMagnet * MagnetMul(Level(CardId.Magnet));
     }
 
     // ---------------------------------------------------------------- passive hooks
@@ -208,7 +228,7 @@ public class Upgrades : MonoBehaviour
         int ls = Level(CardId.Lifesteal);
         if (ls > 0) player.Regen(ls);
         int kb = Level(CardId.KillBlast);
-        if (kb > 0 && !z.KilledByExplosion && UnityEngine.Random.value < 0.05f + 0.1f * kb)
+        if (kb > 0 && !z.KilledByExplosion && UnityEngine.Random.value < KillBlastChance(kb))
             Explosions.Explode(z.transform.position, killBlastRadius, 45f + 10f * kb, 0f, SfxId.Explosion, 0.25f, z, false);
     }
 
@@ -231,7 +251,7 @@ public class Upgrades : MonoBehaviour
         if (sg > 0 && (shotgunT -= dt) <= 0f)
         {
             var z = Zombie.FindNearest(player.transform.position, shotgunRange);
-            if (z) { FireShotgun(z); shotgunT = sg == 1 ? 1.6f : sg == 2 ? 1.25f : 0.95f; }
+            if (z) { FireShotgun(z); shotgunT = ShotgunInterval(sg); }
             else shotgunT = 0.1f;
         }
 
