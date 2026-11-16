@@ -16,7 +16,7 @@ public static class ProjectSetup
     public const string ProductName = "Holdout";
     public const string BundleId = "com.oztdigital.holdout";
     public const string Version = "0.1.0";
-    public const string IosBuildNumber = "1";
+    public const string IosBuildNumber = "2";
     public const string IconDir = "Assets/Art/Icon";
 
     public static void Apply()
@@ -27,7 +27,7 @@ public static class ProjectSetup
             PlayerSettings.SetApplicationIdentifier(t, BundleId);
         PlayerSettings.bundleVersion = Version;
         PlayerSettings.iOS.buildNumber = IosBuildNumber;
-        PlayerSettings.Android.bundleVersionCode = 1;
+        PlayerSettings.Android.bundleVersionCode = 2;
         PlayerSettings.iOS.targetOSVersionString = "15.0";
         PlayerSettings.SplashScreen.show = true;
         PlayerSettings.SplashScreen.backgroundColor = new Color(0.07f, 0.08f, 0.05f);

@@ -782,3 +782,22 @@ public class EconomyTests
         Assert.IsNull(SaveSystem.Deserialize("{\"version\":2,\"economy\":{\"vip\":true}}"), "unsigned v2 data rejected");
     }
 }
+
+public class ScriptFileTests
+{
+    // Unity binds a serialized MonoBehaviour to a script asset only when the class name matches its file name;
+    // otherwise scenes embed a broken MonoScript and the component never initialises (menu panels stuck open).
+    [Test]
+    public void SceneComponentsLiveInMatchingFiles()
+    {
+        var files = new HashSet<string>();
+        foreach (var f in System.IO.Directory.GetFiles("Assets/Scripts", "*.cs", System.IO.SearchOption.AllDirectories))
+            files.Add(System.IO.Path.GetFileNameWithoutExtension(f));
+        var runtimeOnly = new HashSet<string> { "ServiceRunner" };
+        foreach (var t in typeof(GameManager).Assembly.GetTypes())
+        {
+            if (!typeof(MonoBehaviour).IsAssignableFrom(t) || t.IsAbstract || t.IsNested || runtimeOnly.Contains(t.Name)) continue;
+            Assert.IsTrue(files.Contains(t.Name), $"{t.Name} must be in {t.Name}.cs");
+        }
+    }
+}
