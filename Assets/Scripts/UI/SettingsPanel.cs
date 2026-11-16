@@ -10,7 +10,9 @@ using UnityEngine.UI;
 public class SettingsPanel : MonoBehaviour
 {
     public const string SupportMail = "oztdigitaldestek@gmail.com";
-    public const string PrivacyUrl = "https://oztdigital.com.tr/holdout/privacy";
+    public const string SupportUrl = "https://www.oztdigital.com.tr/holdout/support";
+    public const string PrivacyUrl = "https://www.oztdigital.com.tr/holdout/privacy";
+    public const string TermsUrl = "https://www.oztdigital.com.tr/holdout/terms";
 
     public GameObject root;
     public Slider music, sfx, joySize, joyAlpha;
@@ -19,7 +21,7 @@ public class SettingsPanel : MonoBehaviour
     public Button[] fpsButtons;
     public Button[] qualityButtons;
     public Button[] langButtons;
-    public Button support, privacy, reset, close;
+    public Button support, privacy, terms, reset, close;
     public GameObject confirm;
     public Button confirmYes, confirmNo;
     public Text resetDone;
@@ -43,7 +45,8 @@ public class SettingsPanel : MonoBehaviour
         for (int i = 0; i < fpsButtons.Length; i++) { int f = Settings.FpsOptions[i]; fpsButtons[i].onClick.AddListener(() => { Click(); Change(s => s.fps = f); }); }
         for (int i = 0; i < qualityButtons.Length; i++) { int q = i; qualityButtons[i].onClick.AddListener(() => { Click(); Change(s => s.quality = q); }); }
         for (int i = 0; i < langButtons.Length; i++) { string l = i == 0 ? "tr" : "en"; langButtons[i].onClick.AddListener(() => { Click(); Change(s => s.lang = l); }); }
-        support.onClick.AddListener(() => { Click(); Application.OpenURL("mailto:" + SupportMail + "?subject=Holdout"); });
+        support.onClick.AddListener(() => { Click(); Application.OpenURL(SupportUrl); });
+        terms.onClick.AddListener(() => { Click(); Application.OpenURL(TermsUrl); });
         privacy.onClick.AddListener(() => { Click(); Application.OpenURL(PrivacyUrl); });
         reset.onClick.AddListener(() => { Click(); confirm.SetActive(true); });
         confirmNo.onClick.AddListener(() => { Click(); confirm.SetActive(false); });

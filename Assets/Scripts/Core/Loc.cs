@@ -98,6 +98,7 @@ public static class Loc
         ["set.lang"] = new[] { "Dil", "Language" },
         ["set.support"] = new[] { "DESTEK", "SUPPORT" },
         ["set.privacy"] = new[] { "GİZLİLİK", "PRIVACY" },
+        ["set.terms"] = new[] { "KOŞULLAR", "TERMS" },
         ["set.reset"] = new[] { "İLERLEMEYİ SIFIRLA", "RESET PROGRESS" },
         ["set.reset_q"] = new[] { "Rekorlar, para ve ilerleme silinsin mi? Bu geri alınamaz.", "Delete records, currency and progress? This cannot be undone." },
         ["set.reset_done"] = new[] { "İlerleme sıfırlandı", "Progress reset" },

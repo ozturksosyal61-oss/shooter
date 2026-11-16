@@ -4,7 +4,8 @@ using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.iOS.Xcode;
 
-/// <summary>iOS: ProMotion (120 Hz on iPhone needs CADisableMinimumFrameDurationOnPhone) + home-screen name.</summary>
+/// <summary>iOS (every build): ProMotion (120 Hz needs CADisableMinimumFrameDurationOnPhone), home-screen name,
+/// ITSAppUsesNonExemptEncryption = false.</summary>
 public static class IosPostBuild
 {
     [PostProcessBuild]
@@ -16,6 +17,8 @@ public static class IosPostBuild
         plist.ReadFromFile(plistPath);
         plist.root.SetBoolean("CADisableMinimumFrameDurationOnPhone", true);
         plist.root.SetString("CFBundleDisplayName", "Holdout");
+        // Only standard HTTPS / OS crypto: no export-compliance questions on every upload.
+        plist.root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
         plist.WriteToFile(plistPath);
     }
 }

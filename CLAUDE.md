@@ -9,10 +9,17 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 - Türkçe + İngilizce; dil ayarlardan anında değişir.
 - **Tüm oyun içi metinler tek localization tablosundan:** `Assets/Scripts/Core/Loc.cs` (`Loc.T(key)`, `Loc.F(key, args)`, `Loc.Upper` Türkçe i/İ uyumlu; sütunlar tr/en; dil kayıt dosyasında `settings.lang`, `Settings.Apply` → `Loc.Current`). Sabit UI etiketleri `LocText` (builder'da `L(text, key)`). Kodda/builder'da oyuncuya görünen düz string yazma — anahtar ekle. Kart metinleri `card.<CardId>.title/.1/.2/.3` (+ opsiyonel `.icon`). Yeni karakter gerekirse `Warmup.Glyphs`'e ekle.
 
+## Yayın ayarları
+- `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **1** (Android versionCode 1), minimum iOS **15.0**, yalnız yatay (sol/sağ).
+- **İkon:** `Assets/Art/Icon/AppIcon.png` (1024², opak RGB, kare; kaynak masaüstü `ikon.png`) → varsayılan + iOS tüm boyutlar + App Store marketing 1024; Android adaptive (`AppIcon_Foreground.png` şeffaf, %66 güvenli alan + `AppIcon_Background.png` düz #23261F); Unity 6.6'da round/legacy tipleri kaldırıldı → eski launcher'lar varsayılan ikonu kullanır.
+- `IosPostBuild` (her iOS build'de Info.plist): `CADisableMinimumFrameDurationOnPhone` (ProMotion), `CFBundleDisplayName` Holdout, `ITSAppUsesNonExemptEncryption` false.
+- iOS build: `Unity.exe -batchmode -nographics -projectPath . -buildTarget iOS -executeMethod ProjectSetup.BuildIos -quit -logFile <log>` → `Builds/iOS` (Xcode projesi), zip `Builds/Holdout_iOS_<sürüm>.zip`. `Builds/` git'e girmez.
+- Uzak depo: `https://github.com/ozturksosyal61-oss/shooter.git`, dal `main`.
+
 ## Menü, ayarlar, kayıt (F10)
 - **Açılış:** Unity splash → OZT Digital splash (menüde, oturum başına bir kez) → **ana menü** (`MainMenu`): HOLDOUT logosu (haki dolgu, turuncu + mürekkep kontur, zehir yeşili gölge; Rubik), arkada canlı şehir (`BuildCity` ortak; zombisiz) + yavaş dönen kamera (`MenuCamera`), sağ üstte altın / elmas (`SaveData.wallet`, şimdilik 0). Butonlar: OYNA → Kampanya (kilitli, "YAKINDA") / Sonsuz; MAĞAZA (kilitli, "YAKINDA" toast); AYARLAR.
 - **Sahne geçişi:** `LoadingScreen.Load(scene)` — `Resources/LoadingScreen` prefab'ı (DontDestroyOnLoad), rastgele ipucu (`tip.1..10`), ilerleme barı, en az 1.1 sn.
-- **Ayarlar** (`SettingsPanel`, menü + duraklatma; `Settings.Apply`): müzik, efekt, titreşim (`Haptics.Enabled`), FPS 30/60/90/120 (yalnız ekranın desteklediği; `Settings.SupportedFps`, iOS ProMotion için `CADisableMinimumFrameDurationOnPhone`), grafik düşük/orta/yüksek (URP render scale ×0.7/0.85/1, gölge mesafesi ×0/0.6/1, küçük partiküller ×0.45/0.75/1), joystick boyutu (0.75–1.35) + saydamlığı (0.3–1), dil TR/EN (anında), destek (mailto `oztdigitaldestek@gmail.com`), gizlilik (`https://oztdigital.com.tr/holdout/privacy`, yer tutucu), ilerlemeyi sıfırla (onaylı; ayarlar korunur).
+- **Ayarlar** (`SettingsPanel`, menü + duraklatma; `Settings.Apply`): müzik, efekt, titreşim (`Haptics.Enabled`), FPS 30/60/90/120 (yalnız ekranın desteklediği; `Settings.SupportedFps`, iOS ProMotion için `CADisableMinimumFrameDurationOnPhone`), grafik düşük/orta/yüksek (URP render scale ×0.7/0.85/1, gölge mesafesi ×0/0.6/1, küçük partiküller ×0.45/0.75/1), joystick boyutu (0.75–1.35) + saydamlığı (0.3–1), dil TR/EN (anında), destek `https://www.oztdigital.com.tr/holdout/support`, gizlilik `https://www.oztdigital.com.tr/holdout/privacy`, kullanım koşulları `https://www.oztdigital.com.tr/holdout/terms` (`SettingsPanel` sabitleri; e-posta `oztdigitaldestek@gmail.com` panelde yazılı), ilerlemeyi sıfırla (onaylı; ayarlar korunur).
 - **Duraklatma** (`PauseMenu`, `GameManager.SetPaused`): sol üst buton → DEVAM / AYARLAR / ANA MENÜ; uygulama arka plana gidince otomatik. `timeScale` 0, `AudioListener.pause`, `TouchControls.Paused`. Duraklat / menü butonları `TouchControls.uiButtons` ile dokunuşu yutar; uGUI için sahnelerde `EventSystem` + `InputSystemUIInputModule`.
 - **Kayıt** (`SaveSystem`): tek JSON (`persistentDataPath/save.json`) — `SaveData` { version, savedAt, tutorialDone, settings, records, wallet, campaign, inventory }. Atomik yazım (tmp → değiştir), önceki sürüm `save.bak`; ana dosya bozuksa yedek, ikisi de bozuksa yeni veri. `CurrentVersion` + `Migrate` adımları; ilk açılışta eski PlayerPrefs anahtarları içe aktarılır. Depolama `ISaveStore` (`FileSaveStore`, testlerde `MemorySaveStore`; bulut kaydı aynı arayüzü uygular, çakışmada `savedAt`). PlayerPrefs artık kullanılmaz.
 
@@ -88,7 +95,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 
 ## Kurallar
 - Kullanıcıya onay sorma; adımları kendin yap.
-- **Push yok** (yalnızca yerel commit).
+- **Push yok** (yalnızca yerel commit) — kullanıcı açıkça isterse `origin main`'e push.
 - Prompt sonundaki **"Builder, CLAUDE.md, commit, push yok"** = builder'ı çalıştır, CLAUDE.md'yi güncelle, commit at; **yalnızca push yapma**.
 - "Mor kart" = **epik** nadirlik (`Rarity.Epic`).
 - İş bitince **kısa rapor** ver.

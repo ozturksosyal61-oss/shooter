@@ -18,15 +18,7 @@ public static partial class GameSceneBuilder
     static Sprite coinIcon, gemIcon, pauseIcon, lockIcon;
 
     // ---------------------------------------------------------------- identity
-    static void ConfigurePlayer()
-    {
-        PlayerSettings.productName = "Holdout";
-        PlayerSettings.companyName = "OZT Digital";
-        foreach (var t in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS, NamedBuildTarget.Standalone })
-            PlayerSettings.SetApplicationIdentifier(t, BundleId);
-        PlayerSettings.SplashScreen.show = true;
-        PlayerSettings.SplashScreen.backgroundColor = new Color(0.07f, 0.08f, 0.05f);
-    }
+    static void ConfigurePlayer() => ProjectSetup.Apply();
 
     static void MenuIcons()
     {
@@ -165,9 +157,10 @@ public static partial class GameSceneBuilder
         Row("set.joy_alpha"); sp.joyAlpha = MakeSlider("JoyAlpha", p, new Vector2(cx, y), 700f); y -= dy;
         Row("set.lang"); sp.langButtons = Segment("Lang", new string[2], new[] { "TÜRKÇE", "ENGLISH" }, 260f); y -= dy + 20f;
 
-        sp.support = MakeButton("Support", p, "set.support", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(-440f, y), new Vector2(300f, 76f), 32);
-        sp.privacy = MakeButton("Privacy", p, "set.privacy", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(-110f, y), new Vector2(300f, 76f), 32);
-        sp.reset = MakeButton("Reset", p, "set.reset", new Color(0.55f, 0.16f, 0.12f), new Vector2(0.5f, 0.5f), new Vector2(330f, y), new Vector2(520f, 76f), 32);
+        sp.support = MakeButton("Support", p, "set.support", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(-500f, y), new Vector2(250f, 76f), 30);
+        sp.privacy = MakeButton("Privacy", p, "set.privacy", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(-235f, y), new Vector2(250f, 76f), 30);
+        sp.terms = MakeButton("Terms", p, "set.terms", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(30f, y), new Vector2(250f, 76f), 30);
+        sp.reset = MakeButton("Reset", p, "set.reset", new Color(0.55f, 0.16f, 0.12f), new Vector2(0.5f, 0.5f), new Vector2(395f, y), new Vector2(440f, 76f), 28);
         sp.close = MakeButton("Close", p, "set.close", UiOrange, new Vector2(0.5f, 0f), new Vector2(0f, 70f), new Vector2(380f, 96f), 44, UiInk);
         var mail = Txt("Mail", p, 24, TextAnchor.MiddleLeft, new Color(UiCream.r, UiCream.g, UiCream.b, 0.7f));
         Anchor(mail.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(40f, 22f), new Vector2(600f, 36f));
