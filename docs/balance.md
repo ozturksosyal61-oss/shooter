@@ -9,6 +9,18 @@ Botlar oyunu gerçek girdi yolundan oynar (`Assets/Tests/PlayMode/PlaytestBot.cs
 
 Çalıştırma (4 bot tek oturumda, ~5 dk): `PLAYTEST_TIMESCALE=8 CAPTURE_DIR=<klasör> Unity.exe -batchmode -nographics -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play ...` → `<klasör>/playtest_<tarz>.txt`. Opsiyonel `PLAYTEST_STRATEGIES`, `PLAYTEST_SEED`, `PLAYTEST_MAXTIME` (varsayılan 400).
 
+## F9 — ilk boss Kasap (2026-11-16)
+
+İlk boss dalga 6 (sonra 11, 16…); dalga 4–6 yoğunluk artışı yavaşlatıldı (`Difficulty.DensityDip` 1 / 1.6 / 2); kule alanı baskısı ×0.75 → ×0.85; boss dalgasında normal spawn aralığı ×4, eşzamanlı ×0.2. Human bot can < %35 iken tutma alanından çekilir. 600 sn tavan, human ×3 doğal koşu.
+
+| Tur | Ayar | Boss'a ulaşan | Yenen | Dövüş | Hayatta kalma |
+|---|---|---|---|---|---|
+| 0 | boss dalga 10 | 0/3 | — | — | 205–218 sn (dalga 5, kule) |
+| 1 | dalga 6, düşüş, geri çekilme; can ×42 | 2/3 | 2/2 | 30–36 sn | 203–292 sn |
+| 2 | can ×65, hücum 15 m/s, hasar 28/26 | 3/3 | 3/3 | 27–61 sn | 319–485 sn |
+
+Kasap'ın saldırıları botlara neredeyse hiç isabet etmiyor (hücum 0 isabet / 15); zorluk boss dalgasındaki kalabalıktan geliyor. Hedef (~%50 galibiyet) için sonraki adım: hücumun takibi / ikinci hücum, boss dalgasında daha fazla özel zombi.
+
 ## F8 — şehir çeşitliliği + hikâye hedefleri (2026-11-16)
 
 Değişiklik: yeni chunk tipleri (park, meydan, ara sokak, yıkıntı, simge yapılar), hedefler (dalga 2'den itibaren her 3 dalgada bir; fişek / kule 20 sn / ikmal), 3 hedef → helikopter (30 sn dayan). Hedef alanında dayanırken spawn aralığı ×0.75. Botlar (turret hariç) aktif hedefe gider: kite/human yolda zombilerden kaçarak (16 yön, hedefe hizalanma + zombi yakınlığı + bina), alanda kalıp kaçar; explore düz hedefe koşar. **turret** referans olarak yerinde kalır (hedef almaz). Difficulty değişmedi.

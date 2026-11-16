@@ -17,6 +17,7 @@ public class ThreatIndicators : MonoBehaviour
     public Color shieldColor = new Color(1f, 0.2f, 0.15f);
     public Color bombColor = new Color(1f, 0.6f, 0.1f);
     public Color tongueColor = new Color(0.8f, 0.35f, 1f);
+    public Color bossColor = new Color(1f, 0.08f, 0.05f);
     public Color normalColor = new Color(1f, 1f, 1f, 0.75f);
 
     Image[] arrows;
@@ -76,7 +77,7 @@ public class ThreatIndicators : MonoBehaviour
         Shown = used;
     }
 
-    Color ColorOf(ZombieKind k) => k == ZombieKind.Shield ? shieldColor : k == ZombieKind.Bomb ? bombColor : k == ZombieKind.Tongue ? tongueColor : normalColor;
+    Color ColorOf(ZombieKind k) => k == ZombieKind.Shield ? shieldColor : k == ZombieKind.Bomb ? bombColor : k == ZombieKind.Tongue ? tongueColor : k == ZombieKind.Boss ? bossColor : normalColor;
 
     bool Place(Image img, Zombie z, Color color, float size, bool pulse)
     {

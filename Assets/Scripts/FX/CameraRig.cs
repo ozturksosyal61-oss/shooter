@@ -21,6 +21,9 @@ public class CameraRig : MonoBehaviour
 
     float trauma;
     Vector3 focus, vel, kick;
+    // Cinematic focus (boss intro): look at another target, a bit closer, for a few real seconds.
+    Transform focusTarget;
+    float focusUntil, focusDistMul = 1f, distMul = 1f;
     static readonly RaycastHit[] Hits = new RaycastHit[8];
     static readonly int CutCircle = Shader.PropertyToID("_CutCircle");
     Camera cam;
@@ -37,6 +40,16 @@ public class CameraRig : MonoBehaviour
 
     public void AddTrauma(float amount) => trauma = Mathf.Min(1f, trauma + amount);
 
+    /// <summary>Swings the camera over to <paramref name="t"/> for <paramref name="realSeconds"/>, pushed in to <paramref name="distanceMul"/>.</summary>
+    public void Focus(Transform t, float realSeconds, float distanceMul = 0.72f)
+    {
+        focusTarget = t;
+        focusUntil = Time.unscaledTime + realSeconds;
+        focusDistMul = distanceMul;
+    }
+
+    public bool IsFocusing => focusTarget && Time.unscaledTime < focusUntil;
+
     /// <summary>Pushes the camera along <paramref name="dir"/> (e.g. opposite to the shot).</summary>
     public void Kick(Vector3 dir, float amount)
     {
@@ -45,8 +58,15 @@ public class CameraRig : MonoBehaviour
 
     void LateUpdate()
     {
-        if (target) focus = Vector3.SmoothDamp(focus, target.position, ref vel, smoothTime, Mathf.Infinity, Time.deltaTime);
         float udt = Time.unscaledDeltaTime;
+        bool cine = IsFocusing && focusTarget.gameObject.activeInHierarchy;
+        if (cine)
+        {
+            Vector3 goal = Vector3.Lerp(target ? target.position : focusTarget.position, focusTarget.position, 0.8f);
+            focus = Vector3.SmoothDamp(focus, goal, ref vel, 0.3f, Mathf.Infinity, udt);
+        }
+        else if (target) focus = Vector3.SmoothDamp(focus, target.position, ref vel, smoothTime, Mathf.Infinity, Time.deltaTime);
+        distMul = Mathf.Lerp(distMul, cine ? focusDistMul : 1f, 1f - Mathf.Exp(-4f * udt));
         trauma = Mathf.Max(0f, trauma - udt * traumaDecay);
         kick = Vector3.Lerp(kick, Vector3.zero, 1f - Mathf.Exp(-kickRecover * udt));
         Apply(trauma * trauma);
@@ -62,7 +82,7 @@ public class CameraRig : MonoBehaviour
     void Apply(float shake)
     {
         Quaternion rot = Quaternion.Euler(pitch, 0f, 0f);
-        Vector3 pos = focus + kick - rot * Vector3.forward * distance;
+        Vector3 pos = focus + kick - rot * Vector3.forward * (distance * distMul);
         if (shake > 0f)
         {
             float t = Time.unscaledTime * 28f;

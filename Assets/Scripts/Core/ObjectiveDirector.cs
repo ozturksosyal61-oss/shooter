@@ -198,5 +198,6 @@ public class ObjectiveDirector : MonoBehaviour
 
     public int LastBonus { get; private set; }
 
-    void Say(string key) => Radio?.Invoke(new RadioMsg { key = key });
+    /// <summary>Radio line from HQ (also used by the boss director).</summary>
+    public void Say(string key) => Radio?.Invoke(new RadioMsg { key = key });
 }

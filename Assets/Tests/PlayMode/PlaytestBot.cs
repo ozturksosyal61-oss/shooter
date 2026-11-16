@@ -17,7 +17,7 @@ using UnityEngine.TestTools;
 /// All strategies run one after another in ONE Unity session (one test case each):
 ///   -testFilter PlaytestBot.Play   (or -testCategory Balance)
 /// env: PLAYTEST_STRATEGIES = comma list (default turret,human,kite,explore), PLAYTEST_TIMESCALE (default 8),
-///      PLAYTEST_MAXTIME (default 400 s game time), PLAYTEST_SEED (fixed city/spawn seed, default random),
+///      PLAYTEST_MAXTIME (default 600 s game time — long enough to reach the wave-10 boss), PLAYTEST_SEED (fixed city/spawn seed, default random),
 ///      PLAYTEST_SHOTS=1 for screenshots (default off), CAPTURE_DIR = output folder.
 /// High time scales stay physics-compatible and reproducible: Time.captureDeltaTime fixes every frame to exactly
 /// 1/60 s of game time (below fixedDeltaTime 0.02, like a 60 fps device) whatever the machine's real frame rate, and
@@ -70,7 +70,7 @@ public class PlaytestBot
         string dir = Env("CAPTURE_DIR", Application.temporaryCachePath);
         float ts = EnvF("PLAYTEST_TIMESCALE", 8f);
         bool shots = Env("PLAYTEST_SHOTS", "0") == "1";
-        float maxTime = EnvF("PLAYTEST_MAXTIME", 400f);
+        float maxTime = EnvF("PLAYTEST_MAXTIME", 600f);
         int seed = int.Parse(Env("PLAYTEST_SEED", "0"));
 
         GameManager.TimeScale = ts;
@@ -168,10 +168,25 @@ public class PlaytestBot
         Vector3 lastMove = Vector3.forward;
         bool rDown = false;
 
+        bool bailing = false;
+        var bossDir = BossDirector.I;
+        // PLAYTEST_BOSS=1: boss scenario — level up to a typical first-boss level (the bot picks its own cards),
+        // then jump to the breather before the first boss wave. The run ends a few seconds after the boss dies.
+        bool bossScenario = Env("PLAYTEST_BOSS", "0") == "1";
+        if (bossScenario)
+        {
+            int lvl = (int)EnvF("PLAYTEST_BOSS_LEVEL", 8f);
+            while (Progression.I.Level < lvl) Progression.I.AddXp(Progression.I.XpToNext - Progression.I.Xp);
+            WaveDirector.I.JumpToBreakBefore(BossRules.FirstBossWave);
+        }
+        float bossSeen = -1f, bossDown = -1f, bossHurtStart = 0f;
+        int bossHurts = 0, chargeDodges = 0, chargeHits = 0;
+        ButcherZombie.Phase lastBossPhase = ButcherZombie.Phase.Walk;
         try
         {
-            while (!gm.IsGameOver && gm.GameTime < maxTime)
+            while (!gm.IsGameOver && gm.GameTime < maxTime && !(bossScenario && bossDown >= 0f && gm.GameTime - bossDown > 5f))
             {
+                if (bossDir && bossDown < 0f && bossDir.BossesDefeated > 0) bossDown = gm.GameTime;
                 // Level-up cards: let go of everything and click the chosen card (real pointer path).
                 var picker = CardPicker.I;
                 if (picker && picker.IsOpen)
@@ -210,12 +225,26 @@ public class PlaytestBot
                         if (z.Kind == ZombieKind.Bomb && z.Targetable && (z.transform.position - p).sqrMagnitude < 12f * 12f) { nearest = z; break; }
                 }
 
+                ButcherZombie boss = null;
                 Vector3 threat = Vector3.zero;
                 foreach (var z in Zombie.Active)
                 {
+                    if (z is ButcherZombie bz && z.Targetable) boss = bz;
                     Vector3 d = p - z.transform.position; d.y = 0f;
                     float m = d.magnitude;
-                    if (m < 12f && m > 0.01f) threat += d / (m * m) * (z.Kind == ZombieKind.Bomb ? 3f : 1f);
+                    bool isBoss = z.Kind == ZombieKind.Boss;
+                    if (m < (isBoss ? 16f : 12f) && m > 0.01f) threat += d / (m * m) * (z.Kind == ZombieKind.Bomb ? 3f : isBoss ? 5f : 1f);
+                }
+                if (boss)
+                {
+                    if (bossSeen < 0f) { bossSeen = gm.GameTime; bossHurtStart = hurts; }
+                    var ph = boss.CurrentPhase;
+                    if (lastBossPhase == ButcherZombie.Phase.Charge && ph != ButcherZombie.Phase.Charge)
+                    {
+                        if (hurts > bossHurts) chargeHits++; else chargeDodges++;
+                    }
+                    if (ph == ButcherZombie.Phase.Charge && lastBossPhase != ButcherZombie.Phase.Charge) bossHurts = hurts;
+                    lastBossPhase = ph;
                 }
                 wanderT -= Time.unscaledDeltaTime * ts;
                 if (wanderT <= 0f) { wanderT = 3f; wander = Quaternion.Euler(0f, Random.Range(-60f, 60f), 0f) * wander; }
@@ -276,7 +305,15 @@ public class PlaytestBot
                     float r = od.Step.radius;
                     Vector3 goal = dist > 0.01f ? to / dist : Vector3.zero;
                     bool inside = dist < r * 0.7f;
-                    if (strat == "explore") move = inside && od.Step.hold > 0f ? Vector3.zero : near < 3.5f && threat.sqrMagnitude > 0f ? (goal + threat.normalized * 1.5f).normalized : goal;
+                    // A human player backs out of a hold zone when nearly dead and comes back after recovering a bit.
+                    if (strat == "human" && od.Step.hold > 0f)
+                    {
+                        float h01 = gm.player.Health / gm.player.maxHealth;
+                        if (h01 < 0.35f) bailing = true; else if (h01 > 0.6f || near > 12f) bailing = false;
+                    }
+                    else bailing = false;
+                    if (bailing && threat.sqrMagnitude > 0.0004f) move = BestEscape(p, lastMove);
+                    else if (strat == "explore") move = inside && od.Step.hold > 0f ? Vector3.zero : near < 3.5f && threat.sqrMagnitude > 0f ? (goal + threat.normalized * 1.5f).normalized : goal;
                     else if (!inside) move = GoalMove(p, goal, threat, lastMove, strat == "human" ? 0.9f : 1.2f);
                     else if (od.Step.hold <= 0f || od.Step.kind == ObjectiveKind.Supply) move = goal; // walk onto the item / crate
                     else if (threat.sqrMagnitude > 0.0004f) move = BestEscape(p, lastMove, od.TargetLocal, r * 0.8f);
@@ -290,6 +327,30 @@ public class PlaytestBot
                     }
                     if (detourT > 0f) { detourT -= Time.unscaledDeltaTime * ts; move = (detour + goal * 0.3f).normalized; }
                     if (strat == "kite" || strat == "human") lastMove = move.sqrMagnitude > 0.01f ? move : lastMove;
+                }
+
+                if (boss && (strat == "kite" || strat == "human"))
+                {
+                    Vector3 bp = boss.transform.position;
+                    Vector3 to = p - bp; to.y = 0f;
+                    var ph = boss.CurrentPhase;
+                    float react = strat == "human" ? 0.35f : 0.15f;
+                    if ((ph == ButcherZombie.Phase.ChargeWind && boss.PhaseTime > react) || ph == ButcherZombie.Phase.Charge)
+                    {
+                        // Side-step out of the charge line.
+                        Vector3 cd = boss.ChargeDirection;
+                        float along = Vector3.Dot(to, cd);
+                        Vector3 perp = to - cd * along;
+                        if (along > -2f && along < boss.ChargeLength + 3f && perp.magnitude < 4.5f)
+                            move = perp.sqrMagnitude > 0.04f ? perp.normalized : Vector3.Cross(Vector3.up, cd);
+                    }
+                    else if (ph == ButcherZombie.Phase.SlamWind && boss.PhaseTime > react * 0.6f && to.magnitude < boss.slamRadius + 1.5f)
+                        move = to.normalized;
+                    else if (!boss.IsWeak && to.magnitude < 7f && !(od && od.HasActive))
+                        move = (to.normalized + move * 0.4f).normalized;
+                    lastMove = move.sqrMagnitude > 0.01f ? move : lastMove;
+                    // Winded boss: everything into it.
+                    if (boss.IsWeak && (bp - p).sqrMagnitude < 20f * 20f) nearest = boss;
                 }
 
                 var keys = new List<Key>();
@@ -311,7 +372,7 @@ public class PlaytestBot
                 else if (strat == "human")
                 {
                     // Reaction time on target switches + small aim error.
-                    if (nearest && near < 15f && !w.IsReloading)
+                    if (nearest && (near < 15f || nearest == boss) && !w.IsReloading)
                     {
                         if (nearest != aimTarget) { aimTarget = nearest; targetSince = gm.GameTime; aimJitter = new Vector3((float)rng.NextDouble() - 0.5f, 0f, (float)rng.NextDouble() - 0.5f) * 0.9f; }
                         if (gm.GameTime - targetSince > 0.22f)
@@ -377,7 +438,12 @@ public class PlaytestBot
             $"acc={(shotsFired > 0 ? 100f * hits / shotsFired : 0):0}% hurts={hurts} firstHurt={firstHurt:0}s packs={packs} comboBreaks={breaks} " +
             $"bestCombo={gm.BestCombo} reloads={reloads} perfect={perfect} jams={jams} vaults={vaults} maxAlive={maxAlive} hitches={hitchCount} " +
             $"level={Progression.I.Level} picks={Upgrades.I.Picks} specials={gm.SpecialKills} blocks={blocks} bombs={bombs} barrels={barrels} grabs={grabs} snaps={snaps} " +
-            $"objIssued={objIssued} objDone={objDone} helis={helis} objAvg={(objDone > 0 ? objTimeSum / objDone : 0):0}s";
+            $"objIssued={objIssued} objDone={objDone} helis={helis} objAvg={(objDone > 0 ? objTimeSum / objDone : 0):0}s " +
+            $"boss={(bossDir ? bossDir.BossesSpawned : 0)}/{(bossDir ? bossDir.BossesDefeated : 0)} bossAt={bossSeen:0}s " +
+            $"bossFight={(bossDir && bossDir.BossesDefeated > 0 ? bossDir.LastFightTime : bossSeen >= 0f ? gm.GameTime - bossSeen : 0):0}s " +
+            $"bossHpLeft={(bossDir && bossDir.Boss && bossDir.BossAlive ? 100f * bossDir.Boss.Health / bossDir.Boss.MaxHealth : 0):0}% " +
+            $"bossHurts={(bossSeen >= 0f ? hurts - bossHurtStart : 0):0} " +
+            (bossDir && bossDir.Boss is ButcherZombie bb ? $"charges={bb.Charges} chargeHits={bb.ChargeHits} slamHits={bb.SlamHits} shoves={bb.ShoveHits}" : "");
         log.AppendLine(summary);
         log.AppendLine("cards: " + cardLog);
         log.AppendLine("objectives: " + objLog);

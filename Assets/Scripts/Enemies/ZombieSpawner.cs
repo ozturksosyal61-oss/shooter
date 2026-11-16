@@ -13,6 +13,10 @@ public class ZombieSpawner : MonoBehaviour
     public Zombie shieldPrefab;
     public Zombie bombPrefab;
     public Zombie tonguePrefab;
+    [Header("Boss")]
+    public Zombie bossPrefab;
+    public float bossSpeed = 2.3f;
+    public float bossDamageMul = 1.6f;
     public int specialPrewarm = 3;
     public float shieldHealthMul = 8f, bombHealthMul = 1.3f, tongueHealthMul = 2.4f;
     public float shieldSpeed = 1.25f, bombSpeed = 2f, tongueSpeed = 2.1f;
@@ -26,7 +30,7 @@ public class ZombieSpawner : MonoBehaviour
     public Vector2 walkerSpeed = new Vector2(1.7f, 2.5f);
     public Vector2 runnerSpeed = new Vector2(3.6f, 4.4f);
 
-    Pool<Zombie> pool, shieldPool, bombPool, tonguePool;
+    Pool<Zombie> pool, shieldPool, bombPool, tonguePool, bossPool;
     float timer = 1f;
     Camera cam;
     Vector3 lastPlayerPos, heading;
@@ -41,6 +45,7 @@ public class ZombieSpawner : MonoBehaviour
         if (shieldPrefab) shieldPool = new Pool<Zombie>(shieldPrefab, transform, specialPrewarm);
         if (bombPrefab) bombPool = new Pool<Zombie>(bombPrefab, transform, specialPrewarm);
         if (tonguePrefab) tonguePool = new Pool<Zombie>(tonguePrefab, transform, specialPrewarm);
+        if (bossPrefab) bossPool = new Pool<Zombie>(bossPrefab, transform, 1);
     }
 
     void Update()
@@ -65,10 +70,14 @@ public class ZombieSpawner : MonoBehaviour
         if (timer > 0f) return;
         var wp = waves ? waves.Params : Difficulty.ForWave(1);
         float pressure = ObjectiveDirector.I ? ObjectiveDirector.I.SpawnPressure : 1f;
+        var boss = BossDirector.I;
+        // Boss fight: far fewer ordinary zombies.
+        if (boss) pressure *= boss.SpawnIntervalMul;
+        int maxAlive = boss ? Mathf.Max(4, Mathf.RoundToInt(wp.maxAlive * boss.AliveMul)) : wp.maxAlive;
         timer = wp.spawnInterval * pressure * Random.Range(0.7f, 1.3f);
         int burst = wp.burst + (Random.value < 0.3f ? 1 : 0);
 
-        for (int i = 0; i < burst && Zombie.Active.Count < wp.maxAlive; i++)
+        for (int i = 0; i < burst && Zombie.Active.Count < maxAlive; i++)
         {
             if (!TryFindSpawnPoint(player.position, out var pos)) break;
             if (Random.value < wp.specialChance && TrySpawnSpecial(PickSpecial(wp), pos, wp) != null) continue;
@@ -109,6 +118,15 @@ public class ZombieSpawner : MonoBehaviour
         return z;
     }
 
+    /// <summary>Spawns the boss (one at a time) with wave-scaled health (<see cref="BossRules.Health"/>).</summary>
+    public Zombie SpawnBoss(Vector3 pos, WaveParams wp, int bossIndex)
+    {
+        if (bossPool == null) return null;
+        var z = bossPool.Get();
+        z.Spawn(pos, BossRules.Health(baseHealth, wp, bossIndex), bossSpeed, wp.contactDamage * bossDamageMul, false, bossPool);
+        return z;
+    }
+
     public Zombie SpawnSpecial(ZombieKind kind, Vector3 pos) =>
         TrySpawnSpecial(kind, pos, WaveDirector.I ? WaveDirector.I.Params : Difficulty.ForWave(1));
 
@@ -118,6 +136,7 @@ public class ZombieSpawner : MonoBehaviour
         for (int i = Zombie.Active.Count - 1; i >= 0; i--)
         {
             var z = Zombie.Active[i];
+            if (z.kind == ZombieKind.Boss) continue; // the boss catches up instead
             Vector3 d = z.transform.position - playerPos; d.y = 0f;
             if (d.sqrMagnitude > max) z.Despawn();
         }

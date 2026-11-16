@@ -229,6 +229,7 @@ MonoBehaviour:
   turnSpeed: 300
   score: 30
   xp: 5
+  aimBias: 0
   runDistance: 6
   runSpeedMul: 1.7
   triggerDistance: 2

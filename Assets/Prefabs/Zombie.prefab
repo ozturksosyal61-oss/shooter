@@ -138,6 +138,7 @@ MonoBehaviour:
   turnSpeed: 300
   score: 10
   xp: 1
+  aimBias: 0
 --- !u!1001 &7696287813222742639
 PrefabInstance:
   m_ObjectHideFlags: 0

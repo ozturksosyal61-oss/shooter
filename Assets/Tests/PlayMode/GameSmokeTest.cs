@@ -508,6 +508,166 @@ public class GameSmokeTest
     }
 
     [UnityTest, Timeout(300000)]
+    public IEnumerator BossButcher()
+    {
+        GameManager.TimeScale = 2f;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        WaveDirector.I.enabled = false; // no regular spawns
+        var p = gm.player;
+        var bd = BossDirector.I;
+        Assert.NotNull(bd, "BossDirector in the scene");
+        Assert.NotNull(PropTosser.I, "PropTosser in the scene");
+        var spawner = Object.FindAnyObjectByType<ZombieSpawner>();
+        var heard = new System.Collections.Generic.List<SfxId>();
+        System.Action<SfxId, Vector3> h = (id, pos) => heard.Add(id);
+        GameAudio.OnSfx += h;
+        var phases = new System.Collections.Generic.HashSet<ButcherZombie.Phase>();
+        try
+        {
+            Vector3 home = OpenArea(p);
+            yield return null;
+            var boss = bd.Spawn(6, ClearSpot(home, 13f)) as ButcherZombie;
+            Assert.NotNull(boss, "Kasap spawned");
+            boss.PhaseChanged += ph => phases.Add(ph);
+            Assert.AreEqual(ZombieKind.Boss, boss.Kind);
+            Assert.IsTrue(bd.HoldsWave, "boss wave holds while the boss lives");
+            Assert.Greater(bd.SpawnIntervalMul, 1f, "ordinary spawning thinned out");
+            Assert.IsTrue(gm.cameraRig.IsFocusing, "intro camera swing");
+            Assert.IsTrue(MusicDirector.I.BossLayerOn, "boss music layer");
+            Assert.Greater(boss.MaxHealth, 2000f);
+            Assert.AreEqual(2, boss.eyes.Length, "two eye glows");
+            yield return WaitUntil(() => boss.IsWalking && boss.CurrentPhase == ButcherZombie.Phase.Walk, 10f);
+            yield return Wait(0.5f);
+            var hud = Object.FindAnyObjectByType<BossHUD>();
+            Assert.NotNull(hud);
+            Assert.IsTrue(hud.BarVisible, "boss health bar shown");
+            Assert.IsTrue(heard.Contains(SfxId.BossRoar), "spawn roar");
+
+            // --- Natural charge at range: wind-up (strip) -> charge -> winded (2x damage).
+            p.Heal(1000f);
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.ChargeWind, 8f);
+            Assert.AreEqual(ButcherZombie.Phase.ChargeWind, boss.CurrentPhase, "charges a player at range");
+            Assert.IsTrue(boss.chargeStrip.gameObject.activeSelf, "red strip telegraph");
+            yield return WaitUntil(() => boss.IsWeak, 8f);
+            Assert.IsTrue(phases.Contains(ButcherZombie.Phase.Charge), "charged");
+            Assert.IsTrue(boss.IsWeak, "winded after the charge");
+            yield return null;
+            Assert.IsTrue(hud.WeakShown, "ZAYIF! tag");
+            float hp0 = boss.Health;
+            boss.TakeHit(50f, false, Vector3.forward, boss.AimPoint);
+            Assert.AreEqual(100f, hp0 - boss.Health, 0.5f, "double damage while winded");
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk, 10f);
+            hp0 = boss.Health;
+            boss.TakeHit(50f, false, Vector3.forward, boss.AimPoint);
+            Assert.AreEqual(50f, hp0 - boss.Health, 0.5f, "normal damage otherwise");
+
+            // --- Smashes low obstacles in its path and flings zombies.
+            int tossed0 = PropTosser.I.TotalTossed;
+            Collider prop = null;
+            foreach (var c in Physics.OverlapSphere(boss.transform.position, 35f, GameLayers.VaultableMask))
+                if (c.GetComponentInParent<EnvProp>() && !c.GetComponentInParent<ExplosiveBarrel>()) { prop = c; break; }
+            if (prop)
+            {
+                Vector3 pp = prop.bounds.center; pp.y = 0f;
+                Vector3 dir = Vector3.forward;
+                for (int i = 0; i < 12; i++)
+                {
+                    dir = Quaternion.Euler(0f, i * 30f, 0f) * Vector3.forward;
+                    if (!Physics.CheckSphere(pp - dir * 7f + Vector3.up * 1.5f, 1.3f, GameLayers.BlockerMask) &&
+                        !Physics.SphereCast(pp - dir * 7f + Vector3.up, 1f, dir, out _, 6f, GameLayers.BlockerMask)) break;
+                }
+                boss.transform.position = pp - dir * 7f;
+                Physics.SyncTransforms();
+                var z = spawner.TrySpawnSpecial(ZombieKind.Bomb, pp - dir * 3.5f, Difficulty.ForWave(1));
+                boss.ForceCharge(pp + dir * 4f);
+                yield return WaitUntil(() => boss.CurrentPhase != ButcherZombie.Phase.ChargeWind && boss.CurrentPhase != ButcherZombie.Phase.Charge, 8f);
+                Assert.Greater(PropTosser.I.TotalTossed, tossed0, "charge flings the car / crate in its way");
+                Debug.Log($"SMOKE: boss tossed {PropTosser.I.TotalTossed - tossed0} props, zombie hit={(z ? (!z.Damageable || z.Health < z.MaxHealth).ToString() : "-")}");
+                yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk, 10f);
+            }
+            else Debug.Log("SMOKE: no vaultable prop near the boss, toss check skipped");
+
+            // --- Charging into a building stuns it.
+            Collider wall = null;
+            Vector3 start = Vector3.zero, wc = Vector3.zero;
+            foreach (var c in Physics.OverlapSphere(boss.transform.position, 45f, GameLayers.BlockerMask))
+            {
+                var ep = c.GetComponentInParent<EnvProp>();
+                if ((ep && ep.radius < boss.wallMinRadius) || c.bounds.size.x < 4f || c.bounds.size.z < 4f) continue;
+                wc = c.bounds.center; wc.y = 0f;
+                for (int i = 0; i < 16 && !wall; i++)
+                {
+                    Vector3 d = Quaternion.Euler(0f, i * 22.5f, 0f) * Vector3.forward;
+                    Vector3 s0 = c.ClosestPoint(wc + d * 30f + Vector3.up); s0.y = 0f;
+                    s0 += d * 8f;
+                    if (Physics.CheckSphere(s0 + Vector3.up * 1.5f, 1.4f, GameLayers.ObstacleMask)) continue;
+                    if (!Physics.SphereCast(s0 + Vector3.up, 1f, -d, out var hh, 9f, GameLayers.ObstacleMask) || hh.collider != c) continue;
+                    start = s0;
+                    wc = s0 - d * 12f; // charge straight back into the wall
+                    wall = c;
+                }
+                if (wall) break;
+            }
+            Assert.NotNull(wall, "a building with a clear run-up near the boss");
+            boss.transform.position = start;
+            Physics.SyncTransforms();
+            boss.ForceCharge(wc);
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Stunned, 8f);
+            Assert.AreEqual(ButcherZombie.Phase.Stunned, boss.CurrentPhase, "stunned by the wall");
+            Assert.IsTrue(boss.IsWeak);
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk, 12f);
+
+            // --- Ground slam: hurts inside the ring, leaving the ring dodges it.
+            Teleport(p, boss.transform.position + boss.transform.forward * 3f);
+            p.Heal(1000f);
+            float php = p.Health;
+            boss.ForceSlam();
+            Assert.AreEqual(ButcherZombie.Phase.SlamWind, boss.CurrentPhase);
+            Assert.IsTrue(boss.slamRing.gameObject.activeSelf, "expanding ring telegraph");
+            yield return WaitUntil(() => boss.CurrentPhase != ButcherZombie.Phase.SlamWind, 5f);
+            Assert.Less(p.Health, php, "slam hits a player inside the ring");
+            Assert.IsTrue(heard.Contains(SfxId.BossSlam));
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk, 5f);
+            yield return Wait(0.8f); // invulnerability window
+            Teleport(p, boss.transform.position + boss.transform.forward * 3f);
+            p.Heal(1000f);
+            php = p.Health;
+            boss.ForceSlam();
+            yield return Wait(0.2f);
+            Vector3 away = p.transform.position - boss.transform.position; away.y = 0f;
+            Teleport(p, boss.transform.position + away.normalized * (boss.slamRadius + 3f));
+            yield return WaitUntil(() => boss.CurrentPhase != ButcherZombie.Phase.SlamWind, 5f);
+            Assert.AreEqual(php, p.Health, 0.01f, "leaving the ring dodges the slam");
+
+            // --- Rage under 50 %.
+            Assert.IsFalse(boss.Enraged);
+            boss.TakeHit(boss.Health - boss.MaxHealth * 0.45f, false, Vector3.forward, boss.AimPoint, true);
+            yield return null;
+            yield return null;
+            Assert.IsTrue(boss.Enraged, "enraged below half health");
+
+            // --- Kill: reward, slow-mo, epic card pick.
+            int score0 = gm.Score;
+            boss.TakeHit(boss.Health + 10f, false, Vector3.forward, boss.AimPoint, true);
+            Assert.AreEqual(1, bd.BossesDefeated);
+            Assert.IsFalse(bd.HoldsWave, "wave released after the kill");
+            Assert.Greater(gm.Score - score0, 2000, "big bonus");
+            Assert.Less(Time.timeScale, GameManager.TimeScale * 0.5f, "slow motion on the kill");
+            Assert.IsFalse(MusicDirector.I.BossLayerOn);
+            yield return WaitUntil(() => CardPicker.I.IsOpen, 8f);
+            Assert.IsTrue(CardPicker.I.IsOpen, "boss reward card pick");
+            Assert.AreEqual(Rarity.Epic, Upgrades.Get(CardPicker.I.OfferAt(0)).rarity, "guaranteed epic");
+            Assert.AreEqual(Loc.T("cards.boss"), CardPicker.I.header.text);
+            Debug.Log($"SMOKE: boss phases {string.Join(",", phases)} sfx boss={heard.FindAll(x => x >= SfxId.BossRoar).Count}");
+        }
+        finally
+        {
+            GameAudio.OnSfx -= h;
+        }
+    }
+
+    [UnityTest, Timeout(300000)]
     public IEnumerator CityAndObjectives()
     {
         GameManager.TimeScale = 2f;
@@ -825,6 +985,35 @@ public class GameSmokeTest
         yield return Wait(0.5f);
         Shot(Path.Combine(dir, "special_tongue2.png"));
         Debug.Log("CAPTURE: specials " + dir);
+    }
+
+    /// <summary>[Explicit] Kasap: close-up (feet/eyes), charge telegraph in game view, winded tint. CAPTURE_DIR.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureBoss()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        WaveDirector.I.enabled = false;
+        Vector3 home = OpenArea(gm.player);
+        yield return null;
+        var boss = BossDirector.I.Spawn(6, home + new Vector3(0f, 0f, 9f)) as ButcherZombie;
+        yield return WaitUntil(() => boss.IsWalking && boss.CurrentPhase == ButcherZombie.Phase.Walk, 10f);
+        yield return null;
+        Vector3 bp = boss.transform.position;
+        ShotFrom(Path.Combine(dir, "boss_close.png"), bp + new Vector3(2.5f, 2.6f, -7.5f), bp + Vector3.up * 2.3f);
+        gm.player.Heal(1000f);
+        boss.ForceCharge(gm.player.transform.position);
+        yield return Wait(0.6f);
+        string St() => $"phase={boss.CurrentPhase} t={boss.PhaseTime:0.00} strip={boss.chargeStrip.gameObject.activeSelf} stripPos={boss.chargeStrip.position} scale={boss.chargeStrip.lossyScale} boss={boss.transform.position} player={gm.player.transform.position} ts={Time.timeScale:0.00} game={gm.GameTime:0.0}";
+        Debug.Log("CAPTURE: charge " + St());
+        Shot(Path.Combine(dir, "boss_charge.png"));
+        yield return WaitUntil(() => boss.IsWeak, 6f);
+        yield return Wait(0.3f);
+        Debug.Log("CAPTURE: weak " + St());
+        Shot(Path.Combine(dir, "boss_weak.png"));
+        Debug.Log("CAPTURE: boss " + dir);
     }
 
     /// <summary>Renders gameplay frames to PNG. Run with -testFilter GameSmokeTest.CaptureScreens and CAPTURE_DIR set.</summary>

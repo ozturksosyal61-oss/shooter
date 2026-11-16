@@ -204,6 +204,11 @@ public static partial class GameSceneBuilder
         E(SfxId.ObjectiveDone, "objective_done", 0.9f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Medium),
         E(SfxId.ObjectiveBig, "objective_big", 1f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Heavy),
         E(SfxId.Helicopter, "heli_rotor", 0.85f, 2, spatial: 0.6f, minInterval: 0.5f, pitchVar: 0.02f, volVar: 0f, maxDist: 80f),
+        // F9 boss (Kasap): heard from far away, rumble = heavy haptic + music duck.
+        E(SfxId.BossRoar, "boss_roar", 1f, 2, spatial: 0.3f, minInterval: 0.3f, pitchVar: 0.04f, duck: true, haptic: true, hk: Haptics.Kind.Heavy, maxDist: 90f),
+        E(SfxId.BossStep, "boss_step", 0.8f, 3, spatial: 0.6f, minInterval: 0.12f, pitchVar: 0.06f, haptic: true, hk: Haptics.Kind.Light, maxDist: 60f),
+        E(SfxId.BossCharge, "boss_charge", 1f, 1, spatial: 0.4f, minInterval: 0.3f, pitchVar: 0.03f, haptic: true, hk: Haptics.Kind.Medium, maxDist: 80f),
+        E(SfxId.BossSlam, "boss_slam", 1f, 3, spatial: 0.5f, minInterval: 0.06f, pitchVar: 0.05f, duck: true, haptic: true, hk: Haptics.Kind.Heavy, maxDist: 80f),
     };
 
     // ---------------------------------------------------------------- scene objects
@@ -240,6 +245,7 @@ public static partial class GameSceneBuilder
         }
         md.calm = Layer("Calm", "music_calm", out md.calmFilter);
         md.intense = Layer("Intense", "music_intense", out md.intenseFilter);
+        md.boss = Layer("Boss", "music_boss", out md.bossFilter);
 
         var listener = new GameObject("AudioListener");
         listener.AddComponent<AudioListener>();

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum ZombieKind { Walker, Runner, Shield, Bomb, Tongue }
+public enum ZombieKind { Walker, Runner, Shield, Bomb, Tongue, Boss }
 
 /// <summary>
 /// Pooled, animated zombie. Rises from the ground screaming, walks/runs toward the player and
@@ -44,6 +44,8 @@ public class Zombie : MonoBehaviour
     public float turnSpeed = 300f;
     public int score = 10;
     public int xp = 1;
+    [Tooltip("Metres subtracted from the distance when picking the nearest target (big bosses get aimed at first).")]
+    public float aimBias;
 
     protected static readonly int Gait = Animator.StringToHash("Gait");
     protected static readonly int AnimSpeed = Animator.StringToHash("AnimSpeed");
@@ -90,6 +92,8 @@ public class Zombie : MonoBehaviour
     public bool Targetable => state != State.Dying && (state != State.Rising || stateT > 0.35f);
     /// <summary>Can take damage (explosions also hit zombies that are still rising).</summary>
     public bool Damageable => state != State.Dying;
+    /// <summary>Out of the ground and acting (not rising, not dying).</summary>
+    public bool IsWalking => state == State.Walking;
     public bool IsRunner => runner;
     public bool IsSpecial => kind >= ZombieKind.Shield;
     public ZombieKind Kind => runner ? ZombieKind.Runner : kind;
@@ -150,7 +154,8 @@ public class Zombie : MonoBehaviour
             var z = Active[i];
             if (!z.Targetable) continue;
             Vector3 d = z.transform.position - p; d.y = 0f;
-            float sq = d.sqrMagnitude;
+            float m = Mathf.Max(0f, d.magnitude - z.aimBias);
+            float sq = m * m;
             if (sq < bestD) { bestD = sq; best = z; }
         }
         return best;
@@ -416,6 +421,7 @@ public class Zombie : MonoBehaviour
         if (state == State.Dying) return true;
         dir.y = 0f;
         if (!explosive && Deflects(dir, point)) return false;
+        amount *= DamageTakenMul;
         hp -= amount;
         flash.Flash(0.07f);
         knock = Vector3.ClampMagnitude(knock + dir * (crit ? 4.5f : 3f) * KnockScale, 7f);
@@ -436,6 +442,8 @@ public class Zombie : MonoBehaviour
     }
 
     protected virtual float KnockScale => 1f;
+    /// <summary>Incoming damage multiplier (a winded boss takes double).</summary>
+    protected virtual float DamageTakenMul => 1f;
     protected virtual bool Deflects(Vector3 dir, Vector3 point) => false;
     protected virtual void OnDamaged(float amount, bool explosive) { }
 

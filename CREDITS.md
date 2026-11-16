@@ -46,8 +46,11 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | `SFX/grenade_throw`, `level_up`, `card_pick` | **SYNTH** — band-passed whoosh / bell arpeggio / whoosh + ding | this project | — |
 | `SFX/barrel_explode` | **DERIVED** — `explosion` at 0.85x + metallic clang partials | this project (from CC0) | CC0 |
 | `SFX/radio_static_01..02`, `objective_tick`, `objective_done`, `objective_big`, `heli_rotor` | **SYNTH** — band-limited radio crackle + squelch click + roger beep / double blip / brassy triad stingers / blade-pass thumps on filtered noise (`Tools/synth_objectives.py`) | this project | — |
+| `SFX/boss_roar_01..02`, `boss_charge`, `boss_slam_01..02` | **DERIVED** — `zombie_scream_*` slowed to ~0.55x / `explosion` at 0.6x + synth growl, sub-bass drop, debris crackle (`Tools/synth_boss.py`) | this project (from CC0) | CC0 |
+| `SFX/boss_step_01..03` | **SYNTH** — low pitched-down thump + gravel noise (`Tools/synth_boss.py`) | this project | — |
 | `Music/music_calm` | 60 s seamless crossfaded excerpt of *Post Apocalyptic Wastelands [Loop Ready]* — [Horror Atmosphere](https://opengameart.org/content/horror-atmosphere) | Juhani Junkala (SubspaceAudio) | CC0 |
 | `Music/music_intense` | [Fast fight / battle music (looped)](https://opengameart.org/content/fast-fight-battle-music-looped) | xcvg | CC0 |
+| `Music/music_boss` | **SYNTH** — 19.2 s seamless 100 BPM loop: war drums, taiko, metal hits, low drone (`Tools/synth_boss.py`) | this project | — |
 
 ## 3D models
 | Asset | Source | Author | License |
@@ -63,6 +66,7 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | Gas station, bus stop, fountain, signal tower, helicopter, flare / supply crates | Built from primitives in `GameSceneBuilder.City.cs` | this project | — |
 | `Assets/Art/Weapons/Rifle` | Assault Rifle ([poly.pizza/m/Bgvuu4CUMV](https://poly.pizza/m/Bgvuu4CUMV), Ultimate Gun Pack) | Quaternius | CC0 |
 | `Assets/Art/Characters/{ShieldZombie,BombZombie,TongueZombie}` | Special zombie models supplied by the project owner (originals in `_mixamo/Source~/`), decimated to ~20k tris with `Tools/blender_export_mixamo.py`; rig + animations (Mutant Walking/Punch/Roaring/Dying, Drunk Walk, Zombie Running/Agonizing, Sneaking Forward, Frisbee Throw, Pulling A Rope) via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
+| `Assets/Art/Characters/Kasap` | Boss "Kasap" model supplied by the project owner (original in `_mixamo/Source~/kasap.glb`), decimated + re-baked with `Tools/blender_export_mixamo.py`; rig + animations (Mutant Walking / Run / Roaring / Jump Attack / Breathing Idle / Dying) via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
 | `Assets/Art/Characters/*` | Soldier / Zombie models supplied by the project owner; rig + animations via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
 
 ## UI — `Assets/Art/UI`

@@ -25,6 +25,11 @@ public static class Objectives
     public const int FirstWave = 2;
     public const int EveryWaves = 3;
     public const int PerHelicopter = 3;
+    /// <summary>The first helicopter comes sooner (~4th minute): after this many tasks.</summary>
+    public const int FirstHelicopterAfter = 2;
+
+    /// <summary>Tasks needed before the next landing zone (<paramref name="helicopters"/> already flown).</summary>
+    public static int TasksForHelicopter(int helicopters) => helicopters == 0 ? FirstHelicopterAfter : PerHelicopter;
 
     public const float FlareRadius = 1.8f;
     public const float SupplyRadius = 2.4f, SupplyHold = 2f;
@@ -33,7 +38,7 @@ public static class Objectives
     /// <summary>The helicopter shows up this long before the hold completes.</summary>
     public const float HeliArriveBefore = 9f;
     /// <summary>Spawn interval multiplier while the player is holding a tower / landing zone.</summary>
-    public const float HoldPressure = 0.75f;
+    public const float HoldPressure = 0.85f;
     /// <summary>Supply crate: full heal below this health fraction, otherwise a card pick.</summary>
     public const float SupplyHealBelow = 0.6f;
 
@@ -102,15 +107,15 @@ public interface IObjectivePlan
 }
 
 /// <summary>
-/// Endless mode: flare / tower / supply in a shuffled bag, one every 3 waves; after 3 of them the helicopter landing
-/// zone appears right away; after the helicopter the cycle starts over.
+/// Endless mode: flare / tower / supply in a shuffled bag, one every 3 waves; after 2 of them (the first time, then 3)
+/// the helicopter landing zone appears right away; after the helicopter the cycle starts over.
 /// </summary>
 public class EndlessPlan : IObjectivePlan
 {
     readonly List<ObjectiveKind> bag = new List<ObjectiveKind>(3);
     public int DoneInCycle { get; private set; }
     public int Helicopters { get; private set; }
-    public bool HelicopterDue => DoneInCycle >= Objectives.PerHelicopter;
+    public bool HelicopterDue => DoneInCycle >= Objectives.TasksForHelicopter(Helicopters);
     public bool Finished => false;
 
     public bool ShouldIssue(int wave, int lastIssuedWave, bool hasActive) =>

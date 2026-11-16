@@ -37,9 +37,11 @@ public class DifficultyTests
         Assert.AreEqual(0f, w1.runnerChance, 1e-4f);
 
         var w5 = Difficulty.ForWave(5);
-        Assert.AreEqual(Difficulty.BaseAlive + 4 * Difficulty.AlivePerWave, w5.maxAlive);
+        Assert.AreEqual(Difficulty.BaseAlive + Mathf.RoundToInt(Difficulty.AlivePerWave * Difficulty.DensityStep(5)), w5.maxAlive);
+        Assert.Less(Difficulty.DensityStep(5), 4f, "waves 4-6 ramp slower");
+        Assert.AreEqual(6f, Difficulty.DensityStep(7), 1e-4f, "back on the curve from wave 7");
         Assert.AreEqual(Difficulty.BaseDamage + 4 * Difficulty.DamagePerWave, w5.contactDamage, 1e-4f);
-        Assert.AreEqual(Difficulty.BaseInterval * Mathf.Pow(Difficulty.IntervalDecay, 4), w5.spawnInterval, 1e-4f);
+        Assert.AreEqual(Difficulty.BaseInterval * Mathf.Pow(Difficulty.IntervalDecay, Difficulty.DensityStep(5)), w5.spawnInterval, 1e-4f);
     }
 
     [Test]
@@ -446,22 +448,25 @@ public class ObjectiveTests
     }
 
     [Test]
-    public void EndlessPlanCyclesThreeThenHelicopter()
+    public void EndlessPlanFirstHelicopterAfterTwoThenThree()
     {
         var plan = new EndlessPlan();
         var rng = new System.Random(3);
-        for (int cycle = 0; cycle < 2; cycle++)
+        var firstBag = new HashSet<ObjectiveKind>();
+        Assert.AreEqual(2, Objectives.TasksForHelicopter(0));
+        Assert.AreEqual(3, Objectives.TasksForHelicopter(1));
+        for (int cycle = 0; cycle < 3; cycle++)
         {
-            var seen = new HashSet<ObjectiveKind>();
-            for (int i = 0; i < 3; i++)
+            int need = cycle == 0 ? 2 : 3;
+            for (int i = 0; i < need; i++)
             {
                 Assert.IsFalse(plan.HelicopterDue);
                 var s = plan.Next(rng);
                 Assert.AreNotEqual(ObjectiveKind.Helicopter, s.kind);
-                Assert.IsTrue(seen.Add(s.kind), "each of flare / tower / supply once per cycle");
+                if (firstBag.Count < 3) Assert.IsTrue(firstBag.Add(s.kind), "the bag deals flare / tower / supply once each");
                 plan.Completed(s);
             }
-            Assert.IsTrue(plan.HelicopterDue);
+            Assert.IsTrue(plan.HelicopterDue, $"helicopter due after {need} tasks (cycle {cycle})");
             Assert.IsTrue(plan.ShouldIssue(1, 99, false), "helicopter comes right away");
             var h = plan.Next(rng);
             Assert.AreEqual(ObjectiveKind.Helicopter, h.kind);
@@ -470,6 +475,60 @@ public class ObjectiveTests
             plan.Completed(h);
             Assert.AreEqual(cycle + 1, plan.Helicopters);
             Assert.AreEqual(0, plan.DoneInCycle);
+        }
+    }
+
+    [Test]
+    public void BossWavesHealthAndReward()
+    {
+        for (int n = 1; n < 6; n++) Assert.IsFalse(BossRules.IsBossWave(n), $"no boss before wave 6 ({n})");
+        Assert.IsTrue(BossRules.IsBossWave(6));
+        Assert.IsFalse(BossRules.IsBossWave(7));
+        Assert.IsTrue(BossRules.IsBossWave(11));
+        Assert.IsTrue(BossRules.IsBossWave(16));
+        Assert.IsFalse(BossRules.IsBossWave(15));
+        Assert.AreEqual(0, BossRules.BossIndex(6));
+        Assert.AreEqual(2, BossRules.BossIndex(16));
+
+        float h10 = BossRules.Health(70f, Difficulty.ForWave(6), 0);
+        float h15 = BossRules.Health(70f, Difficulty.ForWave(11), 1);
+        Assert.Greater(h10, 70f * 20f, "a boss is a long fight");
+        Assert.Greater(h15, h10 * 1.3f, "later bosses are tougher");
+
+        Assert.IsFalse(BossRules.Enraged(0.51f));
+        Assert.IsTrue(BossRules.Enraged(0.49f));
+        Assert.AreEqual(40f, BossRules.DamageTaken(20f, true), 1e-4f);
+        Assert.AreEqual(20f, BossRules.DamageTaken(20f, false), 1e-4f);
+
+        BossRules.Reward(6, 0, out int s0, out int x0);
+        BossRules.Reward(11, 1, out int s1, out int x1);
+        Assert.Greater(s0, 1000);
+        Assert.Greater(s1, s0);
+        Assert.Greater(x1, x0);
+        Assert.Less(BossRules.AliveMul, 1f);
+        Assert.Greater(BossRules.SpawnIntervalMul, 1f);
+    }
+
+    [Test]
+    public void BossRewardGuaranteesEpicCard()
+    {
+        var into = new List<CardId>(); var scratch = new List<int>();
+        var rng = new System.Random(11);
+        Func<float> r = () => (float)rng.NextDouble();
+        var levels = new int[System.Enum.GetValues(typeof(CardId)).Length];
+        for (int k = 0; k < 300; k++)
+        {
+            Upgrades.Offer(levels, 3, r, into, scratch, false, Rarity.Epic);
+            Assert.AreEqual(3, into.Count);
+            Assert.AreEqual(3, new HashSet<CardId>(into).Count, "no duplicates");
+            Assert.AreEqual(Rarity.Epic, Upgrades.Get(into[0]).rarity, "epic card first");
+        }
+        // Every epic maxed: falls back to a rare.
+        foreach (var c in Upgrades.Cards) if (c.rarity == Rarity.Epic) levels[(int)c.id] = c.maxLevel;
+        for (int k = 0; k < 100; k++)
+        {
+            Upgrades.Offer(levels, 3, r, into, scratch, false, Rarity.Epic);
+            Assert.IsTrue(into.Exists(id => Upgrades.Get(id).rarity == Rarity.Rare), "rare fallback");
         }
     }
 

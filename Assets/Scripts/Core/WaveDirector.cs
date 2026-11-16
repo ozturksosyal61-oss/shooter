@@ -27,6 +27,15 @@ public class WaveDirector : MonoBehaviour
         Params = Difficulty.ForWave(1);
     }
 
+    /// <summary>Skips ahead: the breather before <paramref name="wave"/> starts now (bots / scripted scenarios).</summary>
+    public void JumpToBreakBefore(int wave)
+    {
+        Wave = Mathf.Max(0, wave - 1);
+        Params = Difficulty.ForWave(Mathf.Max(1, Wave));
+        InBreak = true;
+        PhaseTimeLeft = breakDuration;
+    }
+
     void Update()
     {
         var gm = GameManager.I;
@@ -45,6 +54,8 @@ public class WaveDirector : MonoBehaviour
         }
         else
         {
+            // Boss wave: keeps going until the boss is down.
+            if (BossDirector.I && BossDirector.I.HoldsWave) { PhaseTimeLeft = 0f; return; }
             InBreak = true;
             PhaseTimeLeft = breakDuration;
             GameAudio.Play(SfxId.WaveClear, gm ? gm.player.transform.position : Vector3.zero);

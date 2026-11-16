@@ -170,15 +170,37 @@ public class Upgrades : MonoBehaviour
     public bool CanTake(CardId id) => levels[(int)id] < Get(id).maxLevel;
 
     /// <summary>Up to <paramref name="count"/> distinct cards, rarity-weighted, among those not maxed.</summary>
-    public List<CardId> Offer(int count) =>
-        Offer(levels, count, () => UnityEngine.Random.value, offerBuffer, pickBuffer, Picks < GuaranteedDamagePicks);
+    public List<CardId> Offer(int count, Rarity guaranteeAtLeast = Rarity.Common) =>
+        Offer(levels, count, () => UnityEngine.Random.value, offerBuffer, pickBuffer, Picks < GuaranteedDamagePicks, guaranteeAtLeast);
 
     public static float RarityWeightOf(Rarity r) => RarityWeight[(int)r];
 
     /// <summary>Pure offer logic (unit-tested): <paramref name="rand01"/> supplies [0,1) values.</summary>
-    public static List<CardId> Offer(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch, bool guaranteeDamage = false)
+    public static List<CardId> Offer(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch, bool guaranteeDamage = false,
+        Rarity guaranteeAtLeast = Rarity.Common)
     {
         Draw(levels, count, rand01, into, scratch);
+        if (guaranteeAtLeast > Rarity.Common && into.Count > 0)
+        {
+            // Boss reward: at least one card of the given rarity (falls back to the next lower one if all are maxed).
+            for (var r = guaranteeAtLeast; r > Rarity.Common; r--)
+            {
+                int at = into.FindIndex(id => Get(id).rarity >= r);
+                if (at >= 0)
+                {
+                    // Already offered: show it first.
+                    var c = into[at]; into.RemoveAt(at); into.Insert(0, c);
+                    break;
+                }
+                var keep = into[0];
+                into.RemoveAt(0);
+                int before = into.Count;
+                DrawWhere(levels, rand01, into, scratch, i => Cards[i].rarity >= r);
+                if (into.Count > before) { into.Insert(0, into[into.Count - 1]); into.RemoveAt(into.Count - 1); break; }
+                into.Insert(0, keep);
+            }
+            return into;
+        }
         if (guaranteeDamage && into.Count > 0)
         {
             bool has = false;
@@ -196,11 +218,14 @@ public class Upgrades : MonoBehaviour
         return into;
     }
 
-    static void DrawDamage(int[] levels, Func<float> rand01, List<CardId> into, List<int> scratch)
+    static void DrawDamage(int[] levels, Func<float> rand01, List<CardId> into, List<int> scratch) =>
+        DrawWhere(levels, rand01, into, scratch, i => IsDamageCard(Cards[i].id));
+
+    static void DrawWhere(int[] levels, Func<float> rand01, List<CardId> into, List<int> scratch, Func<int, bool> filter)
     {
         scratch.Clear();
         for (int i = 0; i < Cards.Length; i++)
-            if (IsDamageCard(Cards[i].id) && levels[i] < Cards[i].maxLevel && !into.Contains(Cards[i].id)) scratch.Add(i);
+            if (filter(i) && levels[i] < Cards[i].maxLevel && !into.Contains(Cards[i].id)) scratch.Add(i);
         if (scratch.Count == 0) return;
         float total = 0f;
         foreach (int i in scratch) total += RarityWeight[(int)Cards[i].rarity];

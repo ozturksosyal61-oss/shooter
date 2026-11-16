@@ -46,6 +46,8 @@ public static partial class GameSceneBuilder
         BuildGrenadePrefab(m);
         BuildZombiePrefab(m, anims);
         BuildSpecialZombiePrefabs(m, anims);
+        var boss = ImportBoss(m, t);
+        BuildBossPrefab(m, boss);
         var env = BuildEnvironmentPrefabs(m);
         var cm = CreateCityMaterials(m, t);
         var kit = BuildCityPrefabs(m, cm, env);
@@ -55,7 +57,7 @@ public static partial class GameSceneBuilder
         AssetDatabase.SaveAssets();
         BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
         AssetDatabase.SaveAssets();
-        BuildScene(scene, m, t, env, cm, kit);
+        BuildScene(scene, m, t, env, cm, kit, boss);
         AssetDatabase.SaveAssets();
         Debug.Log("BUILD: done");
     }
@@ -665,7 +667,7 @@ public static partial class GameSceneBuilder
     }
 
     // ---------------------------------------------------------------- scene
-    static void BuildScene(UnityEngine.SceneManagement.Scene scene, Mats m, Tex t, Env env, CityMats cm, CityKit kit)
+    static void BuildScene(UnityEngine.SceneManagement.Scene scene, Mats m, Tex t, Env env, CityMats cm, CityKit kit, BossAssets boss)
     {
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Exponential;
@@ -767,6 +769,7 @@ public static partial class GameSceneBuilder
         spawner.bombPrefab = Load<Zombie>("BombZombie");
         spawner.tonguePrefab = Load<Zombie>("TongueZombie");
         spawner.despawnDistance = 40f; // the wider 17.5 m view reaches ~25 m to the corners
+        BuildBossSystems(spawner);
         BuildAudio(player.transform);
         new GameObject("Progression").AddComponent<Progression>();
         var upgrades = new GameObject("Upgrades").AddComponent<Upgrades>();
@@ -777,12 +780,13 @@ public static partial class GameSceneBuilder
         BuildObjectiveScene(cm);
         var hud = BuildUI(t, out _);
         BuildObjectiveHud(hud, t);
+        BuildBossHud(hud);
 
         var warm = new GameObject("Warmup").AddComponent<Warmup>();
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })
             .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g))).ToArray();
         warm.skinnedSample = LoadGo(ZombieRigged);
-        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash, m.shieldZombie, m.bombZombie, m.tongueZombie };
+        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash, m.shieldZombie, m.bombZombie, m.tongueZombie, boss.body };
         warm.font = UIFont;
 
         var gm = new GameObject("GameManager").AddComponent<GameManager>();

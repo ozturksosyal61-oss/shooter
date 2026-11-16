@@ -139,6 +139,7 @@ MonoBehaviour:
   turnSpeed: 95
   score: 60
   xp: 8
+  aimBias: 0
   shieldArc: 65
 --- !u!1 &5204260132682964659
 GameObject:

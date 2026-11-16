@@ -79,12 +79,13 @@ public static class Difficulty
     public static WaveParams ForWave(int n)
     {
         int k = Mathf.Max(0, n - 1);
+        float kd = DensityStep(n);
         return new WaveParams
         {
             wave = n,
             duration = Mathf.Min(30f + k * 3f, 45f),
-            spawnInterval = Mathf.Max(MinInterval, BaseInterval * Mathf.Pow(IntervalDecay, k)),
-            maxAlive = Mathf.Min(BaseAlive + AlivePerWave * k, MaxAliveCap),
+            spawnInterval = Mathf.Max(MinInterval, BaseInterval * Mathf.Pow(IntervalDecay, kd)),
+            maxAlive = Mathf.Min(BaseAlive + Mathf.RoundToInt(AlivePerWave * kd), MaxAliveCap),
             burst = 1 + k / 2,
             healthMultiplier = 1f + HealthPerWave * k,
             speedMultiplier = Mathf.Min(1f + SpeedPerWave * k, 1.45f),
@@ -96,6 +97,16 @@ public static class Difficulty
             maxBomb = SpecialLimit(n, 2, 2, 6),
             maxTongue = SpecialLimit(n, 1, 4, 3),
         };
+    }
+
+    /// <summary>Waves 4–6 ramp density (spawn interval / max alive) a bit slower so players reach the first boss (wave 6).</summary>
+    public static readonly float[] DensityDip = { 1f, 1.6f, 2f };
+
+    /// <summary>Density "wave step" (k = n − 1, minus the wave 4–6 dip); still increasing every wave.</summary>
+    public static float DensityStep(int n)
+    {
+        int k = Mathf.Max(0, n - 1);
+        return n >= 4 && n <= 6 ? k - DensityDip[n - 4] : k;
     }
 
     // Special zombies: mixed in from wave 3, more every wave; every 5th wave is a special wave.

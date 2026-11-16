@@ -29,7 +29,7 @@ public class GameManager : MonoBehaviour
     public float GameTime { get; private set; }
     public RunRecords Records { get; private set; }
 
-    float hitStopUntil, slow = 1f;
+    float hitStopUntil, hitStopScale = 0.02f, slow = 1f;
     bool hitStopActive;
     bool canRestart;
 
@@ -159,12 +159,20 @@ public class GameManager : MonoBehaviour
 
     public bool IsSlowed => slow < 1f;
 
-    public void HitStop(float duration)
+    public void HitStop(float duration) => HitStop(duration, 0.02f);
+
+    /// <summary>Short slow motion (boss kill); <paramref name="realSeconds"/> of unscaled time at <paramref name="factor"/>.</summary>
+    public void SlowMo(float factor, float realSeconds) => HitStop(realSeconds, factor);
+
+    void HitStop(float duration, float scale)
     {
         if (IsGameOver || slow < 1f) return;
-        hitStopUntil = Mathf.Max(hitStopUntil, Time.unscaledTime + duration);
+        float until = Time.unscaledTime + duration;
+        // The longer-lasting request sets the scale (a kill hit-stop inside the boss slow-mo keeps the slow-mo).
+        if (!hitStopActive || until >= hitStopUntil) hitStopScale = scale;
+        hitStopUntil = Mathf.Max(hitStopUntil, until);
         hitStopActive = true;
-        Time.timeScale = 0.02f * TimeScale;
+        Time.timeScale = hitStopScale * TimeScale;
     }
 
     public void Shake(float trauma)

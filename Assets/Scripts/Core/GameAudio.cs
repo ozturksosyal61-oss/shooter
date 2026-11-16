@@ -15,6 +15,8 @@ public enum SfxId
     LevelUp, CardPick, Shotgun, TurretShot, GrenadeThrow, BarrelExplode,
     // F8 — story objectives
     Radio, ObjectiveTick, ObjectiveDone, ObjectiveBig, Helicopter,
+    // F9 — boss
+    BossRoar, BossStep, BossCharge, BossSlam,
 }
 
 [Serializable]

@@ -109,7 +109,8 @@ public class CardPicker : MonoBehaviour
     void Open()
     {
         offer.Clear();
-        offer.AddRange(Upgrades.I.Offer(cards.Length));
+        bool epic = Progression.I.EpicPicks > 0;
+        offer.AddRange(Upgrades.I.Offer(cards.Length, epic ? Rarity.Epic : Rarity.Common));
         if (offer.Count == 0) { Progression.I.ConsumePick(); return; }
         IsOpen = true;
         openT = 0f;
@@ -117,8 +118,8 @@ public class CardPicker : MonoBehaviour
         group.gameObject.SetActive(true);
         group.alpha = 0f;
         bool bonus = Progression.I.BonusPicks > 0;
-        header.text = Loc.T(bonus ? "cards.reward" : "cards.levelup");
-        subHeader.text = bonus ? Loc.T("cards.reward_sub") : Loc.F("cards.header", Progression.I.Level);
+        header.text = Loc.T(epic ? "cards.boss" : bonus ? "cards.reward" : "cards.levelup");
+        subHeader.text = epic ? Loc.T("cards.boss_sub") : bonus ? Loc.T("cards.reward_sub") : Loc.F("cards.header", Progression.I.Level);
         for (int i = 0; i < cards.Length; i++)
         {
             bool on = i < offer.Count;

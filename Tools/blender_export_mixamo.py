@@ -1,14 +1,16 @@
 """Export a character GLB as a T-pose FBX for Mixamo auto-rigging.
 
 Usage:
-  blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <in.glb> <basecolor.png|-> <out.fbx> [height=1.8] [tris=0] [seams] [bake]
+  blender -b --factory-startup -P Tools/blender_export_mixamo.py -- <in.glb> <basecolor.png|-> <out.fbx> [height=1.8] [tris=0] [nobake] [seams]
 
 basecolor "-": use the GLB's embedded base-color image (written next to out.fbx as <Name>_BaseColor.png, max 1024).
-tris > 0     : weld + collapse-decimate to about that many triangles. UV seams are kept: the collapse
-               quadrics weight edges whose UVs are discontinuous, and fans of 3+ faces are cut first.
-seams        : cut UV seams into mesh boundaries before collapsing (exact UVs on seams; may leave hairline gaps).
-bake         : after decimating, re-unwrap the low-poly mesh and bake the high-poly base color onto it
-               (Cycles, selected-to-active, 1024 diffuse colour) - use when decimation still shifts the texture.
+tris > 0     : weld + collapse-decimate to about that many triangles, then (DEFAULT) weld again, re-unwrap the
+               low-poly mesh and bake the original high-poly base colour onto it (Cycles, selected-to-active,
+               1024 diffuse colour). This is the method that works in Mixamo: one connected mesh, no UV drift.
+nobake       : keep the original UVs instead of baking (only if the decimated texture still lines up).
+seams        : with nobake, cut UV seams into mesh boundaries before collapsing. NOT for Mixamo: the mesh falls
+               apart into islands along the seams and the auto-rigger shows torn shapes / shifted texture.
+Always: single mesh, transforms applied, normals recalculated outside, loose geometry removed.
 
 Result: single mesh, origin at the feet (bottom centre), given height, transforms applied,
 base-color texture embedded (path_mode=COPY + embed_textures).
@@ -25,8 +27,8 @@ src, tex_path, dst = argv[0], argv[1], os.path.abspath(argv[2])
 height = float(argv[3]) if len(argv) > 3 else 1.8
 target_tris = int(argv[4]) if len(argv) > 4 else 0
 flags = set(argv[5:])
-do_bake = "bake" in flags
-cut_seams = "seams" in flags
+do_bake = target_tris > 0 and "nobake" not in flags and "seams" not in flags
+cut_seams = "seams" in flags and not do_bake
 TEX_SIZE = 1024
 
 
@@ -129,6 +131,24 @@ if target_tris > 0 and src_tris > target_tris:
     mod.use_collapse_triangulate = True
     select_only(obj)
     bpy.ops.object.modifier_apply(modifier=mod.name)
+
+
+def clean_mesh(o, weld):
+    """Weld (when the UVs are going to be replaced anyway), drop loose bits, normals outside."""
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    if weld:
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4 * height)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(o.data)
+    bm.free()
+    o.data.update()
+
+
+clean_mesh(obj, weld=do_bake)
+if high is not None:
+    clean_mesh(high, weld=False)
 
 base = obj.name + "_BaseColor.png"
 if do_bake:
