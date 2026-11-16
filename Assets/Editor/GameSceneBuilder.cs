@@ -33,6 +33,9 @@ public static partial class GameSceneBuilder
         var t = GenerateTextures();
         ui = GenerateUiSprites();
         ConfigureUiFont();
+        ConfigurePlayer();
+        MenuIcons();
+        BuildLoadingPrefab();
         ConfigureCharacterTexture(SoldierTex);
         ConfigureCharacterTexture(ZombieTex);
         foreach (var dir in new[] { ShieldDir, BombDir, TongueDir }) ConfigureCharacterTexture(BaseColor(dir));
@@ -58,6 +61,9 @@ public static partial class GameSceneBuilder
         BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
         AssetDatabase.SaveAssets();
         BuildScene(scene, m, t, env, cm, kit, boss);
+        AssetDatabase.SaveAssets();
+        BuildMenuScene(env, cm, kit);
+        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScenePath, true), new EditorBuildSettingsScene(ScenePath, true) };
         AssetDatabase.SaveAssets();
         Debug.Log("BUILD: done");
     }
@@ -667,7 +673,8 @@ public static partial class GameSceneBuilder
     }
 
     // ---------------------------------------------------------------- scene
-    static void BuildScene(UnityEngine.SceneManagement.Scene scene, Mats m, Tex t, Env env, CityMats cm, CityKit kit, BossAssets boss)
+    /// <summary>Lighting, fog, the infinite city around <paramref name="focus"/> and the district mood (game and menu).</summary>
+    static ChunkManager BuildCity(Transform focus, Env env, CityMats cm, CityKit kit, out Light light, out DistrictAtmosphere atmo)
     {
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Exponential;
@@ -680,7 +687,7 @@ public static partial class GameSceneBuilder
         RenderSettings.skybox = null;
 
         var lightGo = new GameObject("Directional Light");
-        var light = lightGo.AddComponent<Light>();
+        light = lightGo.AddComponent<Light>();
         light.type = LightType.Directional;
         light.color = new Color(1f, 0.94f, 0.85f);
         light.intensity = 1.25f;
@@ -689,14 +696,9 @@ public static partial class GameSceneBuilder
         lightGo.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
         lightGo.AddComponent<UniversalAdditionalLightData>();
 
-        // Player
-        var playerPrefab = Load<PlayerController>("Player");
-        var player = ((GameObject)PrefabUtility.InstantiatePrefab(playerPrefab.gameObject)).GetComponent<PlayerController>();
-        player.transform.position = Vector3.zero;
-
         // Infinite city
         var chunks = new GameObject("City").AddComponent<ChunkManager>();
-        chunks.player = player.transform;
+        chunks.player = focus;
         chunks.roadCars = env.cars;
         chunks.roadBarricades = env.barricades;
         chunks.burningBarrels = env.burningBarrels;
@@ -732,9 +734,20 @@ public static partial class GameSceneBuilder
             },
         };
 
-        var atmo = new GameObject("DistrictAtmosphere").AddComponent<DistrictAtmosphere>();
+        atmo = new GameObject("DistrictAtmosphere").AddComponent<DistrictAtmosphere>();
         atmo.sun = light;
         atmo.moods = DistrictMoods();
+        return chunks;
+    }
+
+    static void BuildScene(UnityEngine.SceneManagement.Scene scene, Mats m, Tex t, Env env, CityMats cm, CityKit kit, BossAssets boss)
+    {
+        // Player
+        var playerPrefab = Load<PlayerController>("Player");
+        var player = ((GameObject)PrefabUtility.InstantiatePrefab(playerPrefab.gameObject)).GetComponent<PlayerController>();
+        player.transform.position = Vector3.zero;
+
+        var chunks = BuildCity(player.transform, env, cm, kit, out var light, out var atmo);
 
         var origin = new GameObject("FloatingOrigin").AddComponent<FloatingOrigin>();
         origin.target = player.transform;
@@ -778,9 +791,10 @@ public static partial class GameSceneBuilder
         upgrades.cardSprites = ui.cards;
 
         BuildObjectiveScene(cm);
-        var hud = BuildUI(t, out _);
+        var hud = BuildUI(t, out var controls);
         BuildObjectiveHud(hud, t);
         BuildBossHud(hud);
+        BuildPauseUi(hud, controls);
 
         var warm = new GameObject("Warmup").AddComponent<Warmup>();
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })

@@ -43,15 +43,14 @@ public class GameManager : MonoBehaviour
     void Awake()
     {
         I = this;
-        Application.targetFrameRate = 60;
-        QualitySettings.vSyncCount = 0;
+        Settings.ApplyFrameRate();
         Time.timeScale = TimeScale;
         Records = new RunRecords
         {
-            bestScore = PlayerPrefs.GetInt("best_v2", 0),
-            bestWave = PlayerPrefs.GetInt("bestWave", 0),
-            bestKills = PlayerPrefs.GetInt("bestKills", 0),
-            bestTime = PlayerPrefs.GetFloat("bestTime", 0f),
+            bestScore = SaveSystem.Data.records.bestScore,
+            bestWave = SaveSystem.Data.records.bestWave,
+            bestKills = SaveSystem.Data.records.bestKills,
+            bestTime = SaveSystem.Data.records.bestTime,
         };
     }
 
@@ -60,7 +59,7 @@ public class GameManager : MonoBehaviour
         if (hitStopActive && Time.unscaledTime >= hitStopUntil)
         {
             hitStopActive = false;
-            if (!IsGameOver) Time.timeScale = TimeScale * slow;
+            if (!IsGameOver && !Paused) Time.timeScale = TimeScale * slow;
         }
 
         var input = TouchControls.I;
@@ -154,8 +153,27 @@ public class GameManager : MonoBehaviour
     public void SetSlow(float factor)
     {
         slow = Mathf.Clamp(factor, 0.01f, 1f);
-        if (!IsGameOver && !hitStopActive) Time.timeScale = TimeScale * slow;
+        if (!IsGameOver && !hitStopActive && !Paused) Time.timeScale = TimeScale * slow;
     }
+
+    /// <summary>Pause menu / app in background: time stops, audio pauses, gameplay input is cut.</summary>
+    public bool Paused { get; private set; }
+    public event System.Action<bool> PausedChanged;
+
+    public void SetPaused(bool p)
+    {
+        if (p == Paused || (p && IsGameOver)) return;
+        Paused = p;
+        Time.timeScale = p ? 0f : TimeScale * slow;
+        if (!p) hitStopActive = false;
+        AudioListener.pause = p;
+        if (TouchControls.I) TouchControls.I.Paused = p;
+        PausedChanged?.Invoke(p);
+    }
+
+    void OnApplicationPause(bool background) { if (background) SetPaused(true); }
+    void OnApplicationFocus(bool focus) { if (!focus && !Application.isEditor) SetPaused(true); }
+    void OnDestroy() { if (Paused) { AudioListener.pause = false; Time.timeScale = TimeScale; } }
 
     public bool IsSlowed => slow < 1f;
 
@@ -166,7 +184,7 @@ public class GameManager : MonoBehaviour
 
     void HitStop(float duration, float scale)
     {
-        if (IsGameOver || slow < 1f) return;
+        if (IsGameOver || slow < 1f || Paused) return;
         float until = Time.unscaledTime + duration;
         // The longer-lasting request sets the scale (a kill hit-stop inside the boss slow-mo keeps the slow-mo).
         if (!hitStopActive || until >= hitStopUntil) hitStopScale = scale;
@@ -203,11 +221,9 @@ public class GameManager : MonoBehaviour
         r.bestKills = Mathf.Max(r.bestKills, Kills);
         r.bestTime = Mathf.Max(r.bestTime, GameTime);
         Records = r;
-        PlayerPrefs.SetInt("best_v2", r.bestScore);
-        PlayerPrefs.SetInt("bestWave", r.bestWave);
-        PlayerPrefs.SetInt("bestKills", r.bestKills);
-        PlayerPrefs.SetFloat("bestTime", r.bestTime);
-        PlayerPrefs.Save();
+        var rec = SaveSystem.Data.records;
+        rec.bestScore = r.bestScore; rec.bestWave = r.bestWave; rec.bestKills = r.bestKills; rec.bestTime = r.bestTime;
+        SaveSystem.Write();
         StartCoroutine(GameOverRoutine(wave));
     }
 

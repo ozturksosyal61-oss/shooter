@@ -21,6 +21,8 @@ public class TouchControls : MonoBehaviour
     public CanvasGroup joyGroup, aimGroup;
     public RectTransform reloadButton;
     public RectTransform restartButton;
+    [Tooltip("Pause / menu buttons (uGUI): touches on them never start the joystick or firing.")]
+    public RectTransform[] uiButtons;
     [Tooltip("Level-up cards: while the picker is open every press is routed to them.")]
     public RectTransform[] cardRects;
 
@@ -45,6 +47,9 @@ public class TouchControls : MonoBehaviour
     public int CardHover { get; private set; } = -1;
     /// <summary>Set by modal UI (card picker): gameplay input is suppressed.</summary>
     public bool Blocked { get; set; }
+    /// <summary>Pause menu open: no gameplay input at all.</summary>
+    public bool Paused { get; set; }
+    float baseJoyRadius = -1f;
 
     const int MouseId = -100;
     const int None = int.MinValue;
@@ -77,6 +82,22 @@ public class TouchControls : MonoBehaviour
         ReadMouseAndKeyboard();
 #endif
         float scale = canvas ? canvas.scaleFactor : 1f;
+        // Settings: joystick size.
+        if (baseJoyRadius < 0f) baseJoyRadius = joyRadius;
+        float js = Mathf.Clamp(Settings.S.joystickSize, Settings.MinJoystickSize, Settings.MaxJoystickSize);
+        joyRadius = baseJoyRadius * js;
+        if (joyBase) joyBase.localScale = Vector3.one * js;
+        if (Paused)
+        {
+            leftId = rightId = None;
+            mouseAim = false;
+            Move = Vector2.zero;
+            FireHeld = HasAimDir = AimAtScreenPoint = false;
+            ReloadPressed = RestartPressed = false;
+            CardPressed = -1;
+            UpdateVisuals(scale, Vector2.zero, Vector2.zero);
+            return;
+        }
         if (Blocked)
         {
             CardHover = -1;
@@ -193,6 +214,7 @@ public class TouchControls : MonoBehaviour
                     if (Over(cardRects[i], p)) { CardPressed = i; break; }
             return;
         }
+        if (uiButtons != null) foreach (var b in uiButtons) if (Over(b, p)) return;
         if (Over(restartButton, p)) { RestartPressed = true; return; }
         if (Over(reloadButton, p)) { ReloadPressed = true; return; }
         if (p.x < Screen.width * 0.5f)
@@ -210,7 +232,8 @@ public class TouchControls : MonoBehaviour
             bool active = leftId != None;
             joyBase.anchoredPosition = active ? leftOrigin / scale : joyIdlePos;
             joyKnob.anchoredPosition = joyOffset;
-            if (joyGroup) joyGroup.alpha = Mathf.MoveTowards(joyGroup.alpha, active ? 0.85f : 0.25f, dt * 6f);
+            float ja = Mathf.Clamp(Settings.S.joystickAlpha, Settings.MinJoystickAlpha, Settings.MaxJoystickAlpha);
+            if (joyGroup) joyGroup.alpha = Mathf.MoveTowards(joyGroup.alpha, (active ? 0.85f : 0.25f) * ja, dt * 6f);
         }
         if (aimBase)
         {

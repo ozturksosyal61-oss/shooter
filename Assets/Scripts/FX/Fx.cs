@@ -85,6 +85,8 @@ public class Fx : MonoBehaviour
 
     static void Emit(ParticleSystem ps, Vector3 pos, Vector3 vel, float size, float life)
     {
+        // Graphics quality: thin out small particles (big flashes always stay).
+        if (size < 1f && Settings.ParticleScale < 1f && Random.value > Settings.ParticleScale) return;
         ep.position = pos;
         ep.velocity = vel;
         ep.startSize = size;

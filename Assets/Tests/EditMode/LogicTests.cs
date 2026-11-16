@@ -333,8 +333,10 @@ public class LocTests
     {
         Loc.Current = Lang.Tr;
         Assert.AreEqual("DALGA 3", Loc.F("hud.wave", 3));
-        Assert.AreEqual("Son Devriye", Loc.T("game.title"));
-        Assert.AreEqual("Son Devriye: Zombi Avı", Loc.T("game.store_title"));
+        Assert.AreEqual("Holdout", Loc.T("game.title"));
+        Assert.AreEqual("Holdout: Zombi Avı", Loc.T("game.store_title"));
+        Assert.AreEqual("Son Devriye", Loc.T("game.story"));
+        for (int i = 1; i <= LoadingScreen.TipCount; i++) Assert.IsTrue(Loc.Has("tip." + i), "loading tip " + i);
         Assert.AreEqual("ÇİFT MERMİ", Loc.Upper("Çift Mermi"));
         Assert.AreEqual("KIRIK", Loc.Upper("kırık"));
 
@@ -345,7 +347,7 @@ public class LocTests
         Loc.Changed -= h;
         Assert.AreEqual(1, changed);
         Assert.AreEqual("WAVE 3", Loc.F("hud.wave", 3));
-        Assert.AreEqual("Last Patrol: Zombie Shooter", Loc.T("game.store_title"));
+        Assert.AreEqual("Holdout: Zombie Survival", Loc.T("game.store_title"));
         Assert.AreEqual("DOUBLE SHOT", Loc.Upper("Double Shot"));
         UnityEngine.TestTools.LogAssert.Expect(LogType.Warning, "Loc: missing key missing.key");
         Assert.AreEqual("missing.key", Loc.T("missing.key"));
@@ -567,5 +569,65 @@ public class ObjectiveTests
         Assert.AreEqual("dir.sw", Objectives.DirectionKey(new Vector2(-40f, -38f)));
         Loc.Current = Lang.Tr;
         Assert.AreEqual("Merkez: İşaret fişeği kuzeydeki karakolda!", Loc.F("radio.flare", Loc.T("dir.n")));
+    }
+}
+
+public class SaveAndSettingsTests
+{
+    [TearDown]
+    public void Restore() => SaveSystem.Store = null;
+
+    [Test]
+    public void SaveRoundTripMigrationAndCorruption()
+    {
+        var d = new SaveData { version = SaveSystem.CurrentVersion, tutorialDone = true };
+        d.records.bestScore = 1234; d.wallet.gold = 50; d.settings.lang = "en"; d.settings.fps = 120;
+        var back = SaveSystem.Deserialize(SaveSystem.Serialize(d));
+        Assert.NotNull(back);
+        Assert.AreEqual(1234, back.records.bestScore);
+        Assert.AreEqual(50, back.wallet.gold);
+        Assert.AreEqual("en", back.settings.lang);
+        Assert.IsTrue(back.tutorialDone);
+
+        Assert.IsNull(SaveSystem.Deserialize("{ this is not json"), "corrupt text");
+        Assert.IsNull(SaveSystem.Deserialize(""), "empty file");
+        Assert.IsNull(SaveSystem.Deserialize("{\"version\":0}"), "no version = not a save");
+
+        // An old file without the newer sections still loads, with defaults filled in.
+        var old = SaveSystem.Deserialize("{\"version\":1,\"records\":{\"bestScore\":7}}");
+        Assert.NotNull(old);
+        Assert.AreEqual(7, old.records.bestScore);
+        Assert.NotNull(old.wallet); Assert.NotNull(old.settings); Assert.NotNull(old.campaign); Assert.NotNull(old.inventory);
+        Assert.AreEqual(SaveSystem.CurrentVersion, old.version);
+    }
+
+    [Test]
+    public void CorruptMainFallsBackToBackup()
+    {
+        var good = new SaveData { version = 1 };
+        good.records.bestWave = 9;
+        var mem = new MemorySaveStore { json = "garbage", backupJson = SaveSystem.Serialize(good) };
+        SaveSystem.Store = mem;
+        Assert.AreEqual(9, SaveSystem.Data.records.bestWave, "backup used when the main file is corrupt");
+
+        SaveSystem.Data.wallet.gems = 3;
+        SaveSystem.Data.settings.music = 0.3f;
+        SaveSystem.Write();
+        Assert.IsNotNull(SaveSystem.Deserialize(mem.json));
+        SaveSystem.ResetProgress();
+        Assert.AreEqual(0, SaveSystem.Data.wallet.gems, "progress wiped");
+        Assert.AreEqual(0, SaveSystem.Data.records.bestWave);
+        Assert.AreEqual(0.3f, SaveSystem.Data.settings.music, 1e-4f, "settings kept");
+    }
+
+    [Test]
+    public void FrameRateOptions()
+    {
+        CollectionAssert.AreEqual(new[] { 30, 60 }, Settings.SupportedFps(60));
+        CollectionAssert.AreEqual(new[] { 30, 60, 90 }, Settings.SupportedFps(90));
+        CollectionAssert.AreEqual(new[] { 30, 60, 90, 120 }, Settings.SupportedFps(120));
+        Assert.AreEqual(60, Settings.ClampFps(120, 60), "unsupported rate falls back");
+        Assert.AreEqual(90, Settings.ClampFps(90, 120));
+        Assert.AreEqual(30, Settings.ClampFps(30, 120));
     }
 }

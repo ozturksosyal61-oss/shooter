@@ -84,7 +84,7 @@ public class HUD : MonoBehaviour
         if (gameOverPanel) gameOverPanel.SetActive(false);
         if (comboBrokenText) { comboBrokenText.gameObject.SetActive(false); brokenStart = comboBrokenText.rectTransform.anchoredPosition; }
         if (waveBannerGroup) waveBannerGroup.alpha = 0f;
-        tutorialActive = tutorialGroup && PlayerPrefs.GetInt(TutorialKey, 0) == 0;
+        tutorialActive = tutorialGroup && !SaveSystem.Data.tutorialDone;
         if (tutorialGroup) tutorialGroup.alpha = tutorialActive ? 1f : 0f;
         if (WaveDirector.I) WaveDirector.I.WaveStarted += OnWaveStarted;
         if (Upgrades.I) Upgrades.I.Changed += OnCardChanged;
@@ -396,8 +396,8 @@ public class HUD : MonoBehaviour
             if (tutorialGroup.alpha <= 0f)
             {
                 tutorialActive = false;
-                PlayerPrefs.SetInt(TutorialKey, 1);
-                PlayerPrefs.Save();
+                SaveSystem.Data.tutorialDone = true;
+                SaveSystem.Write();
             }
         }
     }

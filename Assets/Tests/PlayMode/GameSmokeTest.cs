@@ -2,6 +2,7 @@ using System.Collections;
 using System.IO;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.SceneManagement;
@@ -18,7 +19,7 @@ public class GameSmokeTest
         InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
         mouse = InputSystem.AddDevice<Mouse>();
         mouse.MakeCurrent();
-        PlayerPrefs.SetInt("tutorial_done", 1);
+        SaveSystem.Data.tutorialDone = true;
         GameManager.TimeScale = 1f;
     }
 
@@ -693,6 +694,66 @@ public class GameSmokeTest
     }
 
     [UnityTest, Timeout(300000)]
+    public IEnumerator MenuSettingsPauseFlow()
+    {
+        var mem = new MemorySaveStore();
+        SaveSystem.Store = mem;
+        SaveSystem.Data.tutorialDone = true;
+        GameManager.TimeScale = 2f;
+        try
+        {
+            SceneManager.LoadScene(LoadingScreen.MenuScene);
+            yield return null;
+            yield return null;
+            var mm = MainMenu.I;
+            Assert.NotNull(mm, "main menu");
+            Assert.NotNull(Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>(), "event system for buttons");
+            Assert.NotNull(ChunkManager.I, "live city behind the menu");
+            Assert.AreEqual("0", mm.gold.text);
+
+            // Language switches at once (static labels via LocText).
+            mm.settingsPanel.Open();
+            mm.settingsPanel.Change(x => x.lang = "en");
+            yield return null;
+            Assert.AreEqual(Lang.En, Loc.Current);
+            Assert.AreEqual("PLAY", mm.play.GetComponentInChildren<Text>().text);
+            mm.settingsPanel.Change(x => x.lang = "tr");
+            mm.settingsPanel.Change(x => x.quality = 0);
+            Assert.Less(Settings.ParticleScale, 1f);
+            mm.settingsPanel.Change(x => x.quality = 2);
+            mm.settingsPanel.Close();
+            Assert.IsNotNull(mem.json, "settings saved on close");
+            Assert.AreEqual("OYNA", mm.play.GetComponentInChildren<Text>().text);
+
+            // Endless → loading screen → game.
+            mm.PlayEndless();
+            yield return WaitUntil(() => GameManager.I && !LoadingScreen.IsLoading, 20f);
+            var gm = GameManager.I;
+            Assert.NotNull(gm, "game loaded");
+            var pm = Object.FindAnyObjectByType<PauseMenu>();
+            Assert.NotNull(pm);
+            yield return Wait(0.3f);
+            Assert.IsTrue(pm.pauseButton.gameObject.activeInHierarchy, "pause button");
+            pm.Pause();
+            Assert.IsTrue(gm.Paused);
+            Assert.AreEqual(0f, Time.timeScale);
+            Assert.IsTrue(pm.panel.activeSelf, "pause menu");
+            Assert.IsTrue(TouchControls.I.Paused, "no gameplay input while paused");
+            pm.Resume();
+            Assert.AreEqual(GameManager.TimeScale, Time.timeScale, 1e-4f);
+            Assert.IsFalse(pm.panel.activeSelf);
+
+            pm.ToMenu();
+            yield return WaitUntil(() => MainMenu.I && !LoadingScreen.IsLoading, 20f);
+            Assert.NotNull(MainMenu.I, "back in the menu");
+        }
+        finally
+        {
+            SaveSystem.Store = null;
+        }
+    }
+
+    [UnityTest, Timeout(300000)]
     public IEnumerator CityAndObjectives()
     {
         GameManager.TimeScale = 2f;
@@ -1094,6 +1155,58 @@ public class GameSmokeTest
         cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(lookAt - from));
         Shot(path);
         cam.transform.SetPositionAndRotation(p, r);
+    }
+
+    /// <summary>[Explicit] Menu, settings panel and pause screen with their UI (CAPTURE_DIR).</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureMenu()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        SaveSystem.Store = new MemorySaveStore();
+        SaveSystem.Data.tutorialDone = true;
+        GameManager.TimeScale = 1f;
+        SceneManager.LoadScene(LoadingScreen.MenuScene);
+        yield return null;
+        var mm = MainMenu.I;
+        yield return WaitUntil(() => !mm.SplashActive, 6f);
+        yield return Wait(1.5f);
+        ShotCanvas(Path.Combine(dir, "menu_main.png"), mm.GetComponent<Canvas>());
+        mm.settingsPanel.Open();
+        yield return null;
+        ShotCanvas(Path.Combine(dir, "menu_settings.png"), mm.GetComponent<Canvas>());
+        mm.settingsPanel.Close();
+        mm.PlayEndless();
+        yield return WaitUntil(() => GameManager.I && !LoadingScreen.IsLoading, 20f);
+        yield return Wait(2f);
+        Object.FindAnyObjectByType<PauseMenu>().Pause();
+        yield return null;
+        ShotCanvas(Path.Combine(dir, "game_pause.png"), Object.FindAnyObjectByType<HUD>().GetComponent<Canvas>());
+        GameManager.I.SetPaused(false);
+        SaveSystem.Store = null;
+        Debug.Log("CAPTURE: menu " + dir);
+    }
+
+    static void ShotCanvas(string path, Canvas canvas)
+    {
+        var cam = Camera.main;
+        var rt = new RenderTexture(1600, 900, 24);
+        cam.targetTexture = rt;
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = cam;
+        canvas.planeDistance = 1.2f;
+        Canvas.ForceUpdateCanvases();
+        cam.Render();
+        RenderTexture.active = rt;
+        var tex = new Texture2D(1600, 900, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, 1600, 900), 0, 0);
+        tex.Apply();
+        File.WriteAllBytes(path, tex.EncodeToPNG());
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        cam.targetTexture = null;
+        RenderTexture.active = null;
+        Object.Destroy(rt);
+        Object.Destroy(tex);
     }
 
     static void Shot(string path)

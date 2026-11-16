@@ -191,7 +191,7 @@ public static partial class GameSceneBuilder
         Anchor(aimKnob.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(80f, 80f));
 
         // ---- Health bar (top-left): framed, dark trough, delayed white bar, coloured fill, heart + numbers.
-        var hpFrame = Panel("HealthBar", root, UiKhaki, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(64f, -36f), new Vector2(470f, 52f));
+        var hpFrame = Panel("HealthBar", root, UiKhaki, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(170f, -36f), new Vector2(470f, 52f));
         var hpTrough = BarFill("Trough", hpFrame.transform, new Color(0f, 0f, 0f, 0.55f), 8f);
         hpTrough.pivot = new Vector2(0.5f, 0.5f);
         var hpLag = BarFill("Lag", hpFrame.transform, new Color(1f, 1f, 1f, 0.9f), 8f);
@@ -211,26 +211,26 @@ public static partial class GameSceneBuilder
         hud.healthHeart = heart.rectTransform;
 
         // ---- XP bar + level badge (under the health bar), glows on level-up.
-        var xpFrame = Panel("XpBar", root, UiKhaki, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(64f, -96f), new Vector2(400f, 34f), 6f);
+        var xpFrame = Panel("XpBar", root, UiKhaki, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(170f, -96f), new Vector2(400f, 34f), 6f);
         BarFill("Trough", xpFrame.transform, new Color(0f, 0f, 0f, 0.55f), 7f).pivot = new Vector2(0.5f, 0.5f);
         var xpFill = BarFill("Fill", xpFrame.transform, UiOrange, 7f);
         xpFill.anchorMax = new Vector2(0f, 1f);
         var xpGlow = Img("Glow", xpFrame.transform, ui.glow, new Color(1f, 0.75f, 0.3f, 0f));
         Anchor(xpGlow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(620f, 150f));
         var lvBadge = Img("LevelBadge", root, ui.star, UiOrange);
-        Anchor(lvBadge.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 0.5f), new Vector2(478f, -112f), new Vector2(84f, 84f));
+        Anchor(lvBadge.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 0.5f), new Vector2(584f, -112f), new Vector2(84f, 84f));
         var lvlNum = Txt("Num", lvBadge.transform, 30, TextAnchor.MiddleCenter, UiInk);
         Stretch(lvlNum.rectTransform); lvlNum.rectTransform.offsetMin = new Vector2(0f, -6f);
         lvlNum.GetComponent<Outline>().effectColor = new Color(1f, 1f, 1f, 0.4f); lvlNum.GetComponent<Outline>().effectDistance = new Vector2(1.5f, -1.5f);
         lvlNum.GetComponent<Shadow>().enabled = false;
         lvlNum.text = "1";
         var lvl = Txt("Level", root, 26, TextAnchor.MiddleLeft, UiCream);
-        Anchor(lvl.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(528f, -112f), new Vector2(160f, 40f));
+        Anchor(lvl.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(634f, -112f), new Vector2(160f, 40f));
         lvl.text = Loc.F("hud.level", 1);
         hud.xpFill = xpFill; hud.levelText = lvl; hud.levelNumber = lvlNum; hud.levelBadge = lvBadge.rectTransform; hud.xpGlow = xpGlow;
 
         var waveLabel = Txt("WaveLabel", root, 32, TextAnchor.UpperLeft, UiOrange);
-        Anchor(waveLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(66f, -138f), new Vector2(400f, 44f));
+        Anchor(waveLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(66f, -150f), new Vector2(400f, 44f));
         waveLabel.text = "";
         hud.waveLabel = waveLabel;
 

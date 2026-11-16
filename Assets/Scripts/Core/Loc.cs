@@ -16,25 +16,18 @@ public static class Loc
     public static event Action Changed;
 
     static Lang current = Lang.Tr;
-    static bool loaded;
 
     public static Lang Current
     {
         get
         {
-            if (!loaded)
-            {
-                loaded = true;
-                try { current = PlayerPrefs.GetString(PrefKey, "tr") == "en" ? Lang.En : Lang.Tr; } catch { current = Lang.Tr; }
-            }
             return current;
         }
         set
         {
-            loaded = true;
+            // Persisted by Settings (save file); Loc itself stays a pure table.
             if (current == value) return;
             current = value;
-            try { PlayerPrefs.SetString(PrefKey, value == Lang.En ? "en" : "tr"); } catch { }
             Changed?.Invoke();
         }
     }
@@ -73,8 +66,59 @@ public static class Loc
     static readonly Dictionary<string, string[]> Table = new Dictionary<string, string[]>
     {
         // --- Game
-        ["game.title"] = new[] { "Son Devriye", "Last Patrol" },
-        ["game.store_title"] = new[] { "Son Devriye: Zombi Avı", "Last Patrol: Zombie Shooter" },
+        ["game.title"] = new[] { "Holdout", "Holdout" },
+        ["game.store_title"] = new[] { "Holdout: Zombi Avı", "Holdout: Zombie Survival" },
+        ["game.story"] = new[] { "Son Devriye", "Last Patrol" },
+        ["menu.play"] = new[] { "OYNA", "PLAY" },
+        ["menu.shop"] = new[] { "MAĞAZA", "SHOP" },
+        ["menu.settings"] = new[] { "AYARLAR", "SETTINGS" },
+        ["menu.campaign"] = new[] { "KAMPANYA", "CAMPAIGN" },
+        ["menu.campaign_sub"] = new[] { "Son Devriye", "Last Patrol" },
+        ["menu.endless"] = new[] { "SONSUZ", "ENDLESS" },
+        ["menu.endless_sub"] = new[] { "Dayanabildiğin kadar", "Hold out as long as you can" },
+        ["menu.back"] = new[] { "GERİ", "BACK" },
+        ["menu.tagline"] = new[] { "ZOMBİ AVI", "ZOMBIE SURVIVAL" },
+        ["menu.soon"] = new[] { "YAKINDA", "COMING SOON" },
+        ["menu.locked"] = new[] { "YAKINDA", "SOON" },
+        ["menu.splash"] = new[] { "OZT DIGITAL", "OZT DIGITAL" },
+        ["menu.splash_sub"] = new[] { "sunar", "presents" },
+        ["set.title"] = new[] { "AYARLAR", "SETTINGS" },
+        ["set.music"] = new[] { "Müzik", "Music" },
+        ["set.sfx"] = new[] { "Efektler", "Effects" },
+        ["set.vibration"] = new[] { "Titreşim", "Vibration" },
+        ["set.on"] = new[] { "AÇIK", "ON" },
+        ["set.off"] = new[] { "KAPALI", "OFF" },
+        ["set.fps"] = new[] { "Kare hızı", "Frame rate" },
+        ["set.quality"] = new[] { "Grafik", "Graphics" },
+        ["set.q0"] = new[] { "DÜŞÜK", "LOW" },
+        ["set.q1"] = new[] { "ORTA", "MEDIUM" },
+        ["set.q2"] = new[] { "YÜKSEK", "HIGH" },
+        ["set.joy_size"] = new[] { "Joystick boyutu", "Joystick size" },
+        ["set.joy_alpha"] = new[] { "Joystick saydamlığı", "Joystick opacity" },
+        ["set.lang"] = new[] { "Dil", "Language" },
+        ["set.support"] = new[] { "DESTEK", "SUPPORT" },
+        ["set.privacy"] = new[] { "GİZLİLİK", "PRIVACY" },
+        ["set.reset"] = new[] { "İLERLEMEYİ SIFIRLA", "RESET PROGRESS" },
+        ["set.reset_q"] = new[] { "Rekorlar, para ve ilerleme silinsin mi? Bu geri alınamaz.", "Delete records, currency and progress? This cannot be undone." },
+        ["set.reset_done"] = new[] { "İlerleme sıfırlandı", "Progress reset" },
+        ["set.yes"] = new[] { "EVET, SİL", "YES, DELETE" },
+        ["set.no"] = new[] { "VAZGEÇ", "CANCEL" },
+        ["set.close"] = new[] { "TAMAM", "DONE" },
+        ["pause.title"] = new[] { "DURAKLATILDI", "PAUSED" },
+        ["pause.resume"] = new[] { "DEVAM", "RESUME" },
+        ["pause.menu"] = new[] { "ANA MENÜ", "MAIN MENU" },
+        ["load.title"] = new[] { "YÜKLENİYOR", "LOADING" },
+        ["load.tip"] = new[] { "İPUCU", "TIP" },
+        ["tip.1"] = new[] { "Kasap hücumdan sonra nefes nefese kalır: o an iki kat hasar alır.", "The Butcher is winded after a charge: it takes double damage then." },
+        ["tip.2"] = new[] { "Kasap'ı bir binaya doğru koşturursan duvara çarpıp sersemler.", "Lure the Butcher's charge into a building and it stuns itself." },
+        ["tip.3"] = new[] { "Kalkanlı zombiyi yandan ya da arkadan vur.", "Shoot the Shield zombie from the side or behind." },
+        ["tip.4"] = new[] { "Bombalıyı kalabalığın ortasında patlat.", "Pop the Bomber in the middle of a crowd." },
+        ["tip.5"] = new[] { "Dil seni yakalarsa dile ateş et — kopar.", "Grabbed by a tongue? Shoot the tongue to snap it." },
+        ["tip.6"] = new[] { "Doldururken tatlı noktada tekrar bas: anında dolar, sonraki şarjör güçlü.", "Tap again in the sweet spot while reloading: instant reload and a stronger next mag." },
+        ["tip.7"] = new[] { "Joystick'i sonuna kadar itip alçak engele koş: üstünden atlarsın.", "Push the stick all the way into low cover to vault over it." },
+        ["tip.8"] = new[] { "Kırmızı variller zincirleme patlar — zombileri onlara çek.", "Red barrels chain-explode — lead the horde past them." },
+        ["tip.9"] = new[] { "Nefes arasında can yenilenir; hedeflere o zaman koş.", "Health regenerates between waves; run for objectives then." },
+        ["tip.10"] = new[] { "Hasar almak komboyu kırar. Mesafeni koru.", "Taking damage breaks your combo. Keep your distance." },
 
         // --- HUD
         ["hud.health"] = new[] { "CAN", "HP" },

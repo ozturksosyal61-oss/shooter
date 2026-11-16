@@ -167,18 +167,24 @@ public class GameAudio : MonoBehaviour
     }
 }
 
-/// <summary>Saved volume settings (0..1) applied to the AudioMixer's exposed parameters.</summary>
+/// <summary>Volume settings (0..1, stored in the save file) applied to the AudioMixer's exposed parameters.
+/// Music → music group; "effects" (Sfx) drives both the SFX and UI groups.</summary>
 public static class AudioPrefs
 {
     public const string Master = "MasterVolume", Music = "MusicVolume", Sfx = "SfxVolume", Ui = "UiVolume";
 
-    public static float Get(string key, float def = 1f) => PlayerPrefs.GetFloat("vol_" + key, def);
+    public static float Get(string key, float def = 1f)
+    {
+        var s = SaveSystem.Data.settings;
+        return key == Music ? s.music : key == Sfx || key == Ui ? s.sfx : 1f;
+    }
 
     public static void Set(AudioMixer mixer, string key, float value)
     {
-        PlayerPrefs.SetFloat("vol_" + key, Mathf.Clamp01(value));
-        PlayerPrefs.Save();
-        if (mixer) mixer.SetFloat(key, ToDb(value));
+        value = Mathf.Clamp01(value);
+        var s = SaveSystem.Data.settings;
+        if (key == Music) s.music = value; else if (key == Sfx || key == Ui) s.sfx = value;
+        Apply(mixer);
     }
 
     public static void Apply(AudioMixer mixer)

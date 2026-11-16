@@ -19,6 +19,8 @@ public struct DistrictMood
 public class DistrictAtmosphere : MonoBehaviour
 {
     public Light sun;
+    [Tooltip("Whose district sets the mood (menu: the orbit point); defaults to the player.")]
+    public Transform focus;
     public Camera cam;
     [Tooltip("Indexed by District.")]
     public DistrictMood[] moods = new DistrictMood[4];
@@ -42,8 +44,9 @@ public class DistrictAtmosphere : MonoBehaviour
     {
         var cm = ChunkManager.I;
         var gm = GameManager.I;
-        if (!cm || !gm || !gm.player || moods == null || moods.Length < 4) return;
-        Current = cm.DistrictAtPosition(gm.player.transform.position);
+        Transform who = focus ? focus : gm && gm.player ? gm.player.transform : null;
+        if (!cm || !who || moods == null || moods.Length < 4) return;
+        Current = cm.DistrictAtPosition(who.position);
         var target = moods[(int)Current];
         float k = snap || !init ? 1f : 1f - Mathf.Exp(-blendSpeed * Time.unscaledDeltaTime);
         init = true;
