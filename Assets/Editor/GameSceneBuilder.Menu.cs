@@ -162,6 +162,7 @@ public static partial class GameSceneBuilder
         sp.terms = MakeButton("Terms", p, "set.terms", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(30f, y), new Vector2(250f, 76f), 30);
         sp.reset = MakeButton("Reset", p, "set.reset", new Color(0.55f, 0.16f, 0.12f), new Vector2(0.5f, 0.5f), new Vector2(395f, y), new Vector2(440f, 76f), 28);
         sp.close = MakeButton("Close", p, "set.close", UiOrange, new Vector2(0.5f, 0f), new Vector2(0f, 70f), new Vector2(380f, 96f), 44, UiInk);
+        sp.restore = MakeButton("Restore", p, "set.restore", UiKhakiDark, new Vector2(0.5f, 0f), new Vector2(450f, 70f), new Vector2(440f, 80f), 26);
         var mail = Txt("Mail", p, 24, TextAnchor.MiddleLeft, new Color(UiCream.r, UiCream.g, UiCream.b, 0.7f));
         Anchor(mail.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(40f, 22f), new Vector2(600f, 36f));
         mail.text = SettingsPanel.SupportMail;
@@ -245,7 +246,7 @@ public static partial class GameSceneBuilder
     }
 
     // ---------------------------------------------------------------- menu scene
-    static void BuildMenuScene(Env env, CityMats cm, CityKit kit)
+    static void BuildMenuScene(Env env, CityMats cm, CityKit kit, Mats m)
     {
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         // A quiet corner of the same city, a few chunks away from the spawn block.
@@ -260,6 +261,7 @@ public static partial class GameSceneBuilder
         cam.fieldOfView = 40f; cam.nearClipPlane = 1f; cam.farClipPlane = 90f;
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.2f, 0.21f, 0.23f);
+        cam.cullingMask = ~(1 << GameLayers.Preview);
         camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
         camGo.AddComponent<MenuCamera>().focus = focus;
         atmo.cam = cam;
@@ -317,6 +319,7 @@ public static partial class GameSceneBuilder
         Stretch(mm.toastText.rectTransform);
 
         mm.settingsPanel = BuildSettingsPanel(root);
+        BuildEconomyMenu(root, mm, m);
 
         // OZT Digital splash (once per session, after Unity's).
         var spl = Img("Splash", root, ui.flat, new Color(0.03f, 0.03f, 0.03f, 1f));

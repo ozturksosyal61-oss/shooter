@@ -8,6 +8,8 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | File(s) | Source | Author | License |
 |---|---|---|---|
 | `SFX/rifle_shot_01..03` | Single shots sliced from AR-15 / AK-47 recordings — [The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library) | bart (OpenGameArt) | CC0 |
+| `SFX/smg_shot_01..02`, `hmg_shot_01..02`, `sniper_shot_01` | Pitched / filtered / layered from `rifle_shot` (above) + synthesized thump, crack and echo — `Tools/synth_guns.py` | bart (OpenGameArt) + this project | CC0 (derivative) |
+| `SFX/coin`, `SFX/purchase` | Synthesized — `Tools/synth_guns.py` | this project | CC0 |
 | `SFX/reload_mag_out`, `reload_mag_in`, `reload_bolt` | Sliced from `assaultriflereload1.wav` — [Gun reload sounds](https://opengameart.org/content/gun-reload-sounds) | springyspringo | CC0 |
 | `SFX/hit_flesh_01..04` | Layer of Kenney *impactPunch_medium* + Kenney *slime* — [Impact Sounds](https://kenney.nl/assets/impact-sounds), [Sci-fi Sounds](https://kenney.nl/assets/sci-fi-sounds) | Kenney | CC0 |
 | `SFX/hit_crit_01..03` | *impactPunch_heavy* — Kenney Impact Sounds | Kenney | CC0 |
@@ -65,6 +67,8 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | `Assets/Art/Environment/StatueSoldier.asset` | Soldier mesh baked in its idle pose by the builder (plaza statue) | this project | project-owned |
 | Gas station, bus stop, fountain, signal tower, helicopter, flare / supply crates | Built from primitives in `GameSceneBuilder.City.cs` | this project | — |
 | `Assets/Art/Weapons/Rifle` | Assault Rifle ([poly.pizza/m/Bgvuu4CUMV](https://poly.pizza/m/Bgvuu4CUMV), Ultimate Gun Pack) | Quaternius | CC0 |
+| `Assets/Art/Weapons/{Smg,Shotgun,Hmg,Sniper}` | [Ultimate Gun Pack](https://quaternius.com/packs/ultimateguns.html) (via poly.pizza), normalized like the rifle | Quaternius | CC0 |
+| `Assets/Art/Characters/Soldier/Textures/Costumes/*` | Recoloured / patterned variants of the soldier texture, `Tools/make_costumes.py` | this project | project-owned |
 | `Assets/Art/Characters/{ShieldZombie,BombZombie,TongueZombie}` | Special zombie models supplied by the project owner (originals in `_mixamo/Source~/`), decimated to ~20k tris with `Tools/blender_export_mixamo.py`; rig + animations (Mutant Walking/Punch/Roaring/Dying, Drunk Walk, Zombie Running/Agonizing, Sneaking Forward, Frisbee Throw, Pulling A Rope) via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
 | `Assets/Art/Characters/Kasap` | Boss "Kasap" model supplied by the project owner (original in `_mixamo/Source~/kasap.glb`), decimated + re-baked with `Tools/blender_export_mixamo.py`; rig + animations (Mutant Walking / Run / Roaring / Jump Attack / Breathing Idle / Dying) via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |
 | `Assets/Art/Characters/*` | Soldier / Zombie models supplied by the project owner; rig + animations via Adobe Mixamo | — / Adobe | project-owned / Mixamo terms |

@@ -19,7 +19,11 @@ public class GameSmokeTest
         InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
         mouse = InputSystem.AddDevice<Mouse>();
         mouse.MakeCurrent();
+        // Tests never touch the player's real save (selected weapon, currency...).
+        SaveSystem.Store = new MemorySaveStore();
         SaveSystem.Data.tutorialDone = true;
+        Store.UseFake = Ads.UseFake = true;
+        Store.Backend = null; Ads.Backend = null;
         GameManager.TimeScale = 1f;
     }
 
@@ -28,6 +32,7 @@ public class GameSmokeTest
     {
         if (mouse != null) InputSystem.RemoveDevice(mouse);
         GameManager.TimeScale = 1f;
+        SaveSystem.Store = null;
     }
 
     static Vector2 ScreenPos(RectTransform rt) => RectTransformUtility.WorldToScreenPoint(null, rt.position);
@@ -751,6 +756,84 @@ public class GameSmokeTest
         {
             SaveSystem.Store = null;
         }
+    }
+
+    [UnityTest, Timeout(300000)]
+    public IEnumerator ShopLoadoutAndRunRewards()
+    {
+        GameManager.TimeScale = 2f;
+        SceneManager.LoadScene(LoadingScreen.MenuScene);
+        yield return null;
+        yield return null;
+        var mm = MainMenu.I;
+        Assert.NotNull(mm.shopUI, "shop in the menu");
+        Profile.Grant(6000, 100, "test");
+        var shop = mm.shopUI;
+
+        // Weapons: buy the SMG, equip it, one damage upgrade.
+        shop.Open(ShopUI.Tab.Weapons, (int)WeaponId.Smg);
+        yield return null;
+        Assert.IsTrue(shop.previewImage.enabled, "3D preview for weapons");
+        shop.ActNow();
+        Assert.IsTrue(Profile.Owns(WeaponId.Smg), "bought with gold");
+        shop.ActNow();
+        Assert.AreEqual(WeaponId.Smg, Profile.SelectedWeapon, "equipped");
+        shop.upgradeButtons[0].onClick.Invoke();
+        Assert.IsTrue(shop.confirm.activeSelf, "purchase confirmation");
+        shop.confirmYes.onClick.Invoke();
+        Assert.AreEqual(1, Profile.Level(WeaponId.Smg, WeaponStat.Damage));
+
+        // Costume.
+        shop.Open(ShopUI.Tab.Costumes, (int)CostumeId.Woodland);
+        shop.ActNow();
+        Assert.AreEqual(CostumeId.Woodland, Profile.SelectedCostume);
+
+        // Gems: fake store purchase.
+        int gems0 = Profile.Gems;
+        shop.Open(ShopUI.Tab.Gems, 1);
+        shop.ActNow();
+        yield return WaitUntil(() => Profile.Gems > gems0, 5f);
+        Assert.AreEqual(gems0 + 80, Profile.Gems, "fake IAP delivered");
+        shop.Close();
+
+        // Loadout → game: weapon + costume applied.
+        mm.loadout.Open();
+        Assert.IsTrue(mm.loadout.root.activeSelf);
+        mm.PlayEndless();
+        yield return WaitUntil(() => GameManager.I && !LoadingScreen.IsLoading, 20f);
+        var gm = GameManager.I;
+        var p = gm.player;
+        var lo = p.GetComponent<WeaponLoadout>();
+        Assert.AreEqual(WeaponId.Smg, lo.Current);
+        Assert.AreEqual(Economy.Magazine(Economy.Weapon(WeaponId.Smg), 0), p.weapon.magazineSize);
+        Assert.AreEqual(SfxId.ShootSmg, p.weapon.shootSfx);
+        Assert.AreEqual(CostumeId.Woodland, lo.Costume);
+        yield return Wait(0.5f);
+
+        // Death → gold, continue with gems, second death → no second continue, 2x gold with a (fake) ad.
+        gm.AddBonus(2000);   // an instant death on wave 0 earns nothing by design
+        int gold0 = Profile.Gold;
+        p.TakeDamage(9999f, Vector3.forward);
+        yield return WaitUntil(() => RunRewards.I.root.activeSelf, 5f);
+        Assert.Greater(Profile.Gold, gold0, "run gold paid");
+        Assert.IsTrue(RunRewards.I.continueGemButton.gameObject.activeSelf);
+        int gemsBefore = Profile.Gems;
+        RunRewards.I.ContinueWithGems();
+        Assert.IsFalse(gm.IsGameOver, "continued");
+        Assert.IsFalse(p.IsDead);
+        Assert.AreEqual(gemsBefore - Economy.ContinueGems, Profile.Gems);
+        yield return Wait(1f);
+        p.TakeDamage(9999f, Vector3.forward);
+        yield return WaitUntil(() => RunRewards.I.root.activeSelf, 5f);
+        Assert.IsFalse(RunRewards.I.continueGemButton.gameObject.activeSelf, "one continue per run");
+        int g1 = Profile.Gold;
+        int last = RunRewards.I.LastGold;
+        RunRewards.I.DoubleGold();
+        yield return WaitUntil(() => RunRewards.I.Doubled, 5f);
+        Assert.AreEqual(g1 + last, Profile.Gold, "2x gold");
+        bool anyRuns = false;
+        foreach (var q in Profile.Quests) if (q.progress > 0) anyRuns = true;
+        Assert.IsTrue(anyRuns || Profile.Quests.Count == 0, "quests got the run");
     }
 
     [UnityTest, Timeout(300000)]

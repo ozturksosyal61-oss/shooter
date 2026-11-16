@@ -17,6 +17,8 @@ public enum SfxId
     Radio, ObjectiveTick, ObjectiveDone, ObjectiveBig, Helicopter,
     // F9 — boss
     BossRoar, BossStep, BossCharge, BossSlam,
+    // F13 — weapons / economy
+    ShootSmg, ShootHmg, ShootSniper, Coin, Purchase,
 }
 
 [Serializable]

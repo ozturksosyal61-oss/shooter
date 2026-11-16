@@ -195,6 +195,16 @@ public class PlayerController : MonoBehaviour
         if (Health <= 0f) Die();
     }
 
+    /// <summary>Continue after death (rewarded ad / gems): full health, back on its feet.</summary>
+    public void Revive()
+    {
+        if (!IsDead) return;
+        IsDead = false;
+        Health = maxHealth;
+        knock = Vector3.zero;
+        if (rig) rig.Revive();
+    }
+
     void Die()
     {
         IsDead = true;

@@ -31,6 +31,40 @@ public class WalletData
     public int gold, gems;
 }
 
+[Serializable]
+public class WeaponLevels
+{
+    public string id;
+    public int damage, magazine, reload;
+}
+
+[Serializable]
+public class QuestState
+{
+    public int index;     // into Economy.QuestPool
+    public int progress;
+    public bool claimed;
+}
+
+/// <summary>Owned items, permanent upgrades, selections and daily state (F13).</summary>
+[Serializable]
+public class EconomyData
+{
+    public List<string> weapons = new List<string> { nameof(WeaponId.M4) };
+    public List<WeaponLevels> levels = new List<WeaponLevels>();
+    public string weapon = nameof(WeaponId.M4);
+    public List<string> costumes = new List<string> { nameof(CostumeId.Standard) };
+    public string costume = nameof(CostumeId.Standard);
+    public int startHealth, goldBoost, startCards;
+    public bool vip, starterPack;
+    public int loginDay = -1, loginIndex = -1;
+    public int questDay = -1;
+    public List<QuestState> quests = new List<QuestState>();
+    public int freeGemDay = -1;
+    public long lifetimeGold;
+    public List<string> receipts = new List<string>();
+}
+
 /// <summary>Campaign progress (chapters later): stars per chapter.</summary>
 [Serializable]
 public class CampaignData
@@ -52,6 +86,7 @@ public class SaveData
     public WalletData wallet = new WalletData();
     public CampaignData campaign = new CampaignData();
     public List<string> inventory = new List<string>();
+    public EconomyData economy = new EconomyData();
 }
 
 /// <summary>Where the JSON lives. Local file now; a cloud store (Game Center / Play Games saved games) implements the same.</summary>
@@ -111,7 +146,11 @@ public class MemorySaveStore : ISaveStore
 /// </summary>
 public static class SaveSystem
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
+    // Tamper protection: the JSON is obfuscated (xor + base64) and signed (SHA-256 of a salt + payload).
+    // Not unbreakable — just enough that editing the file by hand makes it invalid (→ backup / fresh).
+    const string Salt = "h0ld0ut-0zt-5a1t-2026";
+    const string Key = "ZombieHoldout#OZT";
 
     static SaveData data;
     static ISaveStore store;
@@ -169,14 +208,49 @@ public static class SaveSystem
         Changed?.Invoke();
     }
 
-    public static string Serialize(SaveData d) => JsonUtility.ToJson(d, true);
+    [Serializable]
+    class Envelope { public int v; public string p; public string h; }
 
-    /// <summary>Parses and migrates; null when the text is missing or corrupt.</summary>
-    public static SaveData Deserialize(string json)
+    public static string Serialize(SaveData d)
     {
-        if (string.IsNullOrWhiteSpace(json)) return null;
+        string json = JsonUtility.ToJson(d);
+        return JsonUtility.ToJson(new Envelope { v = d.version, p = Obfuscate(json), h = Hash(json) });
+    }
+
+    static string Obfuscate(string json)
+    {
+        var b = System.Text.Encoding.UTF8.GetBytes(json);
+        for (int i = 0; i < b.Length; i++) b[i] ^= (byte)Key[i % Key.Length];
+        return Convert.ToBase64String(b);
+    }
+
+    static string Deobfuscate(string p)
+    {
+        var b = Convert.FromBase64String(p);
+        for (int i = 0; i < b.Length; i++) b[i] ^= (byte)Key[i % Key.Length];
+        return System.Text.Encoding.UTF8.GetString(b);
+    }
+
+    public static string Hash(string json)
+    {
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+            return BitConverter.ToString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(Salt + json))).Replace("-", "");
+    }
+
+    /// <summary>Parses (signed envelope, or a plain v1 JSON from before F13) and migrates; null when missing, corrupt or tampered.</summary>
+    public static SaveData Deserialize(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
         try
         {
+            string json = text;
+            var env = JsonUtility.FromJson<Envelope>(text);
+            if (env != null && !string.IsNullOrEmpty(env.p))
+            {
+                json = Deobfuscate(env.p);
+                if (env.h != Hash(json)) { Debug.LogWarning("Save: signature mismatch"); return null; }
+            }
+            else if (text.Contains("\"economy\"")) return null; // v2+ data must be signed
             var d = JsonUtility.FromJson<SaveData>(json);
             if (d == null || d.version <= 0 || d.version > CurrentVersion + 100) return null;
             Migrate(d);
@@ -193,7 +267,16 @@ public static class SaveSystem
         d.wallet ??= new WalletData();
         d.campaign ??= new CampaignData();
         d.inventory ??= new List<string>();
-        // if (d.version < 2) { ... } — future steps go here.
+        // v1 → v2: economy section (owned M4 + standard uniform).
+        d.economy ??= new EconomyData();
+        var e = d.economy;
+        e.weapons ??= new List<string>(); e.levels ??= new List<WeaponLevels>(); e.costumes ??= new List<string>();
+        e.quests ??= new List<QuestState>(); e.receipts ??= new List<string>();
+        if (!e.weapons.Contains(nameof(WeaponId.M4))) e.weapons.Add(nameof(WeaponId.M4));
+        if (!e.costumes.Contains(nameof(CostumeId.Standard))) e.costumes.Add(nameof(CostumeId.Standard));
+        if (string.IsNullOrEmpty(e.weapon)) e.weapon = nameof(WeaponId.M4);
+        if (string.IsNullOrEmpty(e.costume)) e.costume = nameof(CostumeId.Standard);
+        // if (d.version < 3) { ... } — future steps go here.
         d.version = CurrentVersion;
     }
 

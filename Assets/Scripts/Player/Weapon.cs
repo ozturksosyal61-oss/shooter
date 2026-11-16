@@ -25,6 +25,14 @@ public class Weapon : MonoBehaviour
     public float autoAimRange = 18f;
     public float maxAimAngleToFire = 40f;
     public float cameraKick = 0.12f;
+    [Header("Weapon type (set by WeaponLoadout)")]
+    public float bulletLife = 0.6f;
+    [Tooltip("Pellets per shot (shotgun); cards add extra bullets on top.")]
+    public int basePellets = 1;
+    public float pelletSpread = 6f;
+    public int basePierce;
+    public float shotShake = 0.02f;
+    public SfxId shootSfx = SfxId.Shoot;
     [Tooltip("Zombies a bullet passes through (card: Delici Mermi).")]
     public int pierce;
     [Tooltip("Extra bullets per shot, fanned out, each at 70% damage (card: Çift Mermi).")]
@@ -208,6 +216,15 @@ public class Weapon : MonoBehaviour
         Vector3 castFrom = owner.transform.position; castFrom.y = start.y;
         float scale = DamageScale;
         if (BonusShots > 0) BonusShots--;
+        int pellets = Mathf.Max(1, basePellets);
+        for (int p = 1; p < pellets; p++)
+        {
+            // Shotgun: a fan of pellets inside the cone.
+            bool pc = Random.value < critChance;
+            float pd = damage * scale * Random.Range(1f - damageJitter, 1f + damageJitter) * (pc ? critMultiplier : 1f);
+            Vector3 pdir = Quaternion.Euler(0f, Random.Range(-pelletSpread, pelletSpread), 0f) * dir;
+            pool.Get().Launch(start, castFrom, pdir, bulletSpeed * Random.Range(0.92f, 1.05f), pd, pc, pool, bulletLife * Random.Range(0.85f, 1.1f), pierce + basePierce);
+        }
         for (int b = 0; b <= extraBullets; b++)
         {
             bool crit = Random.value < critChance;
@@ -220,7 +237,7 @@ public class Weapon : MonoBehaviour
                 d = Quaternion.Euler(0f, side, 0f) * dir;
                 dmg *= extraBulletDamage;
             }
-            pool.Get().Launch(start, castFrom, d, bulletSpeed, dmg, crit, pool, 0.6f, pierce);
+            pool.Get().Launch(start, castFrom, d, bulletSpeed, dmg, crit, pool, bulletLife, pierce + basePierce);
         }
 
         if (muzzleFlash)
@@ -235,7 +252,7 @@ public class Weapon : MonoBehaviour
         if (rig) rig.Kick();
         var gm = GameManager.I;
         if (gm.cameraRig) gm.cameraRig.Kick(-dir, cameraKick);
-        gm.Shake(0.02f);
-        GameAudio.Play(SfxId.Shoot, start);
+        gm.Shake(shotShake);
+        GameAudio.Play(shootSfx, start);
     }
 }

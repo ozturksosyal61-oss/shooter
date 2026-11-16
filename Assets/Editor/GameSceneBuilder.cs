@@ -39,6 +39,7 @@ public static partial class GameSceneBuilder
         ConfigureCharacterTexture(SoldierTex);
         ConfigureCharacterTexture(ZombieTex);
         foreach (var dir in new[] { ShieldDir, BombDir, TongueDir }) ConfigureCharacterTexture(BaseColor(dir));
+        foreach (var c in CostumeNames()) ConfigureCharacterTexture(CostumeTex(c));
         var m = CreateMaterials(t);
         ConfigureAudioImports();
         var anims = ImportCharacterAnimations();
@@ -62,7 +63,7 @@ public static partial class GameSceneBuilder
         AssetDatabase.SaveAssets();
         BuildScene(scene, m, t, env, cm, kit, boss);
         AssetDatabase.SaveAssets();
-        BuildMenuScene(env, cm, kit);
+        BuildMenuScene(env, cm, kit, m);
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScenePath, true), new EditorBuildSettingsScene(ScenePath, true) };
         AssetDatabase.SaveAssets();
         Debug.Log("BUILD: done");
@@ -82,6 +83,7 @@ public static partial class GameSceneBuilder
         layers.GetArrayElementAtIndex(GameLayers.Vaultable).stringValue = "Vaultable";
         layers.GetArrayElementAtIndex(GameLayers.Zombie).stringValue = "Zombie";
         layers.GetArrayElementAtIndex(GameLayers.Player).stringValue = "Player";
+        layers.GetArrayElementAtIndex(GameLayers.Preview).stringValue = "Preview";
         tm.ApplyModifiedPropertiesWithoutUndo();
 
         Physics.IgnoreLayerCollision(GameLayers.Player, GameLayers.Zombie, true);
@@ -795,6 +797,7 @@ public static partial class GameSceneBuilder
         BuildObjectiveHud(hud, t);
         BuildBossHud(hud);
         BuildPauseUi(hud, controls);
+        BuildRewardsUi(hud, controls);
 
         var warm = new GameObject("Warmup").AddComponent<Warmup>();
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })

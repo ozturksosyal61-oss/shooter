@@ -19,6 +19,8 @@ public static class IosPostBuild
         plist.root.SetString("CFBundleDisplayName", "Holdout");
         // Only standard HTTPS / OS crypto: no export-compliance questions on every upload.
         plist.root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
+        // App Tracking Transparency prompt (rewarded ads; refused → non-personalised ads).
+        plist.root.SetString("NSUserTrackingUsageDescription", "Reklamları ilgi alanlarına göre göstermek için kullanılır. Reddedersen reklamlar kişiselleştirilmez.");
         plist.WriteToFile(plistPath);
     }
 }

@@ -6,6 +6,7 @@ public static class GameLayers
     public const int Vaultable = 9;  // crates, cars, barricades: the player vaults these
     public const int Zombie = 10;
     public const int Player = 11;
+    public const int Preview = 12;   // shop preview stage (rendered by its own camera only)
 
     public const int BlockerMask = 1 << Blocker;
     public const int VaultableMask = 1 << Vaultable;

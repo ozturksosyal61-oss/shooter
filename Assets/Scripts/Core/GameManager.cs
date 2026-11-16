@@ -205,6 +205,37 @@ public class GameManager : MonoBehaviour
         if (hud) hud.FlashDamage();
     }
 
+    /// <summary>Raised when the run ends (rewards, quests) — again after a continue.</summary>
+    public event System.Action GameOverStarted;
+    public event System.Action Revived;
+    public int Continues { get; private set; }
+    Coroutine gameOverCo;
+
+    /// <summary>Continue (rewarded ad / gems): back to life, zombies around pushed away.</summary>
+    public void Revive()
+    {
+        if (!IsGameOver || !player) return;
+        if (gameOverCo != null) StopCoroutine(gameOverCo);
+        IsGameOver = false;
+        canRestart = false;
+        Continues++;
+        Time.timeScale = TimeScale * slow;
+        Vector3 p = player.transform.position;
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--)
+        {
+            var z = Zombie.Active[i];
+            Vector3 d = z.transform.position - p; d.y = 0f;
+            if (d.sqrMagnitude > 12f * 12f) continue;
+            if (z.Kind == ZombieKind.Boss) z.Knock(d.normalized * 12f);
+            else z.Despawn();
+        }
+        player.Revive();
+        if (hud) hud.HideGameOver();
+        if (Fx.I) Fx.I.Explosion(p, 5f, false);
+        GameAudio.Play(SfxId.LevelUp, p);
+        Revived?.Invoke();
+    }
+
     public void TriggerGameOver()
     {
         if (IsGameOver) return;
@@ -224,7 +255,8 @@ public class GameManager : MonoBehaviour
         var rec = SaveSystem.Data.records;
         rec.bestScore = r.bestScore; rec.bestWave = r.bestWave; rec.bestKills = r.bestKills; rec.bestTime = r.bestTime;
         SaveSystem.Write();
-        StartCoroutine(GameOverRoutine(wave));
+        GameOverStarted?.Invoke();
+        gameOverCo = StartCoroutine(GameOverRoutine(wave));
     }
 
     IEnumerator GameOverRoutine(int wave)

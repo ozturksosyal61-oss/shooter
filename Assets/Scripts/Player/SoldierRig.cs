@@ -118,6 +118,20 @@ public class SoldierRig : MonoBehaviour
         anim.SetFloat(ReloadSpeed, reloadClipLength / Mathf.Max(0.1f, reloadDuration));
     }
 
+    Transform weaponParent;
+    Vector3 weaponLocalPos;
+    Quaternion weaponLocalRot;
+
+    public void Revive()
+    {
+        if (!dead) return;
+        dead = false;
+        anim.SetBool(Dead, false);
+        anim.Play("Locomotion", 0, 0f);
+        anim.SetLayerWeight(1, 1f);
+        if (weaponRoot && weaponParent) { weaponRoot.SetParent(weaponParent, false); weaponRoot.localPosition = weaponLocalPos; weaponRoot.localRotation = weaponLocalRot; }
+    }
+
     public void Die(Vector3 hitFromDir)
     {
         if (dead) return;
@@ -131,6 +145,7 @@ public class SoldierRig : MonoBehaviour
         anim.SetLayerWeight(1, 0f);
         // Let the rifle follow the right hand from now on.
         var hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+        if (weaponRoot) { weaponParent = weaponRoot.parent; weaponLocalPos = weaponRoot.localPosition; weaponLocalRot = weaponRoot.localRotation; }
         if (hand && weaponRoot) weaponRoot.SetParent(hand, true);
     }
 

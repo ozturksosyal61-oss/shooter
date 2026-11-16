@@ -204,6 +204,12 @@ public static partial class GameSceneBuilder
         E(SfxId.ObjectiveDone, "objective_done", 0.9f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Medium),
         E(SfxId.ObjectiveBig, "objective_big", 1f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Heavy),
         E(SfxId.Helicopter, "heli_rotor", 0.85f, 2, spatial: 0.6f, minInterval: 0.5f, pitchVar: 0.02f, volVar: 0f, maxDist: 80f),
+        // F13 weapons + economy (the shotgun weapon reuses the Shotgun entry).
+        E(SfxId.ShootSmg, "smg_shot", 0.55f, 5, spatial: 0.15f, minInterval: 0.02f, pitchVar: 0.06f, haptic: true, hk: Haptics.Kind.Light),
+        E(SfxId.ShootHmg, "hmg_shot", 0.75f, 5, spatial: 0.15f, minInterval: 0.03f, pitchVar: 0.05f, haptic: true, hk: Haptics.Kind.Light),
+        E(SfxId.ShootSniper, "sniper_shot", 0.95f, 2, spatial: 0.1f, minInterval: 0.1f, pitchVar: 0.03f, duck: true, haptic: true, hk: Haptics.Kind.Heavy),
+        E(SfxId.Coin, "coin", 0.5f, 3, ui: true, minInterval: 0.05f, pitchVar: 0.05f),
+        E(SfxId.Purchase, "purchase", 0.85f, 1, ui: true, pitchVar: 0f, haptic: true, hk: Haptics.Kind.Medium),
         // F9 boss (Kasap): heard from far away, rumble = heavy haptic + music duck.
         E(SfxId.BossRoar, "boss_roar", 1f, 2, spatial: 0.3f, minInterval: 0.3f, pitchVar: 0.04f, duck: true, haptic: true, hk: Haptics.Kind.Heavy, maxDist: 90f),
         E(SfxId.BossStep, "boss_step", 0.8f, 3, spatial: 0.6f, minInterval: 0.12f, pitchVar: 0.06f, haptic: true, hk: Haptics.Kind.Light, maxDist: 60f),

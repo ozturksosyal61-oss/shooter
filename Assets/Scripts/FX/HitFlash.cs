@@ -10,8 +10,11 @@ public class HitFlash : MonoBehaviour
     float until;
     bool on;
 
-    void Awake()
+    void Awake() => Init();
+
+    void Init()
     {
+        if (originals != null) return;
         originals = new Material[renderers.Length];
         for (int i = 0; i < renderers.Length; i++) originals[i] = renderers[i].sharedMaterial;
     }
@@ -20,6 +23,7 @@ public class HitFlash : MonoBehaviour
     public void SetBaseMaterial(Material m)
     {
         if (m == null) return;
+        Init();
         for (int i = 0; i < originals.Length; i++) originals[i] = m;
         if (!on) for (int i = 0; i < renderers.Length; i++) renderers[i].sharedMaterial = m;
     }

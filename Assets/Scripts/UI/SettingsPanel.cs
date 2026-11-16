@@ -21,7 +21,7 @@ public class SettingsPanel : MonoBehaviour
     public Button[] fpsButtons;
     public Button[] qualityButtons;
     public Button[] langButtons;
-    public Button support, privacy, terms, reset, close;
+    public Button support, privacy, terms, reset, close, restore;
     public GameObject confirm;
     public Button confirmYes, confirmNo;
     public Text resetDone;
@@ -49,6 +49,11 @@ public class SettingsPanel : MonoBehaviour
         terms.onClick.AddListener(() => { Click(); Application.OpenURL(TermsUrl); });
         privacy.onClick.AddListener(() => { Click(); Application.OpenURL(PrivacyUrl); });
         reset.onClick.AddListener(() => { Click(); confirm.SetActive(true); });
+        if (restore) restore.onClick.AddListener(() =>
+        {
+            Click();
+            Store.Restore(ok => Notify(Loc.T(ok ? "set.restored" : "set.restore_failed")));
+        });
         confirmNo.onClick.AddListener(() => { Click(); confirm.SetActive(false); });
         confirmYes.onClick.AddListener(() => { Click(); ResetProgress(); });
         close.onClick.AddListener(() => { Click(); Close(); });
@@ -90,11 +95,19 @@ public class SettingsPanel : MonoBehaviour
         Refresh();
     }
 
+    void Notify(string text)
+    {
+        if (!resetDone) return;
+        resetDone.text = text;
+        resetDone.gameObject.SetActive(true);
+        resetDoneT = 2.5f;
+    }
+
     public void ResetProgress()
     {
         SaveSystem.ResetProgress();
         confirm.SetActive(false);
-        if (resetDone) { resetDone.gameObject.SetActive(true); resetDoneT = 2f; }
+        Notify(Loc.T("set.reset_done"));
     }
 
     void Update()

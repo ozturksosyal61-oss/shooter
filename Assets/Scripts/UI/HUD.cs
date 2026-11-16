@@ -416,6 +416,8 @@ public class HUD : MonoBehaviour
 
     static string Time2(float t) => $"{(int)(t / 60f)}:{(int)(t % 60f):00}";
 
+    public void HideGameOver() => gameOverPanel.SetActive(false);
+
     public void ShowGameOver(int score, float time, int kills, int bestCombo, int wave, GameManager.RunRecords rec)
     {
         gameOverPanel.SetActive(true);

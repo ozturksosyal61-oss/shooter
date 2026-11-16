@@ -76,7 +76,10 @@ public class PlaytestBot
         GameManager.TimeScale = ts;
         ChunkManager.SeedOverride = seed;
         if (seed != 0) Random.InitState(seed);
+        SaveSystem.Store = new MemorySaveStore();
         SaveSystem.Data.tutorialDone = Env("PLAYTEST_TUTORIAL", "0") != "1";
+        string weapon = Env("PLAYTEST_WEAPON", "");
+        WeaponLoadout.Override = System.Enum.TryParse(weapon, out WeaponId wid) ? wid : (WeaponId?)null;
         SceneManager.LoadScene("Game");
         yield return null;
         // GameManager caps the game at 60 fps; at timescale N allow 60·N so a frame is still ~1/60 s of game time.

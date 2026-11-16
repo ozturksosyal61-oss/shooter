@@ -541,6 +541,7 @@ public static partial class GameSceneBuilder
         weapon.rig = rig;
 
         var pc = go.AddComponent<PlayerController>();
+        AddLoadout(go, pc, model, rifle, rGrip, lGrip, muzzle, mf);
         pc.model = model.transform;
         pc.rig = rig;
         pc.weapon = weapon;

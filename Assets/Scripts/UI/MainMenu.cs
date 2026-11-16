@@ -20,6 +20,12 @@ public class MainMenu : MonoBehaviour
     public CanvasGroup toast;
     public Text toastText;
     public SettingsPanel settingsPanel;
+    public ShopUI shopUI;
+    public LoadoutPanel loadout;
+    public DailyLoginPanel login;
+    public QuestsPanel quests;
+    public Button questsButton, loginButton;
+    public GameObject questBadge, loginBadge;
 
     static bool splashShown;
     float splashT = -1f, toastT, t;
@@ -32,19 +38,22 @@ public class MainMenu : MonoBehaviour
     {
         play.onClick.AddListener(() => { Click(); ShowPlay(true); });
         back.onClick.AddListener(() => { Click(); ShowPlay(false); });
-        endless.onClick.AddListener(() => { Click(); PlayEndless(); });
+        endless.onClick.AddListener(() => { Click(); if (loadout) loadout.Open(); else PlayEndless(); });
         campaign.onClick.AddListener(() => { Click(); Toast(Loc.T("menu.soon")); });
-        shop.onClick.AddListener(() => { Click(); Toast(Loc.T("menu.soon")); });
+        shop.onClick.AddListener(() => { Click(); if (shopUI) shopUI.Open(ShopUI.Tab.Weapons); else Toast(Loc.T("menu.soon")); });
+        if (questsButton) questsButton.onClick.AddListener(() => { Click(); quests.Open(); });
+        if (loginButton) loginButton.onClick.AddListener(() => { Click(); login.Open(); });
+        Profile.Changed += RefreshWallet;
         settings.onClick.AddListener(() => { Click(); settingsPanel.Open(); });
         ShowPlay(false);
         toast.alpha = 0f;
         SaveSystem.Changed += RefreshWallet;
         RefreshWallet();
         if (!splashShown) { splashShown = true; splashT = 0f; splash.gameObject.SetActive(true); splash.alpha = 1f; }
-        else splash.gameObject.SetActive(false);
+        else { splash.gameObject.SetActive(false); AutoLogin(); }
     }
 
-    void OnDestroy() => SaveSystem.Changed -= RefreshWallet;
+    void OnDestroy() { SaveSystem.Changed -= RefreshWallet; Profile.Changed -= RefreshWallet; }
 
     static void Click() { if (GameAudio.I) GameAudio.Play(SfxId.UiClick, Vector3.zero); }
 
@@ -53,6 +62,18 @@ public class MainMenu : MonoBehaviour
         var w = SaveSystem.Data.wallet;
         gold.text = w.gold.ToString();
         gems.text = w.gems.ToString();
+        if (questBadge) questBadge.SetActive(QuestsPanel.AnyClaimable());
+        if (loginBadge) loginBadge.SetActive(Profile.LoginClaimable >= 0);
+    }
+
+    static bool loginShown;
+
+    /// <summary>Once per session: the daily reward pops up if it is waiting.</summary>
+    void AutoLogin()
+    {
+        if (loginShown || !login || Profile.LoginClaimable < 0) return;
+        loginShown = true;
+        login.Open();
     }
 
     public void ShowPlay(bool on)
@@ -84,7 +105,7 @@ public class MainMenu : MonoBehaviour
             var g = splashLogo.GetComponent<CanvasGroup>();
             if (g) g.alpha = k < 0.25f ? k / 0.25f : k > 0.75f ? Mathf.Clamp01((1f - k) / 0.25f) : 1f;
             if (k > 0.85f) splash.alpha = Mathf.Clamp01((1f - k) / 0.15f);
-            if (k >= 1f) { splashT = -1f; splash.gameObject.SetActive(false); }
+            if (k >= 1f) { splashT = -1f; splash.gameObject.SetActive(false); AutoLogin(); }
         }
 
         if (toastT > 0f) toastT -= dt;

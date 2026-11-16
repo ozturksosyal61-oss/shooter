@@ -631,3 +631,154 @@ public class SaveAndSettingsTests
         Assert.AreEqual(30, Settings.ClampFps(30, 120));
     }
 }
+
+public class EconomyTests
+{
+    [SetUp]
+    public void Mem()
+    {
+        SaveSystem.Store = new MemorySaveStore();
+        Profile.UtcNow = () => new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc);
+    }
+
+    [TearDown]
+    public void Restore()
+    {
+        SaveSystem.Store = null;
+        Profile.UtcNow = () => DateTime.UtcNow;
+    }
+
+    [Test]
+    public void PricesAndUpgradeCurve()
+    {
+        Assert.AreEqual(0, Economy.Weapon(WeaponId.M4).price, "M4 is the starter");
+        for (int i = 1; i < Economy.Weapons.Length; i++) Assert.Greater(Economy.Weapons[i].price, Economy.Weapons[i - 1].price);
+        foreach (WeaponId w in Enum.GetValues(typeof(WeaponId)))
+            foreach (WeaponStat st in Enum.GetValues(typeof(WeaponStat)))
+            {
+                for (int l = 1; l < Economy.MaxUpgrade; l++) Assert.Greater(Economy.UpgradeCost(w, st, l), Economy.UpgradeCost(w, st, l - 1), "costs rise");
+                Assert.AreEqual(-1, Economy.UpgradeCost(w, st, Economy.MaxUpgrade), "max level");
+            }
+        // No pay-to-win: maxed permanent upgrades stay small.
+        Assert.LessOrEqual(Economy.DamageMul(Economy.MaxUpgrade), 1.4f);
+        Assert.GreaterOrEqual(Economy.ReloadMul(Economy.MaxUpgrade), 0.6f);
+        Assert.LessOrEqual(Economy.GoldMultiplier(true, 1), 1.36f);
+        Assert.AreEqual(30, Economy.StartHealthBonus(9), "start health capped at +30");
+        foreach (var p in Economy.Products) StringAssert.StartsWith("com.oztdigital.holdout.", p.id);
+    }
+
+    [Test]
+    public void RunGoldBalance()
+    {
+        // A typical run (wave 7, ~300 kills, 2 objectives, 1 boss) pays a few hundred gold; a weapon costs 3-4 such runs.
+        int typical = Economy.RunGold(6000, 7, 300, 2, 1, 1f);
+        Assert.That(typical, Is.InRange(300, 500));
+        int noBoss = Economy.RunGold(3000, 5, 180, 1, 0, 1f);
+        float runs = Economy.Weapon(WeaponId.Smg).price / (float)((typical + noBoss) / 2);
+        Assert.That(runs, Is.InRange(2.5f, 4.5f), "first weapon in ~3-4 runs");
+        Assert.Greater(Economy.RunGold(6000, 7, 300, 2, 1, 1.25f), typical);
+        Assert.AreEqual(0, Economy.RunGold(0, 0, 0, 0, 0, 1f));
+    }
+
+    [Test]
+    public void LoginStreakCycle()
+    {
+        Assert.AreEqual(0, Economy.LoginIndex(-1, -1, 100), "first ever");
+        Assert.AreEqual(-1, Economy.LoginIndex(100, 0, 100), "once a day");
+        Assert.AreEqual(1, Economy.LoginIndex(100, 0, 101), "consecutive");
+        Assert.AreEqual(0, Economy.LoginIndex(100, 6, 101), "cycle restarts after day 7");
+        Assert.AreEqual(0, Economy.LoginIndex(100, 3, 103), "missed a day");
+
+        Assert.IsTrue(Profile.ClaimLogin());
+        Assert.IsFalse(Profile.ClaimLogin(), "second claim today");
+        Assert.AreEqual(Economy.LoginRewards[0].gold, Profile.Gold);
+        Profile.UtcNow = () => new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        Assert.IsTrue(Profile.ClaimLogin());
+        Assert.AreEqual(Economy.LoginRewards[0].gold + Economy.LoginRewards[1].gold, Profile.Gold);
+    }
+
+    [Test]
+    public void QuestsDailyAndClaim()
+    {
+        var a = Economy.QuestsFor(500); var b = Economy.QuestsFor(500);
+        CollectionAssert.AreEqual(a, b, "same day, same quests");
+        Assert.AreEqual(Economy.QuestsPerDay, new HashSet<int>(a).Count, "distinct");
+        var qs = Profile.Quests;
+        Assert.AreEqual(Economy.QuestsPerDay, qs.Count);
+        Profile.ReportRun(1000, 100, 3, 20, 10, 200);
+        int before = Profile.Gold;
+        for (int i = 0; i < qs.Count; i++) Assert.IsTrue(Profile.ClaimQuest(i), "everything done by a huge run");
+        Assert.Greater(Profile.Gold, before);
+        Assert.IsFalse(Profile.ClaimQuest(0), "claimed once");
+        // A continue after death must not count as another run.
+        Profile.UtcNow = () => new DateTime(2026, 11, 20, 9, 0, 0, DateTimeKind.Utc);
+        Profile.ReportRun(1, 0, 0, 1, 0, 1, true);
+        Profile.ReportRun(1, 0, 0, 1, 0, 1, false);
+        foreach (var q in Profile.Quests)
+            if (Economy.QuestPool[q.index].kind == QuestKind.Runs) Assert.AreEqual(1, q.progress);
+    }
+
+    [Test]
+    public void BuyUpgradeSelectAndCosmetics()
+    {
+        Assert.IsTrue(Profile.Owns(WeaponId.M4));
+        Assert.IsFalse(Profile.BuyWeapon(WeaponId.Smg), "no gold");
+        Profile.Grant(5000, 400, "test");
+        Assert.IsTrue(Profile.BuyWeapon(WeaponId.Smg));
+        Assert.AreEqual(5000 - Economy.Weapon(WeaponId.Smg).price, Profile.Gold);
+        Assert.IsFalse(Profile.BuyWeapon(WeaponId.Smg), "already owned");
+        Profile.SelectWeapon(WeaponId.Smg);
+        Assert.AreEqual(WeaponId.Smg, Profile.SelectedWeapon);
+        Profile.SelectWeapon(WeaponId.Sniper);
+        Assert.AreEqual(WeaponId.Smg, Profile.SelectedWeapon, "cannot select a locked weapon");
+        int g = Profile.Gold;
+        Assert.IsTrue(Profile.BuyUpgrade(WeaponId.Smg, WeaponStat.Damage));
+        Assert.AreEqual(1, Profile.Level(WeaponId.Smg, WeaponStat.Damage));
+        Assert.AreEqual(g - Economy.UpgradeCost(WeaponId.Smg, WeaponStat.Damage, 0), Profile.Gold);
+        Assert.IsTrue(Profile.BuyCostume(CostumeId.Gold), "gems costume");
+        Assert.AreEqual(100, Profile.Gems);
+        Assert.IsFalse(Profile.BuyCostume(CostumeId.Commando), "starter-pack only");
+        Assert.IsTrue(Profile.BuyBonus(BonusId.StartCard));
+        Assert.IsTrue(Profile.ConsumeStartCard());
+        Assert.IsFalse(Profile.ConsumeStartCard());
+    }
+
+    [Test]
+    public void PurchasesDeliverOnceAndRestore()
+    {
+        string small = Economy.ProductPrefix + "gems_small", starter = Economy.ProductPrefix + "starter_pack", vip = Economy.ProductPrefix + "vip";
+        Assert.IsTrue(Profile.Deliver(small, "t1", false));
+        Assert.IsFalse(Profile.Deliver(small, "t1", false), "same transaction twice");
+        Assert.AreEqual(80, Profile.Gems);
+        Assert.IsTrue(Profile.Deliver(starter, "t2", false));
+        Assert.AreEqual(230, Profile.Gems);
+        Assert.AreEqual(2000, Profile.Gold);
+        Assert.IsTrue(Profile.Owns(CostumeId.Commando));
+        Assert.IsTrue(Profile.Deliver(starter, null, true), "restore");
+        Assert.AreEqual(230, Profile.Gems, "restore never pays currency again");
+        Assert.IsTrue(Profile.Deliver(vip, "t3", false));
+        Assert.IsTrue(Profile.Vip);
+        Assert.AreEqual(1.25f, Profile.GoldMultiplier, 1e-4f);
+        Assert.IsFalse(Profile.Deliver("com.other.app.gems", "t4", false), "unknown product");
+    }
+
+    [Test]
+    public void SaveIsSignedAndMigrated()
+    {
+        Profile.Grant(1234, 5, "test");
+        var mem = (MemorySaveStore)SaveSystem.Store;
+        StringAssert.DoesNotContain("1234", mem.json, "values are not stored in clear text");
+        Assert.AreEqual(1234, SaveSystem.Deserialize(mem.json).wallet.gold);
+        // Tamper: change one character of the payload → rejected.
+        int i = mem.json.IndexOf("\"p\":\"") + 10;
+        string bad = mem.json.Substring(0, i) + (mem.json[i] == 'A' ? 'B' : 'A') + mem.json.Substring(i + 1);
+        Assert.IsNull(SaveSystem.Deserialize(bad), "tampered save rejected");
+        // v1 (plain JSON, before F13) migrates to v2 with the starter items.
+        var v1 = SaveSystem.Deserialize("{\"version\":1,\"wallet\":{\"gold\":50}}");
+        Assert.AreEqual(2, v1.version);
+        Assert.AreEqual(50, v1.wallet.gold);
+        Assert.IsTrue(v1.economy.weapons.Contains("M4"));
+        Assert.IsTrue(v1.economy.costumes.Contains("Standard"));
+        Assert.IsNull(SaveSystem.Deserialize("{\"version\":2,\"economy\":{\"vip\":true}}"), "unsigned v2 data rejected");
+    }
+}
