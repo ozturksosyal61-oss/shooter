@@ -19,7 +19,14 @@ Botlar oyunu gerçek girdi yolundan oynar (`Assets/Tests/PlayMode/PlaytestBot.cs
 | 1 | dalga 6, düşüş, geri çekilme; can ×42 | 2/3 | 2/2 | 30–36 sn | 203–292 sn |
 | 2 | can ×65, hücum 15 m/s, hasar 28/26 | 3/3 | 3/3 | 27–61 sn | 319–485 sn |
 
-Kasap'ın saldırıları botlara neredeyse hiç isabet etmiyor (hücum 0 isabet / 15); zorluk boss dalgasındaki kalabalıktan geliyor. Hedef (~%50 galibiyet) için sonraki adım: hücumun takibi / ikinci hücum, boss dalgasında daha fazla özel zombi.
+**F9.1 — daha tehlikeli Kasap** (hücum takibi, öfkede çift hücum, uzak oyuncuya enkaz, şok halkası). `PLAYTEST_BOSS=1`, human ×3:
+
+| Tur | Ayar | Yenen | Dövüş | Boss'tan isabet (hücum / yer vuruşu / fırlatma sayısı) |
+|---|---|---|---|---|
+| 0 | can ×65, takip 70°/sn, enkaz 18 / 2.4 m | 3/3 | 38–77 sn | 3 / 0 / 32 |
+| 1 | can ×85, takip 110°/sn, enkaz 24 / 2.8 m, şok ×0.4 | 3/3 | 57–106 sn | 3 / 3 / 33 |
+
+Hâlâ %50 galibiyetin altında değil; gerçek oyuncu testi bekleniyor. Önceki not: Kasap'ın saldırıları botlara neredeyse hiç isabet etmiyor (hücum 0 isabet / 15); zorluk boss dalgasındaki kalabalıktan geliyor. Hedef (~%50 galibiyet) için sonraki adım: hücumun takibi / ikinci hücum, boss dalgasında daha fazla özel zombi.
 
 ## F8 — şehir çeşitliliği + hikâye hedefleri (2026-11-16)
 

@@ -22,6 +22,11 @@ public class ButcherZombie : Zombie
     public float chargeZombieDamage = 80f;
     public float stunTime = 2f;
     public float tiredTime = 3f;
+    [Tooltip("First part of the run that still bends toward the player (limited turn rate).")]
+    public float homingTime = 0.4f;
+    public float homingTurn = 110f;
+    [Tooltip("Enraged: a second charge follows right away with this shorter wind-up.")]
+    public float secondTelegraph = 0.45f;
     [Tooltip("Blockers smaller than this (EnvProp radius) are smashed instead of stopping the charge.")]
     public float wallMinRadius = 1.6f;
 
@@ -34,6 +39,17 @@ public class ButcherZombie : Zombie
     [Tooltip("Impact moment in the slam clip (seconds at normal speed), measured once from the animation.")]
     public float slamImpactTime = 1.1f;
     public float slamRecover = 0.7f;
+
+    [Tooltip("Shock ring left on the ground after the slam: slows the player inside.")]
+    public float shockTime = 2f;
+    public float shockSlow = 0.4f;
+
+    [Header("Throw (player far away)")]
+    public BossProjectile[] projectiles;
+    public float throwMinDistance = 12f;
+    public float throwWind = 0.7f;
+    public float throwCooldown = 3.5f;
+    public float throwLead = 0.5f;
 
     [Header("Rage (< 50 % health)")]
     public float rageSpeedMul = 1.35f;
@@ -51,10 +67,13 @@ public class ButcherZombie : Zombie
     public Transform[] eyes;
     public Renderer ringRenderer;
 
-    public enum Phase { Walk, ChargeWind, Charge, Stunned, Tired, SlamWind, SlamRecover, Dead }
+    public enum Phase { Walk, ChargeWind, Charge, Stunned, Tired, SlamWind, SlamRecover, Throw, Dead }
 
     Phase phase;
-    float phaseT, chargeCd, slamCd, shoveCd, stepT, curSpeed, chargeLen, traveled;
+    float phaseT, chargeCd, slamCd, shoveCd, stepT, curSpeed, chargeLen, traveled, windTime, throwCd, shockT;
+    int chargeInCombo;
+    Vector3 shockPos, lastPlayerPos, playerVel;
+    Renderer zoneRenderer;
     Vector3 chargeDir;
     bool hitPlayer, lockedLine;
     System.Random rng = new System.Random(1);
@@ -76,6 +95,11 @@ public class ButcherZombie : Zombie
     public int SlamHits { get; private set; }
     public int ShoveHits { get; private set; }
     public int Charges { get; private set; }
+    public int Throws { get; private set; }
+    /// <summary>Charge number inside a rage double charge (1 or 2).</summary>
+    public int ChargeInCombo => chargeInCombo;
+    public bool ShockActive => shockT > 0f;
+    public Vector3 ShockCenter => shockPos;
     public Vector3 ChargeDirection => chargeDir;
     public float ChargeLength => chargeLen;
     /// <summary>Raised on every phase change (tests, bots, HUD).</summary>
@@ -93,6 +117,9 @@ public class ButcherZombie : Zombie
     {
         base.Awake();
         mpb = new MaterialPropertyBlock();
+        if (slamZone) zoneRenderer = slamZone.GetComponent<Renderer>();
+        if (projectiles != null)
+            foreach (var pr in projectiles) if (pr) { pr.transform.SetParent(null, true); pr.Hide(); }
         eyeScale = new Vector3[eyes != null ? eyes.Length : 0];
         for (int i = 0; i < eyeScale.Length; i++) eyeScale[i] = eyes[i] ? eyes[i].localScale : Vector3.one;
     }
@@ -103,6 +130,9 @@ public class ButcherZombie : Zombie
         chargeCd = 2.5f;
         slamCd = 1.5f;
         shoveCd = 0f;
+        throwCd = 4f;
+        shockT = 0f;
+        chargeInCombo = 0;
         flungCount = 0;
         animator.speed = 1f;
         SetPhase(Phase.Walk);
@@ -112,6 +142,10 @@ public class ButcherZombie : Zombie
 
     static readonly Color ringColor = new Color(1f, 0.12f, 0.08f, 1f);
     static readonly Color weakColor = new Color(1f, 0.9f, 0.25f, 1f);
+
+    void OnEnable() => FloatingOrigin.OnShift += Shift;
+    protected override void OnDisable() { base.OnDisable(); FloatingOrigin.OnShift -= Shift; }
+    void Shift(Vector3 d) { shockPos += d; lastPlayerPos += d; }
 
     void SetPhase(Phase p)
     {
@@ -130,7 +164,12 @@ public class ButcherZombie : Zombie
         chargeCd -= dt;
         slamCd -= dt;
         shoveCd -= dt;
+        throwCd -= dt;
         knock *= 0.2f; // explosions barely move it
+        Vector3 pp = player.transform.position;
+        playerVel = Vector3.Lerp(playerVel, (pp - lastPlayerPos) / Mathf.Max(dt, 0.0001f), 1f - Mathf.Exp(-6f * dt));
+        lastPlayerPos = pp;
+        UpdateShock(dt, player);
 
         if (!Enraged && BossRules.Enraged(hp / maxHp))
         {
@@ -158,6 +197,7 @@ public class ButcherZombie : Zombie
                 Hold(dt);
                 if (phaseT >= slamRecover) BackToWalk();
                 break;
+            case Phase.Throw: UpdateThrow(dt, player, dir, dist); break;
         }
     }
 
@@ -187,7 +227,9 @@ public class ButcherZombie : Zombie
         if (player.IsDead) return;
 
         if (dist < slamTrigger && slamCd <= 0f) { StartSlam(); return; }
-        if (chargeCd <= 0f && dist > chargeMinDistance && dist < chargeMaxDistance) { StartChargeWind(dir, dist); return; }
+        if (chargeCd <= 0f && dist > chargeMinDistance && dist < chargeMaxDistance) { chargeInCombo = 1; StartChargeWind(dir, dist); return; }
+        // Kiting from afar does not work: it hurls debris.
+        if (throwCd <= 0f && dist >= throwMinDistance && FreeProjectile() != null) { StartThrow(); return; }
         if (dist < body.radius + 1f && shoveCd <= 0f)
         {
             // Too close for anything else: a heavy shove.
@@ -213,6 +255,7 @@ public class ButcherZombie : Zombie
     {
         if (state != State.Walking || phase == Phase.Dead) return;
         Vector3 d = point - transform.position; d.y = 0f;
+        chargeInCombo = 1;
         StartChargeWind(d.normalized, d.magnitude - chargeOvershoot);
         lockedLine = true;
     }
@@ -224,9 +267,17 @@ public class ButcherZombie : Zombie
         StartSlam();
     }
 
-    void StartChargeWind(Vector3 dir, float dist)
+    /// <summary>Command: throw debris at the player now.</summary>
+    public void ForceThrow()
+    {
+        if (state != State.Walking || phase == Phase.Dead || FreeProjectile() == null) return;
+        StartThrow();
+    }
+
+    void StartChargeWind(Vector3 dir, float dist, float wind = -1f)
     {
         lockedLine = false;
+        windTime = wind > 0f ? wind : chargeTelegraph;
         chargeDir = dir;
         chargeLen = Mathf.Min(dist + chargeOvershoot, chargeMaxDistance);
         animator.CrossFadeInFixedTime(ScreamState, 0.15f, 0);
@@ -240,14 +291,14 @@ public class ButcherZombie : Zombie
     {
         Hold(dt);
         // Tracks the player for most of the wind-up, then commits to the line.
-        if (!lockedLine && phaseT < chargeTelegraph * 0.7f)
+        if (!lockedLine && phaseT < windTime * 0.7f)
         {
             chargeDir = dir;
             chargeLen = Mathf.Min(dist + chargeOvershoot, chargeMaxDistance);
         }
         transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(chargeDir), 400f * dt);
         UpdateStrip();
-        if (phaseT >= chargeTelegraph) StartCharge();
+        if (phaseT >= windTime) StartCharge();
     }
 
     void UpdateStrip()
@@ -279,6 +330,13 @@ public class ButcherZombie : Zombie
     {
         gait = 2f;
         curSpeed = chargeSpeed * (Enraged ? 1.15f : 1f);
+        if (phaseT < homingTime && !lockedLine && !player.IsDead)
+        {
+            // Bends toward the player at the start of the run (limited turn rate), then straight.
+            Vector3 to = player.transform.position - transform.position; to.y = 0f;
+            if (to.sqrMagnitude > 1f)
+                chargeDir = Vector3.RotateTowards(chargeDir, to.normalized, homingTurn * Mathf.Deg2Rad * dt, 0f);
+        }
         float step = curSpeed * dt;
         Vector3 pos = transform.position;
         Vector3 origin = pos + Vector3.up * 1f;
@@ -325,6 +383,14 @@ public class ButcherZombie : Zombie
         }
         if (traveled >= chargeLen)
         {
+            if (Enraged && chargeInCombo == 1 && !player.IsDead)
+            {
+                // Rage: straight into a second charge with a short wind-up.
+                chargeInCombo = 2;
+                Vector3 d2 = ToPlayer(out float dist2);
+                StartChargeWind(d2, dist2, secondTelegraph);
+                return;
+            }
             EnterTired();
         }
     }
@@ -426,7 +492,78 @@ public class ButcherZombie : Zombie
         }
         slamCd = Cooldown(slamCooldown);
         ShowTelegraphs(false, false);
+        shockT = shockTime;
+        shockPos = pos;
+        if (slamZone) slamZone.gameObject.SetActive(true);
         SetPhase(Phase.SlamRecover);
+    }
+
+    void UpdateShock(float dt, PlayerController player)
+    {
+        if (shockT <= 0f) return;
+        shockT -= dt;
+        if (slamZone)
+        {
+            slamZone.position = shockPos + Vector3.up * 0.05f;
+            float s = slamRadius * 2f / transform.localScale.x * (1f + 0.04f * Mathf.Sin(shockT * 25f));
+            slamZone.localScale = new Vector3(s, s, 1f);
+            if (zoneRenderer)
+            {
+                zoneRenderer.GetPropertyBlock(mpb);
+                mpb.SetColor(BaseColorId, new Color(0.35f, 0.75f, 1f, 1f) * Mathf.Clamp01(shockT / shockTime + 0.2f));
+                zoneRenderer.SetPropertyBlock(mpb);
+            }
+        }
+        if (!player.IsDead)
+        {
+            Vector3 d = player.transform.position - shockPos; d.y = 0f;
+            if (d.sqrMagnitude < slamRadius * slamRadius) player.Slow(shockSlow, 0.12f);
+        }
+        if (shockT <= 0f)
+        {
+            if (slamZone)
+            {
+                slamZone.localPosition = new Vector3(0f, 0.05f, 0f);
+                slamZone.gameObject.SetActive(phase == Phase.SlamWind);
+                if (zoneRenderer) { zoneRenderer.GetPropertyBlock(mpb); mpb.SetColor(BaseColorId, new Color(1f, 0.15f, 0.05f, 1f)); zoneRenderer.SetPropertyBlock(mpb); }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ throw
+    BossProjectile FreeProjectile()
+    {
+        if (projectiles == null) return null;
+        foreach (var p in projectiles) if (p && !p.Flying) return p;
+        return null;
+    }
+
+    void StartThrow()
+    {
+        animator.CrossFadeInFixedTime(ScreamState, 0.15f, 0);
+        GameAudio.Play(SfxId.BossRoar, transform.position, 1.2f, 0.7f);
+        SetPhase(Phase.Throw);
+    }
+
+    void UpdateThrow(float dt, PlayerController player, Vector3 dir, float dist)
+    {
+        Hold(dt);
+        Face(dir, dt * 2f);
+        if (phaseT < throwWind) return;
+        int n = Enraged ? 2 : 1;
+        for (int i = 0; i < n; i++)
+        {
+            var pr = FreeProjectile();
+            if (!pr) break;
+            Vector3 target = player.transform.position + Vector3.ClampMagnitude(playerVel, 7f) * (throwLead + 0.4f * i);
+            if (i == 1) target += Vector3.Cross(Vector3.up, dir) * ((float)rng.NextDouble() < 0.5 ? -3f : 3f);
+            float flight = 0.9f + dist * 0.025f;
+            pr.Launch(transform.position + Vector3.up * 4f + transform.forward * 1.2f, target, flight);
+            Throws++;
+        }
+        GameAudio.Play(SfxId.GrenadeThrow, transform.position, 0.6f);
+        throwCd = Cooldown(throwCooldown);
+        BackToWalk();
     }
 
     // ------------------------------------------------------------------ visuals (read-only on state)
@@ -434,7 +571,7 @@ public class ButcherZombie : Zombie
     {
         if (chargeStrip) chargeStrip.gameObject.SetActive(strip);
         if (slamRing) slamRing.gameObject.SetActive(slam);
-        if (slamZone)
+        if (slamZone && shockT <= 0f)
         {
             slamZone.gameObject.SetActive(slam);
             float s = slamRadius * 2f / transform.localScale.x;
@@ -511,6 +648,8 @@ public class ButcherZombie : Zombie
     protected override void OnRemoved()
     {
         base.OnRemoved();
+        shockT = 0f;
+        if (slamZone) slamZone.localPosition = new Vector3(0f, 0.05f, 0f);
         ShowTelegraphs(false, false);
     }
 }

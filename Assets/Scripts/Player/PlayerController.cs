@@ -36,6 +36,16 @@ public class PlayerController : MonoBehaviour
     public float Health { get; private set; }
     public bool IsDead { get; private set; }
     public bool IsVaulting => vaulting;
+    float slowFactor = 1f, slowUntil;
+    /// <summary>Movement multiplier from area effects (boss shock ring); 1 = none.</summary>
+    public float SlowFactor => Time.time < slowUntil ? slowFactor : 1f;
+
+    /// <summary>Slows movement to <paramref name="factor"/> for <paramref name="seconds"/> (refreshed each frame by area effects).</summary>
+    public void Slow(float factor, float seconds)
+    {
+        slowFactor = Time.time < slowUntil ? Mathf.Min(slowFactor, factor) : factor;
+        slowUntil = Mathf.Max(slowUntil, Time.time + seconds);
+    }
     public TongueZombie Grabber { get; private set; }
     public bool IsGrabbed => Grabber != null;
 
@@ -72,7 +82,8 @@ public class PlayerController : MonoBehaviour
         if (vaulting) UpdateVault(dt);
         else if (!(mag >= vaultMinInput && !IsGrabbed && TryStartVault(moveDir)))
         {
-            Vector3 vel = move * moveSpeed + knock;
+            if (Time.time >= slowUntil) slowFactor = 1f;
+            Vector3 vel = move * moveSpeed * slowFactor + knock;
             if (IsGrabbed)
             {
                 // Reeled in by the tongue; the stick still pushes back (slowly).

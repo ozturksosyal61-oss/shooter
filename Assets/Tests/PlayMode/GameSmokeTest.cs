@@ -628,6 +628,11 @@ public class GameSmokeTest
             yield return WaitUntil(() => boss.CurrentPhase != ButcherZombie.Phase.SlamWind, 5f);
             Assert.Less(p.Health, php, "slam hits a player inside the ring");
             Assert.IsTrue(heard.Contains(SfxId.BossSlam));
+            Assert.IsTrue(boss.ShockActive, "shock ring stays after the slam");
+            Teleport(p, boss.ShockCenter + Vector3.right * 2f);
+            yield return null;
+            yield return null;
+            Assert.Less(p.SlowFactor, 1f, "shock ring slows the player");
             yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk, 5f);
             yield return Wait(0.8f); // invulnerability window
             Teleport(p, boss.transform.position + boss.transform.forward * 3f);
@@ -640,12 +645,32 @@ public class GameSmokeTest
             yield return WaitUntil(() => boss.CurrentPhase != ButcherZombie.Phase.SlamWind, 5f);
             Assert.AreEqual(php, p.Health, 0.01f, "leaving the ring dodges the slam");
 
+            // --- Far player: debris throw with a landing marker.
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk && !boss.ShockActive, 8f);
+            Teleport(p, ClearSpot(boss.transform.position, 15f));
+            p.Heal(1000f);
+            yield return Wait(0.6f);
+            php = p.Health;
+            int landed0 = BossProjectile.Landed;
+            boss.ForceThrow();
+            Assert.AreEqual(ButcherZombie.Phase.Throw, boss.CurrentPhase, "throws at a far player");
+            yield return WaitUntil(() => boss.projectiles[0].Flying, 4f);
+            Assert.IsTrue(boss.projectiles[0].marker.gameObject.activeSelf, "landing marker on the ground");
+            yield return WaitUntil(() => BossProjectile.Landed > landed0, 6f);
+            Assert.Less(p.Health, php, "debris hits a player who stays on the marker");
+
             // --- Rage under 50 %.
             Assert.IsFalse(boss.Enraged);
             boss.TakeHit(boss.Health - boss.MaxHealth * 0.45f, false, Vector3.forward, boss.AimPoint, true);
             yield return null;
             yield return null;
             Assert.IsTrue(boss.Enraged, "enraged below half health");
+            yield return WaitUntil(() => boss.CurrentPhase == ButcherZombie.Phase.Walk, 10f);
+            p.Heal(1000f);
+            boss.ForceCharge(p.transform.position);
+            yield return WaitUntil(() => boss.CurrentPhase != ButcherZombie.Phase.ChargeWind && boss.CurrentPhase != ButcherZombie.Phase.Charge || boss.ChargeInCombo == 2, 8f);
+            if (boss.CurrentPhase == ButcherZombie.Phase.Stunned) Debug.Log("SMOKE: rage charge hit a wall, double-charge check skipped");
+            else Assert.AreEqual(2, boss.ChargeInCombo, "enraged: a second charge follows");
 
             // --- Kill: reward, slow-mo, epic card pick.
             int score0 = gm.Score;

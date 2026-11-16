@@ -15,7 +15,7 @@ public static class BossRules
     public const float AliveMul = 0.2f;
 
     /// <summary>Boss health = base zombie health × wave health multiplier × this (× growth per earlier boss).</summary>
-    public static float HealthMul = 65f;
+    public static float HealthMul = 85f;
     public static float HealthGrowthPerBoss = 0.3f;
 
     public const float RageBelow = 0.5f;

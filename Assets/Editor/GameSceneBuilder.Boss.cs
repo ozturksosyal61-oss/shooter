@@ -83,6 +83,44 @@ public static partial class GameSceneBuilder
         ring.SetActive(false);
         k.slamRing = ring.transform;
 
+        // Thrown debris (far player): two reusable chunks of Kenney wreckage + their landing markers.
+        var parts = new[] { "Debris_Door", "Debris_Bumper" };
+        var projs = new List<BossProjectile>();
+        for (int i = 0; i < 2; i++)
+        {
+            var pgo = new GameObject("Debris" + i);
+            pgo.transform.SetParent(go.transform, false);
+            var pr = pgo.AddComponent<BossProjectile>();
+            var meshRoot = new GameObject("Mesh").transform;
+            meshRoot.SetParent(pgo.transform, false);
+            var src = LoadGo($"{EnvPrefabDir}/{parts[i]}.prefab");
+            if (src)
+            {
+                var inst = Object.Instantiate(src);
+                foreach (var mf in inst.GetComponentsInChildren<MeshFilter>())
+                {
+                    var c = new GameObject("Part");
+                    c.transform.SetParent(meshRoot, false);
+                    c.transform.localPosition = inst.transform.InverseTransformPoint(mf.transform.position);
+                    c.transform.localRotation = mf.transform.rotation;
+                    c.transform.localScale = mf.transform.lossyScale;
+                    c.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
+                    var mr = c.AddComponent<MeshRenderer>();
+                    mr.sharedMaterials = mf.GetComponent<MeshRenderer>().sharedMaterials;
+                }
+                Object.DestroyImmediate(inst);
+            }
+            else GameObject.CreatePrimitive(PrimitiveType.Cube).transform.SetParent(meshRoot, false);
+            meshRoot.localScale = Vector3.one * 1.5f;
+            foreach (var col in meshRoot.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(col);
+            pr.mesh = meshRoot;
+            var mk = Quad("Marker", pgo.transform, b.telegraph);
+            pr.marker = mk.transform;
+            pgo.SetActive(false);
+            projs.Add(pr);
+        }
+        k.projectiles = projs.ToArray();
+
         // Eyes: orange glow sprites on the head bone, placed on the red eye texels of the mesh.
         var model = k.model;
         var head = k.animator.GetBoneTransform(HumanBodyBones.Head);

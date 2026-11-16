@@ -348,6 +348,21 @@ public class PlaytestBot
                         move = to.normalized;
                     else if (!boss.IsWeak && to.magnitude < 7f && !(od && od.HasActive))
                         move = (to.normalized + move * 0.4f).normalized;
+                    if (ph != ButcherZombie.Phase.ChargeWind && ph != ButcherZombie.Phase.Charge)
+                    {
+                        // Step off debris landing markers and out of the shock ring.
+                        foreach (var pr in boss.projectiles)
+                        {
+                            if (!pr || !pr.Flying) continue;
+                            Vector3 a = p - pr.Target; a.y = 0f;
+                            if (a.magnitude < pr.Radius + 1f) move = a.sqrMagnitude > 0.01f ? a.normalized : Vector3.right;
+                        }
+                        if (boss.ShockActive)
+                        {
+                            Vector3 a = p - boss.ShockCenter; a.y = 0f;
+                            if (a.magnitude < boss.slamRadius + 0.5f) move = a.sqrMagnitude > 0.01f ? a.normalized : Vector3.right;
+                        }
+                    }
                     lastMove = move.sqrMagnitude > 0.01f ? move : lastMove;
                     // Winded boss: everything into it.
                     if (boss.IsWeak && (bp - p).sqrMagnitude < 20f * 20f) nearest = boss;
@@ -443,7 +458,7 @@ public class PlaytestBot
             $"bossFight={(bossDir && bossDir.BossesDefeated > 0 ? bossDir.LastFightTime : bossSeen >= 0f ? gm.GameTime - bossSeen : 0):0}s " +
             $"bossHpLeft={(bossDir && bossDir.Boss && bossDir.BossAlive ? 100f * bossDir.Boss.Health / bossDir.Boss.MaxHealth : 0):0}% " +
             $"bossHurts={(bossSeen >= 0f ? hurts - bossHurtStart : 0):0} " +
-            (bossDir && bossDir.Boss is ButcherZombie bb ? $"charges={bb.Charges} chargeHits={bb.ChargeHits} slamHits={bb.SlamHits} shoves={bb.ShoveHits}" : "");
+            (bossDir && bossDir.Boss is ButcherZombie bb ? $"charges={bb.Charges} throws={bb.Throws} chargeHits={bb.ChargeHits} slamHits={bb.SlamHits} shoves={bb.ShoveHits}" : "");
         log.AppendLine(summary);
         log.AppendLine("cards: " + cardLog);
         log.AppendLine("objectives: " + objLog);
