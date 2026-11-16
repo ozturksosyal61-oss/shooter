@@ -202,7 +202,7 @@ public static partial class GameSceneBuilder
     static GameObject Dim(string name, Transform root, out Transform panel, Vector2 size)
     {
         var dim = Img(name, root, ui.flat, new Color(0f, 0f, 0f, 0.75f));
-        Stretch(dim.rectTransform);
+        Stretch(dim.rectTransform); dim.raycastTarget = true; // modal: blocks clicks behind
         var p = Panel("Panel", dim.transform, UiKhaki, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, size, 12f);
         panel = p.transform;
         return dim.gameObject;
@@ -277,7 +277,7 @@ public static partial class GameSceneBuilder
 
         // Confirmation.
         var conf = Img("Confirm", shop.root.transform, ui.flat, new Color(0f, 0f, 0f, 0.6f));
-        Stretch(conf.rectTransform);
+        Stretch(conf.rectTransform); conf.raycastTarget = true;
         var cp = Panel("Panel", conf.transform, UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1000f, 420f), 12f);
         shop.confirmText = Txt("Text", cp.transform, 40, TextAnchor.MiddleCenter, UiCream);
         Anchor(shop.confirmText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(900f, 200f));

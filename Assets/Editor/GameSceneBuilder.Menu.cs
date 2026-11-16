@@ -46,6 +46,7 @@ public static partial class GameSceneBuilder
     {
         // Buttons that get hidden must not have a shadow: Panel's shadow is a sibling and would stay visible.
         var img = Panel(name, parent, color, anchor, new Vector2(0.5f, 0.5f), pos, size, shadow);
+        img.raycastTarget = true; // Img/Sliced default to non-raycast (HUD lets touches through); buttons must catch clicks
         var b = img.gameObject.AddComponent<Button>();
         b.targetGraphic = img;
         var cb = b.colors; cb.highlightedColor = new Color(1.08f, 1.08f, 1.08f); cb.pressedColor = new Color(0.8f, 0.8f, 0.8f); b.colors = cb;
@@ -59,7 +60,7 @@ public static partial class GameSceneBuilder
         var root = Rect(name, parent);
         Anchor(root, new Vector2(0.5f, 0.5f), new Vector2(0f, 0.5f), pos, new Vector2(width, 44f));
         var bg = Sliced("Background", root, ui.flat, new Color(0f, 0f, 0f, 0.5f));
-        Stretch(bg.rectTransform);
+        Stretch(bg.rectTransform); bg.raycastTarget = true;
         var fillArea = Rect("Fill Area", root);
         Stretch(fillArea); fillArea.offsetMin = new Vector2(8f, 8f); fillArea.offsetMax = new Vector2(-8f, -8f);
         var fill = Sliced("Fill", fillArea, ui.flat, UiOrange);
@@ -72,7 +73,7 @@ public static partial class GameSceneBuilder
         handle.rectTransform.anchorMin = new Vector2(0.5f, 0f); handle.rectTransform.anchorMax = new Vector2(0.5f, 1f);
         handle.rectTransform.offsetMin = new Vector2(-29f, -10f); handle.rectTransform.offsetMax = new Vector2(29f, 10f);
         var s = root.gameObject.AddComponent<Slider>();
-        s.fillRect = fill.rectTransform; s.handleRect = handle.rectTransform; s.targetGraphic = handle;
+        s.fillRect = fill.rectTransform; s.handleRect = handle.rectTransform; s.targetGraphic = handle; handle.raycastTarget = true;
         s.direction = Slider.Direction.LeftToRight; s.minValue = 0f; s.maxValue = 1f; s.value = 0.5f;
         return s;
     }
@@ -126,7 +127,7 @@ public static partial class GameSceneBuilder
         Stretch(host);
         var sp = host.gameObject.AddComponent<SettingsPanel>();
         var root = Img("Root", host, ui.flat, new Color(0f, 0f, 0f, 0.7f));
-        Stretch(root.rectTransform);
+        Stretch(root.rectTransform); root.raycastTarget = true; // modal: blocks clicks behind
         var panel = Panel("Panel", root.transform, UiKhaki, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1400f, 1000f), 12f);
         var p = panel.transform;
         var title = Label("Title", p, 64, TextAnchor.MiddleCenter, UiOrange, "set.title");
@@ -189,6 +190,7 @@ public static partial class GameSceneBuilder
     {
         var root = hud.transform;
         var pb = Panel("PauseButton", root, UiKhakiDark, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(96f, 96f), 0f);
+        pb.raycastTarget = true;
         var pbtn = pb.gameObject.AddComponent<Button>();
         pbtn.targetGraphic = pb;
         var pi = Img("Icon", pb.transform, pauseIcon, UiCream);
@@ -198,7 +200,7 @@ public static partial class GameSceneBuilder
         var goMenu = MakeButton("MenuButton", go, "pause.menu", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(0f, -400f), new Vector2(420f, 100f), 40);
 
         var panel = Img("PausePanel", root, ui.flat, new Color(0.02f, 0.02f, 0f, 0.92f));
-        Stretch(panel.rectTransform);
+        Stretch(panel.rectTransform); panel.raycastTarget = true;
         var title = Label("Title", panel.transform, 110, TextAnchor.MiddleCenter, UiOrange, "pause.title");
         Anchor(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 300f), new Vector2(1200f, 150f));
         var resume = MakeButton("Resume", panel.transform, "pause.resume", UiOrange, new Vector2(0.5f, 0.5f), new Vector2(0f, 90f), new Vector2(560f, 140f), 64, UiInk);
