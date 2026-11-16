@@ -64,7 +64,8 @@ public class ZombieSpawner : MonoBehaviour
         timer -= Time.deltaTime;
         if (timer > 0f) return;
         var wp = waves ? waves.Params : Difficulty.ForWave(1);
-        timer = wp.spawnInterval * Random.Range(0.7f, 1.3f);
+        float pressure = ObjectiveDirector.I ? ObjectiveDirector.I.SpawnPressure : 1f;
+        timer = wp.spawnInterval * pressure * Random.Range(0.7f, 1.3f);
         int burst = wp.burst + (Random.value < 0.3f ? 1 : 0);
 
         for (int i = 0; i < burst && Zombie.Active.Count < wp.maxAlive; i++)

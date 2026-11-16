@@ -198,6 +198,12 @@ public static partial class GameSceneBuilder
         E(SfxId.TurretShot, "turret_shot", 0.45f, 3, minInterval: 0.05f),
         E(SfxId.GrenadeThrow, "grenade_throw", 0.7f, 2, spatial: 0.3f),
         E(SfxId.BarrelExplode, "barrel_explode", 1f, 3, spatial: 0.5f, minInterval: 0.05f, duck: true, haptic: true, hk: Haptics.Kind.Heavy, maxDist: 60f),
+        // F8 — story objectives
+        E(SfxId.Radio, "radio_static", 0.75f, 1, ui: true, pitchVar: 0.04f, minInterval: 0.2f),
+        E(SfxId.ObjectiveTick, "objective_tick", 0.55f, 1, ui: true, pitchVar: 0f, volVar: 0f),
+        E(SfxId.ObjectiveDone, "objective_done", 0.9f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Medium),
+        E(SfxId.ObjectiveBig, "objective_big", 1f, 1, ui: true, pitchVar: 0f, volVar: 0f, duck: true, haptic: true, hk: Haptics.Kind.Heavy),
+        E(SfxId.Helicopter, "heli_rotor", 0.85f, 2, spatial: 0.6f, minInterval: 0.5f, pitchVar: 0.02f, volVar: 0f, maxDist: 80f),
     };
 
     // ---------------------------------------------------------------- scene objects

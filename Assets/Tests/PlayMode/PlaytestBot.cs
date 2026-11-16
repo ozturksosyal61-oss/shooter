@@ -91,6 +91,19 @@ public class PlaytestBot
 
         int shotsFired = 0, hits = 0, kills = 0, hurts = 0, vaults = 0, reloads = 0, perfect = 0, jams = 0, packs = 0, breaks = 0;
         int blocks = 0, bombs = 0, barrels = 0, grabs = 0, snaps = 0, levelUps = 0;
+        int objIssued = 0, objDone = 0, helis = 0;
+        float objTimeSum = 0f;
+        var objLog = new StringBuilder();
+        var od = ObjectiveDirector.I;
+        System.Action<ObjectiveStep> onIssued = st => { objIssued++; objLog.Append($"{gm.GameTime:0}s:+{st.kind} "); };
+        System.Action<ObjectiveStep> onDone = st =>
+        {
+            objDone++; if (st.kind == ObjectiveKind.Helicopter) helis++;
+            objTimeSum += gm.GameTime - od.IssuedAt;
+            objLog.Append($"{gm.GameTime:0}s:✓{st.kind}({gm.GameTime - od.IssuedAt:0}s) ");
+        };
+        if (od) { od.Issued += onIssued; od.Completed += onDone; }
+        Vector3 stuckRef = Vector3.zero; float stuckT = 0f, detourT = 0f; Vector3 detour = Vector3.zero;
         var cardLog = new StringBuilder();
         var rng = new System.Random(strat.GetHashCode());
         bool reloadPlanned = false, reloadWillHit = false;
@@ -254,6 +267,31 @@ public class PlaytestBot
                     if (near < 3.5f && threat.sqrMagnitude > 0f) move = (move + threat.normalized * 1.5f).normalized;
                 }
 
+                // Story objectives: every moving bot heads for the active target (smart bots keep dodging on the way)
+                // and stays inside a hold zone until it completes.
+                if (od && od.HasActive && strat != "turret")
+                {
+                    Vector3 to = od.TargetLocal - p; to.y = 0f;
+                    float dist = to.magnitude;
+                    float r = od.Step.radius;
+                    Vector3 goal = dist > 0.01f ? to / dist : Vector3.zero;
+                    bool inside = dist < r * 0.7f;
+                    if (strat == "explore") move = inside && od.Step.hold > 0f ? Vector3.zero : near < 3.5f && threat.sqrMagnitude > 0f ? (goal + threat.normalized * 1.5f).normalized : goal;
+                    else if (!inside) move = GoalMove(p, goal, threat, lastMove, strat == "human" ? 0.9f : 1.2f);
+                    else if (od.Step.hold <= 0f || od.Step.kind == ObjectiveKind.Supply) move = goal; // walk onto the item / crate
+                    else if (threat.sqrMagnitude > 0.0004f) move = BestEscape(p, lastMove, od.TargetLocal, r * 0.8f);
+                    else move = Vector3.zero;
+                    // Unstick: no progress for 2.5 s → sidestep for a moment.
+                    stuckT += Time.unscaledDeltaTime * ts;
+                    if (stuckT > 2.5f)
+                    {
+                        if ((p - stuckRef).sqrMagnitude < 1.5f && !inside) { detourT = 1.4f; detour = Quaternion.Euler(0f, rng.Next(2) == 0 ? 90f : -90f, 0f) * goal; }
+                        stuckRef = p; stuckT = 0f;
+                    }
+                    if (detourT > 0f) { detourT -= Time.unscaledDeltaTime * ts; move = (detour + goal * 0.3f).normalized; }
+                    if (strat == "kite" || strat == "human") lastMove = move.sqrMagnitude > 0.01f ? move : lastMove;
+                }
+
                 var keys = new List<Key>();
                 if (move.z > 0.35f) keys.Add(Key.W);
                 if (move.z < -0.35f) keys.Add(Key.S);
@@ -329,6 +367,7 @@ public class PlaytestBot
         {
             GameAudio.OnSfx -= listen;
             Font.textureRebuilt -= onFont;
+            if (od) { od.Issued -= onIssued; od.Completed -= onDone; }
             foreach (var (_, r) in recs) r.Dispose();
         }
 
@@ -337,9 +376,11 @@ public class PlaytestBot
             $"PLAYTEST {strat}: ts={ts:0} speedup={gm.GameTime / Mathf.Max(0.01f, realSec):0.0}x real={realSec:0}s survived={gm.GameTime:0}s wave={WaveDirector.I.Wave} dead={gm.IsGameOver} score={gm.Score} kills={kills} " +
             $"acc={(shotsFired > 0 ? 100f * hits / shotsFired : 0):0}% hurts={hurts} firstHurt={firstHurt:0}s packs={packs} comboBreaks={breaks} " +
             $"bestCombo={gm.BestCombo} reloads={reloads} perfect={perfect} jams={jams} vaults={vaults} maxAlive={maxAlive} hitches={hitchCount} " +
-            $"level={Progression.I.Level} picks={Upgrades.I.Picks} specials={gm.SpecialKills} blocks={blocks} bombs={bombs} barrels={barrels} grabs={grabs} snaps={snaps}";
+            $"level={Progression.I.Level} picks={Upgrades.I.Picks} specials={gm.SpecialKills} blocks={blocks} bombs={bombs} barrels={barrels} grabs={grabs} snaps={snaps} " +
+            $"objIssued={objIssued} objDone={objDone} helis={helis} objAvg={(objDone > 0 ? objTimeSum / objDone : 0):0}s";
         log.AppendLine(summary);
         log.AppendLine("cards: " + cardLog);
+        log.AppendLine("objectives: " + objLog);
         log.Append(hitches);
         File.WriteAllText(Path.Combine(dir, $"playtest_{strat}.txt"), log.ToString());
         Debug.Log(summary);
@@ -361,6 +402,55 @@ public class PlaytestBot
         {
             int rank = System.Array.IndexOf(Priority, p.OfferAt(i));
             if (rank < bestRank) { bestRank = rank; best = i; }
+        }
+        return best;
+    }
+
+    /// <summary>Head for a goal while avoiding zombies and buildings: 16 directions scored by goal alignment, zombie
+    /// proximity after a 2.5 m step (weighted by <paramref name="caution"/>) and openness.</summary>
+    static Vector3 GoalMove(Vector3 p, Vector3 goal, Vector3 threat, Vector3 last, float caution)
+    {
+        Vector3 best = goal;
+        float bestScore = float.NegativeInfinity;
+        for (int i = 0; i < 16; i++)
+        {
+            Vector3 d = Quaternion.Euler(0f, i * 22.5f, 0f) * Vector3.forward;
+            Vector3 q = p + d * 2.5f;
+            float score = Vector3.Dot(d, goal) * 0.6f + 0.05f * Vector3.Dot(d, last);
+            foreach (var z in Zombie.Active)
+            {
+                Vector3 v = z.transform.position - q; v.y = 0f;
+                float m = Mathf.Max(0.5f, v.magnitude);
+                if (m < 10f) score -= caution / (m * m) * (z.Kind == ZombieKind.Bomb ? 3f : 1f);
+            }
+            if (Physics.SphereCast(p + Vector3.up * 0.6f, 0.4f, d, out var hit, 3.5f, GameLayers.BlockerMask))
+                score -= 0.8f * (1f - hit.distance / 3.5f);
+            if (score > bestScore) { bestScore = score; best = d; }
+        }
+        return best;
+    }
+
+    /// <summary>Escape scoring that keeps the bot inside a circle (hold zones).</summary>
+    static Vector3 BestEscape(Vector3 p, Vector3 last, Vector3 center, float radius)
+    {
+        Vector3 best = last;
+        float bestScore = float.NegativeInfinity;
+        for (int i = 0; i < 16; i++)
+        {
+            Vector3 d = Quaternion.Euler(0f, i * 22.5f, 0f) * Vector3.forward;
+            Vector3 q = p + d * 2f;
+            float score = 0f;
+            foreach (var z in Zombie.Active)
+            {
+                Vector3 v = z.transform.position - q; v.y = 0f;
+                float m = Mathf.Max(0.5f, v.magnitude);
+                if (m < 12f) score -= 1f / (m * m) * (z.Kind == ZombieKind.Bomb ? 3f : 1f);
+            }
+            Vector3 c = q - center; c.y = 0f;
+            if (c.magnitude > radius) score -= 2f * (c.magnitude - radius);
+            if (Physics.SphereCast(p + Vector3.up * 0.6f, 0.4f, d, out var hit, 3f, GameLayers.BlockerMask)) score -= 0.4f;
+            score += 0.03f * Vector3.Dot(d, last);
+            if (score > bestScore) { bestScore = score; best = d; }
         }
         return best;
     }

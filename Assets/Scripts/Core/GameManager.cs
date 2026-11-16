@@ -141,6 +141,13 @@ public class GameManager : MonoBehaviour
 
     public void OnWaveCleared(int wave) => Score += WaveBonus * wave;
 
+    /// <summary>Objective / story bonus (not multiplied by the combo).</summary>
+    public void AddBonus(int amount)
+    {
+        if (IsGameOver || amount <= 0) return;
+        Score += amount;
+    }
+
     Vector3 PlayerPos => player ? player.transform.position : Vector3.zero;
 
     /// <summary>Global slow-motion factor (level-up card pick); 1 = normal.</summary>

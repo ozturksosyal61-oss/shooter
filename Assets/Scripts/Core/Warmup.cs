@@ -14,7 +14,7 @@ public class Warmup : MonoBehaviour
     public Font font;
     public int[] fontSizes = { 24, 26, 28, 30, 34, 36, 38, 40, 46, 48, 50, 54, 60, 64, 70, 72, 84, 110, 120 };
 
-    const string Glyphs = "0123456789x/+-!:·.,()%•♥»<>*o ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZabcçdefgğhıijklmnoöpqrsştuüvwxyzFPS—→";
+    const string Glyphs = "0123456789x/+-!?:;·.,()%•♥»<>*o' ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZabcçdefgğhıijklmnoöpqrsştuüvwxyzFPS—→";
 
     void Start()
     {

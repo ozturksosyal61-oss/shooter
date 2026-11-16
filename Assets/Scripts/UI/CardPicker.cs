@@ -116,7 +116,9 @@ public class CardPicker : MonoBehaviour
         picked = -1;
         group.gameObject.SetActive(true);
         group.alpha = 0f;
-        subHeader.text = Loc.F("cards.header", Progression.I.Level);
+        bool bonus = Progression.I.BonusPicks > 0;
+        header.text = Loc.T(bonus ? "cards.reward" : "cards.levelup");
+        subHeader.text = bonus ? Loc.T("cards.reward_sub") : Loc.F("cards.header", Progression.I.Level);
         for (int i = 0; i < cards.Length; i++)
         {
             bool on = i < offer.Count;

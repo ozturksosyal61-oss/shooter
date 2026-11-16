@@ -52,6 +52,21 @@ public class Progression : MonoBehaviour
         }
     }
 
+    /// <summary>A card pick without a level-up (supply crate, helicopter reward).</summary>
+    public void GrantPick()
+    {
+        if (GameManager.I && GameManager.I.IsGameOver) return;
+        PendingPicks++;
+        BonusPicks++;
+    }
+
+    /// <summary>Pending picks that came from rewards rather than level-ups (they are consumed first).</summary>
+    public int BonusPicks { get; private set; }
+
     /// <summary>Called by the card picker when a pick has been consumed.</summary>
-    public void ConsumePick() => PendingPicks = Mathf.Max(0, PendingPicks - 1);
+    public void ConsumePick()
+    {
+        PendingPicks = Mathf.Max(0, PendingPicks - 1);
+        BonusPicks = Mathf.Max(0, Mathf.Min(BonusPicks - 1, PendingPicks));
+    }
 }

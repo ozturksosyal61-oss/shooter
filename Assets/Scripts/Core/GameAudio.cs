@@ -13,6 +13,8 @@ public enum SfxId
     ShieldSpawn, ShieldBlock, BombSpawn, BombFuse, BombExplode, TongueSpawn, TongueWarn, TongueLash, TongueGrab, TongueSnap,
     // F6 — roguelite / barrels
     LevelUp, CardPick, Shotgun, TurretShot, GrenadeThrow, BarrelExplode,
+    // F8 — story objectives
+    Radio, ObjectiveTick, ObjectiveDone, ObjectiveBig, Helicopter,
 }
 
 [Serializable]

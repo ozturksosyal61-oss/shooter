@@ -20,6 +20,7 @@ Shader "Game/EnvCutout"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
@@ -38,6 +39,7 @@ Shader "Game/EnvCutout"
                 float2 uv : TEXCOORD0;
                 float3 normalWS : TEXCOORD1;
                 float4 screenPos : TEXCOORD2;
+                float fog : TEXCOORD3;
             };
 
             Varyings vert (Attributes v)
@@ -48,6 +50,7 @@ Shader "Game/EnvCutout"
                 o.screenPos = ComputeScreenPos(p.positionCS);
                 o.uv = TRANSFORM_TEX(v.uv, _BaseMap);
                 o.normalWS = TransformObjectToWorldNormal(v.normalOS);
+                o.fog = ComputeFogFactor(p.positionCS.z);
                 return o;
             }
 
@@ -65,6 +68,7 @@ Shader "Game/EnvCutout"
                 half3 lit = albedo.rgb * (SampleSH(n) + l.color * saturate(dot(n, l.direction)));
                 half rim = 1.0 - saturate((r - _CutCircle.z) / max(_CutCircle.w, 1e-4));
                 lit = lerp(lit, _RimColor.rgb, rim * 0.85);
+                lit = MixFog(lit, i.fog);
                 return half4(lit, 1);
             }
             ENDHLSL

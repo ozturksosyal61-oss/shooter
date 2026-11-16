@@ -47,10 +47,15 @@ public static partial class GameSceneBuilder
         BuildZombiePrefab(m, anims);
         BuildSpecialZombiePrefabs(m, anims);
         var env = BuildEnvironmentPrefabs(m);
+        var cm = CreateCityMaterials(m, t);
+        var kit = BuildCityPrefabs(m, cm, env);
+        BuildFlarePrefab(cm);
+        BuildSupplyPrefab(cm);
+        BuildHelicopterPrefab(cm);
         AssetDatabase.SaveAssets();
         BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
         AssetDatabase.SaveAssets();
-        BuildScene(scene, m, t, env);
+        BuildScene(scene, m, t, env, cm, kit);
         AssetDatabase.SaveAssets();
         Debug.Log("BUILD: done");
     }
@@ -82,7 +87,7 @@ public static partial class GameSceneBuilder
     class Tex
     {
         public Texture2D soft, tracer, splat, ringTex, band;
-        public Texture2D[] ground = new Texture2D[4];
+        public Texture2D groundAtlas, beam, helipad, redCross;
         public Sprite ring, disc, vignette, white, arrow;
     }
 
@@ -144,11 +149,7 @@ public static partial class GameSceneBuilder
             float notch = Mathf.Clamp01((x - 0.12f - (1f - y) * 0.22f) * 30f);
             return new Color(1, 1, 1, tri * notch);
         });
-        for (int d = 0; d < 4; d++)
-        {
-            var district = (District)d;
-            t.ground[d] = WriteTex("Ground_" + district, 512, (u, v) => GroundPixel(district, u, v), true, TextureWrapMode.Clamp, 512);
-        }
+        GenerateCityTextures(t);
         return t;
     }
 
@@ -181,82 +182,6 @@ public static partial class GameSceneBuilder
         }
         float shade = 0.85f + 0.15f * Mathf.Clamp01(1f - r);
         return new Color(shade, shade, shade, a);
-    }
-
-    /// <summary>One 20x20 m city block: half road on each edge, curb, sidewalk, district interior.</summary>
-    static Color GroundPixel(District d, float u, float v)
-    {
-        const float S = ChunkManager.Size;
-        float mx = u * S, mz = v * S;
-        float ex = Mathf.Min(mx, S - mx), ez = Mathf.Min(mz, S - mz);
-        float e = Mathf.Min(ex, ez);
-        float grain = 0.93f + 0.07f * Hash((int)(u * 512), (int)(v * 512));
-        float blot = ValueNoise(mx * 0.35f, mz * 0.35f);
-
-        bool roadX = ex < 3.5f, roadZ = ez < 3.5f;
-        Color c;
-        if (roadX || roadZ)
-        {
-            c = new Color(0.23f, 0.24f, 0.27f) * (0.9f + 0.15f * blot) * grain;
-            bool inter = roadX && roadZ;
-            if (!inter)
-            {
-                float across = roadX ? ex : ez;
-                float along = roadX ? mz : mx;
-                // Dashed yellow centre line on the chunk border.
-                if (across < 0.1f && Mathf.Repeat(along, 3f) < 1.7f) c = new Color(0.95f, 0.78f, 0.2f);
-                // Solid white edge line.
-                if (across > 3.12f && across < 3.27f) c = new Color(0.85f, 0.85f, 0.82f);
-                // Zebra crossing next to the intersection.
-                float distToInter = roadX ? ez : ex;
-                if (distToInter > 3.7f && distToInter < 5.2f && across < 3.0f)
-                {
-                    float stripeCoord = roadX ? mx : mz;
-                    if (Mathf.Repeat(stripeCoord, 0.9f) < 0.45f) c = new Color(0.88f, 0.88f, 0.85f);
-                }
-            }
-            // Cracks / patches.
-            if (blot > 0.78f) c *= 0.85f;
-        }
-        else if (e < 3.75f)
-        {
-            c = new Color(0.72f, 0.72f, 0.7f) * grain; // curb
-        }
-        else if (e < 5.5f)
-        {
-            c = new Color(0.62f, 0.6f, 0.57f) * grain; // sidewalk tiles
-            if (Mathf.Repeat(mx, 1f) < 0.05f || Mathf.Repeat(mz, 1f) < 0.05f) c *= 0.82f;
-        }
-        else
-        {
-            switch (d)
-            {
-                case District.Cadde:
-                    c = new Color(0.56f, 0.56f, 0.54f) * grain;
-                    if (Mathf.Repeat(mx, 2f) < 0.06f || Mathf.Repeat(mz, 2f) < 0.06f) c *= 0.85f;
-                    break;
-                case District.Carsi:
-                {
-                    float row = Mathf.Floor(mz / 0.3f);
-                    float bx = mx + (row % 2f) * 0.3f;
-                    c = Color.Lerp(new Color(0.66f, 0.38f, 0.28f), new Color(0.58f, 0.32f, 0.24f), Hash((int)(bx / 0.6f), (int)row)) * grain;
-                    if (Mathf.Repeat(mz, 0.3f) < 0.03f || Mathf.Repeat(bx, 0.6f) < 0.03f) c = new Color(0.5f, 0.45f, 0.4f);
-                    break;
-                }
-                case District.Sanayi:
-                    c = new Color(0.43f, 0.43f, 0.41f) * (0.85f + 0.25f * blot) * grain;
-                    if (ValueNoise(mx * 0.8f + 10f, mz * 0.8f) > 0.72f) c *= 0.65f; // oil stains
-                    if (e < 5.85f && Mathf.Repeat(mx + mz, 1f) < 0.5f) c = new Color(0.9f, 0.72f, 0.1f); // hazard border
-                    break;
-                default: // Liman
-                    c = new Color(0.52f, 0.52f, 0.5f) * (0.9f + 0.15f * blot) * grain;
-                    if (Mathf.Repeat(mx, 3.2f) < 0.1f) c = new Color(0.9f, 0.75f, 0.2f);
-                    if (ValueNoise(mx * 0.6f, mz * 0.6f + 30f) > 0.75f) c = Color.Lerp(c, new Color(0.55f, 0.35f, 0.2f), 0.5f); // rust
-                    break;
-            }
-        }
-        c.a = 1f;
-        return c;
     }
 
     delegate Color PixelFn(float u, float v);
@@ -358,7 +283,6 @@ public static partial class GameSceneBuilder
     {
         public Material soldier, zombie, zombieRunner, flash, bullet, muzzle, goo, chunks, sparks, pop, dust, fire, splat;
         public Material shieldZombie, bombZombie, tongueZombie, ringShield, ringBomb, ringTongue, ringSoldier, tongue, telegraph, fxFire;
-        public Material[] ground = new Material[4];
         public readonly Dictionary<string, Material> kit = new Dictionary<string, Material>();
         public readonly Dictionary<string, Material> kitFade = new Dictionary<string, Material>();
         public Material barrelRed, turretBody, turretDark, grenade;
@@ -411,12 +335,7 @@ public static partial class GameSceneBuilder
         m.telegraph = Mat("M_Telegraph", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.band); x.SetColor("_BaseColor", new Color(1f, 0.1f, 0.08f, 1f)); x.SetFloat("_VertexColor", 0f); });
         m.fxFire = Mat("M_FxExplosion", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", Color.white); });
         m.splat = Mat("M_GooSplat", "Game/FxAlpha", x => { x.SetTexture("_BaseMap", t.splat); x.SetColor("_BaseColor", new Color(0.35f, 0.75f, 0.12f, 0.9f)); x.SetFloat("_VertexColor", 0f); });
-        for (int d = 0; d < 4; d++)
-        {
-            var tex = t.ground[d];
-            m.ground[d] = Mat("M_Ground_" + (District)d, simpleLit, x => { x.SetTexture("_BaseMap", tex); x.SetColor("_BaseColor", Color.white); });
-        }
-        foreach (var kit in new[] { "Cars", "Survival", "Roads", "Commercial", "Industrial" })
+        foreach (var kit in new[] { "Cars", "Survival", "Roads", "Commercial", "Industrial", "Suburban", "Graveyard" })
         {
             var cmap = ConfigureColormap(kit);
             m.kit[kit] = Mat("M_Env_" + kit, simpleLit, x => { x.SetTexture("_BaseMap", cmap); x.SetColor("_BaseColor", Color.white); });
@@ -746,8 +665,12 @@ public static partial class GameSceneBuilder
     }
 
     // ---------------------------------------------------------------- scene
-    static void BuildScene(UnityEngine.SceneManagement.Scene scene, Mats m, Tex t, Env env)
+    static void BuildScene(UnityEngine.SceneManagement.Scene scene, Mats m, Tex t, Env env, CityMats cm, CityKit kit)
     {
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.Exponential;
+        RenderSettings.fogDensity = 0.005f;
+        RenderSettings.fogColor = new Color(0.6f, 0.54f, 0.46f);
         RenderSettings.ambientMode = AmbientMode.Trilight;
         RenderSettings.ambientSkyColor = new Color(0.75f, 0.78f, 0.85f);
         RenderSettings.ambientEquatorColor = new Color(0.55f, 0.55f, 0.55f);
@@ -777,33 +700,39 @@ public static partial class GameSceneBuilder
         chunks.burningBarrels = env.burningBarrels;
         chunks.explosiveBarrels = env.explosiveBarrels;
         chunks.roadDecor = env.decor;
+        chunks.groundMaterial = cm.ground;
+        chunks.kit = kit;
         chunks.districts = new[]
         {
             new DistrictSettings
             {
-                district = District.Cadde, ground = m.ground[0], buildings = env.commercial, buildingChance = 0.7f,
+                district = District.Cadde, buildings = env.commercial, buildingChance = 0.7f,
                 blockProps = new[] { env.crate, env.crateLarge, env.dumpster }, blockPropMin = 1, blockPropMax = 2,
                 sidewalkProps = new[] { env.streetLight, env.dumpster, env.crate },
             },
             new DistrictSettings
             {
-                district = District.Carsi, ground = m.ground[1], buildings = env.commercial, buildingChance = 0.25f,
+                district = District.Carsi, buildings = env.commercial, buildingChance = 0.25f,
                 blockProps = new[] { env.parasolA, env.parasolB, env.crate, env.crateLarge, env.parasolA }, blockPropMin = 3, blockPropMax = 5,
                 sidewalkProps = new[] { env.streetLight, env.crate },
             },
             new DistrictSettings
             {
-                district = District.Sanayi, ground = m.ground[2], buildings = env.industrial, buildingChance = 0.65f,
+                district = District.Sanayi, buildings = env.industrial, buildingChance = 0.65f,
                 blockProps = new[] { env.tank, env.tankLarge, env.burningBarrels[0], env.crateLarge, env.containers[0], env.explosiveBarrels[0], env.explosiveBarrels[0] }, blockPropMin = 1, blockPropMax = 3,
                 sidewalkProps = new[] { env.burningBarrels[0], env.dumpster, env.streetLight },
             },
             new DistrictSettings
             {
-                district = District.Liman, ground = m.ground[3], buildings = new[] { env.industrial[4] }, buildingChance = 0.15f,
+                district = District.Liman, buildings = new[] { env.industrial[4] }, buildingChance = 0.15f,
                 blockProps = env.containers.Concat(new[] { env.crateLarge, env.tank }).ToArray(), blockPropMin = 2, blockPropMax = 3,
                 sidewalkProps = new[] { env.crate, env.crateLarge, env.explosiveBarrels[0] },
             },
         };
+
+        var atmo = new GameObject("DistrictAtmosphere").AddComponent<DistrictAtmosphere>();
+        atmo.sun = light;
+        atmo.moods = DistrictMoods();
 
         var origin = new GameObject("FloatingOrigin").AddComponent<FloatingOrigin>();
         origin.target = player.transform;
@@ -819,6 +748,7 @@ public static partial class GameSceneBuilder
         cam.backgroundColor = new Color(0.2f, 0.21f, 0.23f);
         var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = false;
+        atmo.cam = cam;
         var rig = camGo.AddComponent<CameraRig>();
         rig.target = player.transform;
         // Pulled back from 14 m (F6.5) so more of the street is visible; same angle. Rings/arrows/cutout scaled to match.
@@ -844,7 +774,9 @@ public static partial class GameSceneBuilder
         upgrades.grenadePrefab = LoadGo($"{PrefabDir}/Grenade.prefab");
         upgrades.cardSprites = ui.cards;
 
+        BuildObjectiveScene(cm);
         var hud = BuildUI(t, out _);
+        BuildObjectiveHud(hud, t);
 
         var warm = new GameObject("Warmup").AddComponent<Warmup>();
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })

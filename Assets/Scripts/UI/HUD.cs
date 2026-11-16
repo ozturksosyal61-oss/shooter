@@ -151,6 +151,16 @@ public class HUD : MonoBehaviour
         bannerT = 0f;
     }
 
+    /// <summary>Big centre banner (wave intro style) — objectives, story beats.</summary>
+    public void ShowBanner(string title, string sub, Color subColor)
+    {
+        if (!waveBanner) return;
+        waveBanner.text = title;
+        waveSubBanner.text = sub;
+        waveSubBanner.color = subColor;
+        bannerT = 0f;
+    }
+
     public void ComboBroken(int lostMultiplier)
     {
         if (!comboBrokenText) return;

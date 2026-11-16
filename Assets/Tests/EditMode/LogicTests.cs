@@ -349,3 +349,164 @@ public class LocTests
         Assert.AreEqual("missing.key", Loc.T("missing.key"));
     }
 }
+
+public class CityLayoutTests
+{
+    const int Seed = 4242;
+
+    [Test]
+    public void RoadsConnectAcrossNeighbours()
+    {
+        for (int x = -20; x < 20; x++)
+            for (int z = -20; z < 20; z++)
+            {
+                var c = new Vector2Int(x, z);
+                Assert.AreEqual(CityLayout.HasRoad(Seed, c, Edge.E), CityLayout.HasRoad(Seed, c + Vector2Int.right, Edge.W), $"E/W {c}");
+                Assert.AreEqual(CityLayout.HasRoad(Seed, c, Edge.N), CityLayout.HasRoad(Seed, c + Vector2Int.up, Edge.S), $"N/S {c}");
+            }
+    }
+
+    [Test]
+    public void NoDeadEndsAndManyStraightStretches()
+    {
+        int straight = 0, junction = 0, nodes = 0;
+        for (int i = -30; i < 30; i++)
+            for (int j = -30; j < 30; j++)
+            {
+                int d = CityLayout.NodeDegree(Seed, i, j);
+                Assert.AreNotEqual(1, d, $"dead end at node {i},{j}");
+                if (d == 0) continue;
+                nodes++;
+                if (CityLayout.IsJunction(Seed, i, j)) junction++; else straight++;
+            }
+        Assert.Greater(straight, nodes / 3, "most road nodes should be plain straight avenue (no crossing)");
+        Assert.Greater(junction, nodes / 10, "still enough junctions");
+    }
+
+    [Test]
+    public void EveryChunkTypeAppearsAndRulesHold()
+    {
+        var counts = new int[System.Enum.GetValues(typeof(ChunkType)).Length];
+        for (int x = -40; x < 40; x++)
+            for (int z = -40; z < 40; z++)
+            {
+                var c = new Vector2Int(x, z);
+                var d = (District)(((x / 7) + (z / 5)) & 3);
+                var t = CityLayout.NaturalType(Seed, c, d);
+                counts[(int)t]++;
+                int mask = CityLayout.Mask(Seed, c);
+                if (t == ChunkType.Alley) Assert.IsTrue(CityLayout.AlleyFits(mask), $"alley {c} needs open S/N edges");
+                if (CityLayout.IsLandmark(t)) Assert.AreNotEqual(0, mask, $"landmark {c} must face a road");
+                Assert.IsFalse(CityLayout.IsObjectiveSite(t), "sites are only placed on demand");
+            }
+        for (int i = 0; i <= (int)ChunkType.Hospital; i++) Assert.Greater(counts[i], 0, ((ChunkType)i).ToString());
+        Assert.Greater(counts[(int)ChunkType.Block], counts[(int)ChunkType.Park], "blocks stay the most common");
+        Assert.AreEqual(ChunkType.Block, CityLayout.NaturalType(Seed, Vector2Int.zero, District.Cadde), "spawn chunk");
+    }
+
+    [Test]
+    public void LayoutIsDeterministicPerSeed()
+    {
+        int diff = 0;
+        for (int x = 0; x < 30; x++)
+        {
+            var c = new Vector2Int(x, 3);
+            Assert.AreEqual(CityLayout.Mask(Seed, c), CityLayout.Mask(Seed, c));
+            if (CityLayout.Mask(Seed, c) != CityLayout.Mask(Seed + 1, c) || CityLayout.NaturalType(Seed, c, District.Cadde) != CityLayout.NaturalType(Seed + 1, c, District.Cadde)) diff++;
+        }
+        Assert.Greater(diff, 0, "another seed gives another city");
+    }
+
+    [Test]
+    public void AtlasUvsStayInsideTheirCell()
+    {
+        for (int cell = 0; cell < 16; cell++)
+        {
+            var a = GroundAtlas.UV(cell, 0f, 0f);
+            var b = GroundAtlas.UV(cell, 1f, 1f);
+            int cx = cell % GroundAtlas.Grid, cy = cell / GroundAtlas.Grid;
+            float lo = 1f / GroundAtlas.Grid;
+            Assert.Greater(a.x, cx * lo); Assert.Less(b.x, (cx + 1) * lo);
+            Assert.Greater(a.y, cy * lo); Assert.Less(b.y, (cy + 1) * lo);
+        }
+    }
+}
+
+public class ObjectiveTests
+{
+    [Test]
+    public void ScheduleEveryThreeWaves()
+    {
+        Assert.IsFalse(Objectives.ShouldIssue(1, -1, false), "not in wave 1");
+        Assert.IsTrue(Objectives.ShouldIssue(2, -1, false));
+        Assert.IsFalse(Objectives.ShouldIssue(3, 2, false));
+        Assert.IsFalse(Objectives.ShouldIssue(4, 2, false));
+        Assert.IsTrue(Objectives.ShouldIssue(5, 2, false));
+        Assert.IsFalse(Objectives.ShouldIssue(9, 2, true), "never two at once");
+    }
+
+    [Test]
+    public void EndlessPlanCyclesThreeThenHelicopter()
+    {
+        var plan = new EndlessPlan();
+        var rng = new System.Random(3);
+        for (int cycle = 0; cycle < 2; cycle++)
+        {
+            var seen = new HashSet<ObjectiveKind>();
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.IsFalse(plan.HelicopterDue);
+                var s = plan.Next(rng);
+                Assert.AreNotEqual(ObjectiveKind.Helicopter, s.kind);
+                Assert.IsTrue(seen.Add(s.kind), "each of flare / tower / supply once per cycle");
+                plan.Completed(s);
+            }
+            Assert.IsTrue(plan.HelicopterDue);
+            Assert.IsTrue(plan.ShouldIssue(1, 99, false), "helicopter comes right away");
+            var h = plan.Next(rng);
+            Assert.AreEqual(ObjectiveKind.Helicopter, h.kind);
+            Assert.AreEqual(ChunkType.Helipad, h.site);
+            Assert.AreEqual(Objectives.HeliHold, h.hold, 1e-4f);
+            plan.Completed(h);
+            Assert.AreEqual(cycle + 1, plan.Helicopters);
+            Assert.AreEqual(0, plan.DoneInCycle);
+        }
+    }
+
+    [Test]
+    public void StepsAndRewards()
+    {
+        var f = Objectives.Step(ObjectiveKind.Flare, null);
+        Assert.AreEqual(ChunkType.PoliceStation, f.site);
+        Assert.AreEqual(0f, f.hold);
+        var t = Objectives.Step(ObjectiveKind.Tower, null);
+        Assert.AreEqual(ChunkType.SignalTower, t.site);
+        Assert.Greater(t.hold, 0f);
+        var s = Objectives.Step(ObjectiveKind.Supply, new System.Random(1));
+        Assert.IsTrue(s.site == ChunkType.Hospital || s.site == ChunkType.GasStation);
+        foreach (ObjectiveKind k in System.Enum.GetValues(typeof(ObjectiveKind)))
+            Assert.IsTrue(Loc.Has(Objectives.Step(k, new System.Random(2)).briefKey), k + " brief");
+
+        Objectives.Reward(ObjectiveKind.Flare, 5, 0, out int sc, out int xp);
+        Objectives.Reward(ObjectiveKind.Flare, 8, 0, out int sc2, out int xp2);
+        Assert.Greater(sc2, sc); Assert.Greater(xp2, xp);
+        Objectives.Reward(ObjectiveKind.Helicopter, 5, 0, out int hs, out int hx);
+        Assert.Greater(hs, sc * 3, "helicopter is the big reward");
+        Assert.Greater(hx, xp);
+        Assert.IsTrue(Objectives.SupplyGivesHeal(0.3f));
+        Assert.IsFalse(Objectives.SupplyGivesHeal(0.9f));
+    }
+
+    [Test]
+    public void DirectionWords()
+    {
+        Assert.AreEqual("dir.n", Objectives.DirectionKey(new Vector2(0f, 50f)));
+        Assert.AreEqual("dir.s", Objectives.DirectionKey(new Vector2(0f, -50f)));
+        Assert.AreEqual("dir.e", Objectives.DirectionKey(new Vector2(50f, 2f)));
+        Assert.AreEqual("dir.w", Objectives.DirectionKey(new Vector2(-50f, 0f)));
+        Assert.AreEqual("dir.ne", Objectives.DirectionKey(new Vector2(40f, 40f)));
+        Assert.AreEqual("dir.sw", Objectives.DirectionKey(new Vector2(-40f, -38f)));
+        Loc.Current = Lang.Tr;
+        Assert.AreEqual("Merkez: İşaret fişeği kuzeydeki karakolda!", Loc.F("radio.flare", Loc.T("dir.n")));
+    }
+}

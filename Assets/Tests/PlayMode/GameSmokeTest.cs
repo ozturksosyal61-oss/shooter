@@ -343,6 +343,21 @@ public class GameSmokeTest
     }
 
     /// <summary>Open ground at <paramref name="dist"/> from <paramref name="from"/> with a clear line (no obstacles).</summary>
+    static bool TryClearSpot(Vector3 from, float dist, out Vector3 spot)
+    {
+        for (int i = 0; i < 24; i++)
+        {
+            Vector3 d = Quaternion.Euler(0f, i * 15f, 0f) * Vector3.forward;
+            Vector3 p = from + d * dist;
+            if (Physics.CheckSphere(p + Vector3.up * 1f, 1.2f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) continue;
+            if (Physics.SphereCast(from + Vector3.up * 1f, 0.5f, d, out _, dist, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) continue;
+            spot = p;
+            return true;
+        }
+        spot = from;
+        return false;
+    }
+
     static Vector3 ClearSpot(Vector3 from, float dist, float startAngle = 0f)
     {
         for (int i = 0; i < 24; i++)
@@ -493,6 +508,137 @@ public class GameSmokeTest
     }
 
     [UnityTest, Timeout(300000)]
+    public IEnumerator CityAndObjectives()
+    {
+        GameManager.TimeScale = 2f;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var p = gm.player;
+        WaveDirector.I.enabled = false; // no zombies: objectives are driven directly
+        var od = ObjectiveDirector.I;
+        Assert.NotNull(od, "ObjectiveDirector missing");
+        od.holdScale = 0.12f;
+        od.issueDelay = 0.3f;
+        var cm = ChunkManager.I;
+
+        // City: atlas ground meshes, fog on, chunk types vary in the neighbourhood.
+        Assert.IsTrue(RenderSettings.fog, "district fog");
+        var types = new System.Collections.Generic.HashSet<ChunkType>();
+        for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) types.Add(cm.TypeAt(new Vector2Int(x, z)));
+        Assert.GreaterOrEqual(types.Count, 4, "several chunk types around the spawn");
+        foreach (var mf in cm.GetComponentsInChildren<MeshFilter>())
+            if (mf.name == "Ground") Assert.Greater(mf.sharedMesh.vertexCount, 0, "chunk ground mesh");
+
+        var hud = Object.FindAnyObjectByType<ObjectiveHUD>();
+        Assert.NotNull(hud, "ObjectiveHUD missing");
+        int radio = 0;
+        System.Action<RadioMsg> onRadio = m => radio++;
+        od.Radio += onRadio;
+        try
+        {
+            foreach (var kind in new[] { ObjectiveKind.Flare, ObjectiveKind.Tower, ObjectiveKind.Supply })
+            {
+                int before = radio, score = gm.Score, xp = Progression.I.Xp + Progression.I.Level * 100000;
+                od.ForceIssue(kind);
+                Assert.IsTrue(od.HasActive);
+                Assert.AreEqual(kind, od.Step.kind);
+                Assert.Greater(radio, before, "radio briefing");
+                Vector3 to = od.TargetLocal - p.transform.position; to.y = 0f;
+                Debug.Log($"SMOKE: objective {kind} at {od.SiteChunk} ({cm.TypeAt(od.SiteChunk)}) {to.magnitude:0} m");
+                Assert.AreEqual(od.Step.site, cm.TypeAt(od.SiteChunk), "site chunk has the right type");
+                Assert.Greater(to.magnitude, 30f, "target is away from the player");
+                yield return null; yield return null;
+                Assert.IsTrue(hud.MarkerVisible && hud.MarkerOnEdge, "edge arrow toward an off-screen target");
+                Assert.IsFalse(string.IsNullOrEmpty(hud.CurrentRadio), "radio text on screen");
+
+                if (kind == ObjectiveKind.Supply) p.TakeDamage(60f, Vector3.forward);
+                float hpBefore = p.Health;
+                Vector3 spot = od.TargetLocal + (kind == ObjectiveKind.Tower ? new Vector3(2.6f, 0f, 0f) : Vector3.zero);
+                Teleport(p, spot);
+                yield return WaitUntil(() => !od.HasActive, 15f);
+                Assert.IsFalse(od.HasActive, kind + " should complete");
+                Assert.Greater(gm.Score, score, "bonus score");
+                Assert.Greater(Progression.I.Xp + Progression.I.Level * 100000, xp, "bonus XP");
+                if (kind == ObjectiveKind.Supply) Assert.Greater(p.Health, hpBefore, "supply crate heals when hurt");
+            }
+
+            // After three objectives the landing zone appears by itself.
+            yield return WaitUntil(() => od.HasActive, 5f);
+            Assert.IsTrue(od.HasActive && od.Step.kind == ObjectiveKind.Helicopter, "helicopter landing zone after 3 objectives");
+            Assert.AreEqual(ChunkType.Helipad, cm.TypeAt(od.SiteChunk));
+            int scoreH = gm.Score;
+            Teleport(p, od.TargetLocal + new Vector3(1.5f, 0f, 1.5f));
+            var vis = Object.FindAnyObjectByType<ObjectiveVisuals>();
+            bool heliSeen = false;
+            float t0 = Time.realtimeSinceStartup;
+            while (od.HasActive && Time.realtimeSinceStartup - t0 < 15f)
+            {
+                heliSeen |= vis.helicopter && vis.helicopter.Visible;
+                yield return null;
+            }
+            Assert.IsFalse(od.HasActive, "landing zone hold completes");
+            Assert.IsTrue(heliSeen, "the helicopter flew in");
+            Assert.AreEqual(1, od.Helicopters);
+            Assert.Greater(gm.Score - scoreH, 999, "big helicopter reward");
+            yield return WaitUntil(() => hud.CurrentRadio == Loc.T("radio.heli_done"), 25f);
+            Assert.AreEqual(Loc.T("radio.heli_done"), hud.CurrentRadio, "story line on the radio");
+        }
+        finally { od.Radio -= onRadio; }
+    }
+
+    /// <summary>[Explicit] PNGs of every chunk type, the objective HUD and the helicopter (needs graphics). CAPTURE_DIR.</summary>
+    [UnityTest, Explicit, Timeout(600000)]
+    public IEnumerator CaptureCity()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR") ?? Application.temporaryCachePath;
+        ChunkManager.SeedOverride = 4242;
+        yield return LoadGame();
+        ChunkManager.SeedOverride = 0;
+        var gm = GameManager.I;
+        var p = gm.player;
+        WaveDirector.I.enabled = false;
+        var cm = ChunkManager.I;
+        var od = ObjectiveDirector.I;
+        od.holdScale = 0.5f;
+        yield return Wait(0.5f);
+        PlaytestBot.Shot(Path.Combine(dir, "city_00_spawn.png"));
+        int n = 1;
+        foreach (ChunkType t in System.Enum.GetValues(typeof(ChunkType)))
+        {
+            if (CityLayout.IsObjectiveSite(t)) continue;
+            if (!cm.FindType(t, ChunkManager.ChunkOf(p.transform.position), 1, 14, out var c)) { Debug.Log("CAPTURE: no " + t); continue; }
+            Vector3 g = CityLayout.ChunkOrigin(c) + new Vector3(10f, 0f, 3f);
+            Teleport(p, FloatingOrigin.ToLocal(g));
+            yield return Wait(0.6f);
+            Debug.Log($"CAPTURE: {t} at {c} district={cm.DistrictAt(c)}");
+            PlaytestBot.Shot(Path.Combine(dir, $"city_{n++:00}_{t}_{cm.DistrictAt(c)}.png"));
+        }
+        // Objective HUD: radio + edge arrow, then the tower zone, then the helicopter landing.
+        od.ForceIssue(ObjectiveKind.Flare);
+        yield return Wait(1.6f);
+        PlaytestBot.Shot(Path.Combine(dir, "city_20_radio_arrow.png"));
+        Teleport(p, od.TargetLocal + new Vector3(0f, 0f, -5f));
+        yield return Wait(0.8f);
+        PlaytestBot.Shot(Path.Combine(dir, "city_21_flare_site.png"));
+        Teleport(p, od.TargetLocal);
+        yield return Wait(0.5f);
+        od.ForceIssue(ObjectiveKind.Tower);
+        yield return null;
+        Teleport(p, od.TargetLocal + new Vector3(2.8f, 0f, -1f));
+        yield return Wait(4f);
+        PlaytestBot.Shot(Path.Combine(dir, "city_22_tower_hold.png"));
+        yield return WaitUntil(() => !od.HasActive, 20f);
+        od.ForceIssue(ObjectiveKind.Helicopter);
+        yield return null;
+        Teleport(p, od.TargetLocal + new Vector3(3f, 0f, -3f));
+        yield return WaitUntil(() => od.HeliApproach01 > 0.6f, 30f);
+        PlaytestBot.Shot(Path.Combine(dir, "city_23_heli_arrive.png"));
+        yield return WaitUntil(() => !od.HasActive, 30f);
+        yield return Wait(1.2f);
+        PlaytestBot.Shot(Path.Combine(dir, "city_24_heli_leaves.png"));
+    }
+
+    [UnityTest, Timeout(300000)]
     public IEnumerator CardsBarrelsReadability()
     {
         yield return LoadGame();
@@ -575,16 +721,18 @@ public class GameSmokeTest
             Assert.GreaterOrEqual(Upgrades.I.Owned.Count, 5);
 
             // --- Explosive barrel: shot → blast hurts zombies (through shields too).
+            // A barrel with open ground around it (the denser F8 city has barrels in alleys / gas stations too).
             ExplosiveBarrel barrel = null;
-            for (int tries = 0; tries < 6 && barrel == null; tries++)
+            Vector3 stand = default;
+            for (int tries = 0; tries < 8 && barrel == null; tries++)
             {
                 foreach (var b in ExplosiveBarrel.Active)
-                    if (!b.Exploded && b.gameObject.activeInHierarchy) { barrel = b; break; }
+                    if (!b.Exploded && b.gameObject.activeInHierarchy && TryClearSpot(b.transform.position, 9f, out stand)) { barrel = b; break; }
                 if (barrel == null) { Teleport(p, p.transform.position + new Vector3(60f, 0f, 0f)); yield return null; yield return null; }
             }
             Assert.NotNull(barrel, "the city should contain explosive barrels");
             Vector3 bpos = barrel.transform.position;
-            Teleport(p, ClearSpot(bpos, 9f));
+            Teleport(p, stand);
             yield return null;
             var spawner = Object.FindAnyObjectByType<ZombieSpawner>();
             var sh = spawner.TrySpawnSpecial(ZombieKind.Shield, bpos + (p.transform.position - bpos).normalized * 1.6f, Difficulty.ForWave(3));

@@ -9,6 +9,22 @@ Botlar oyunu gerçek girdi yolundan oynar (`Assets/Tests/PlayMode/PlaytestBot.cs
 
 Çalıştırma (4 bot tek oturumda, ~5 dk): `PLAYTEST_TIMESCALE=8 CAPTURE_DIR=<klasör> Unity.exe -batchmode -nographics -projectPath . -runTests -testPlatform PlayMode -testFilter PlaytestBot.Play ...` → `<klasör>/playtest_<tarz>.txt`. Opsiyonel `PLAYTEST_STRATEGIES`, `PLAYTEST_SEED`, `PLAYTEST_MAXTIME` (varsayılan 400).
 
+## F8 — şehir çeşitliliği + hikâye hedefleri (2026-11-16)
+
+Değişiklik: yeni chunk tipleri (park, meydan, ara sokak, yıkıntı, simge yapılar), hedefler (dalga 2'den itibaren her 3 dalgada bir; fişek / kule 20 sn / ikmal), 3 hedef → helikopter (30 sn dayan). Hedef alanında dayanırken spawn aralığı ×0.75. Botlar (turret hariç) aktif hedefe gider: kite/human yolda zombilerden kaçarak (16 yön, hedefe hizalanma + zombi yakınlığı + bina), alanda kalıp kaçar; explore düz hedefe koşar. **turret** referans olarak yerinde kalır (hedef almaz). Difficulty değişmedi.
+8x, `-nographics`, 400 sn tavan, rastgele seed, 2 tur:
+
+| Bot | Hayatta kalma (tur 1 / tur 2) | Dalga | Kill | Hedef (verilen → biten) | Ort. hedef süresi | Takılma |
+|---|---|---|---|---|---|---|
+| turret | **101 / 105 sn** | 3 | 94–103 | 1 → 0 (gitmez) | — | 0 |
+| human | **250 / 400+ sn** (tavan) | 6–9 | 285–646 | 2→2 / 4→3 (helikopter açıldı) | 13–26 sn | 0 |
+| kite | **249 / 400+ sn** (tavan) | 6–9 | 383–926 | 2→2 / 4→3 (helikopter açıldı) | 29–35 sn | 0 |
+| explore | **189 / 242 sn** | 5–6 | 222–357 | 2→1 / 2→2 | 29–30 sn | 0 |
+
+- "400+": koşu 400 sn tavanında kesildi (son satırdaki `dead=True` tavan sonrası girdisiz geçen ~12 sn'den; helikopter alanında bekliyordu).
+- Hedefe yürümek risk getiriyor: kite F6+F7'deki 600 sn sınırından düştü (artık kaçmak yerine görev için kalabalığın içinden geçiyor), explore ~280 → ~215 sn. Human hedef aralığında (240–360, yüksek varyans). Helikopter iyi oynayan için ~355–365. sn'de (dalga 8–9) açılıyor; 400 sn tavanında tamamlanan olmadı.
+- Hedef ödülleri (tam can / kart) uzun koşularda belirgin; ilk hedef (dalga 2, ~41. sn) 10–37 sn'de bitiyor.
+
 ## F6.5 — kamera 17.5 m sonrası (2026-11-15)
 
 Kamera 14 → 17.5 m: görüş alanı büyüdü, zombiler görüş dışında doğduğu için daha uzakta doğuyor → oyun belirgin kolaylaştı.
