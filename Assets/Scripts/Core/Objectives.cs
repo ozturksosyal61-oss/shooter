@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum ObjectiveKind { Flare, Tower, Supply, Helicopter }
+/// <summary>Flare..Helicopter: endless + campaign; Reach / Survive / Boss: campaign chapters only.</summary>
+public enum ObjectiveKind { Flare, Tower, Supply, Helicopter, Reach, Survive, Boss }
 
 /// <summary>One story objective: what, where (site chunk type) and how long the player has to hold the zone.</summary>
 public struct ObjectiveStep
@@ -13,6 +14,8 @@ public struct ObjectiveStep
     public float hold;
     /// <summary>Loc key of the radio briefing ({0} = direction, {1} = hold seconds).</summary>
     public string briefKey;
+    /// <summary>False for Survive / Boss: no place in the city, no marker.</summary>
+    public bool HasSite => radius > 0f;
 }
 
 /// <summary>
@@ -35,6 +38,8 @@ public static class Objectives
     public const float SupplyRadius = 2.4f, SupplyHold = 2f;
     public const float TowerRadius = 6f, TowerHold = 20f;
     public const float HeliRadius = 7.5f, HeliHold = 30f;
+    public const float ReachRadius = 4f;
+    public const float SurviveDefault = 60f;
     /// <summary>The helicopter shows up this long before the hold completes.</summary>
     public const float HeliArriveBefore = 9f;
     /// <summary>Spawn interval multiplier while the player is holding a tower / landing zone.</summary>
@@ -64,8 +69,30 @@ public static class Objectives
                     kind = k, site = hospital ? ChunkType.Hospital : ChunkType.GasStation, radius = SupplyRadius, hold = SupplyHold,
                     briefKey = hospital ? "radio.supply_hospital" : "radio.supply_gas",
                 };
+            case ObjectiveKind.Reach:
+                var sites = ReachSites;
+                var site = sites[rng == null ? 0 : rng.Next(sites.Length)];
+                return new ObjectiveStep { kind = k, site = site, radius = ReachRadius, hold = 0f, briefKey = "radio.reach" };
+            case ObjectiveKind.Survive:
+                return new ObjectiveStep { kind = k, site = ChunkType.Block, radius = 0f, hold = SurviveDefault, briefKey = "radio.survive" };
+            case ObjectiveKind.Boss:
+                return new ObjectiveStep { kind = k, site = ChunkType.Block, radius = 0f, hold = 0f, briefKey = "radio.boss_hunt" };
             default:
                 return new ObjectiveStep { kind = k, site = ChunkType.Helipad, radius = HeliRadius, hold = HeliHold, briefKey = "radio.heli" };
+        }
+    }
+
+    static readonly ChunkType[] ReachSites = { ChunkType.PoliceStation, ChunkType.GasStation, ChunkType.Hospital };
+
+    /// <summary>HUD icon / colour slot (4 sprites: flare, tower, supply, helicopter).</summary>
+    public static int VisualIndex(ObjectiveKind k)
+    {
+        switch (k)
+        {
+            case ObjectiveKind.Reach: return 3;
+            case ObjectiveKind.Survive: return 1;
+            case ObjectiveKind.Boss: return 0;
+            default: return (int)k;
         }
     }
 

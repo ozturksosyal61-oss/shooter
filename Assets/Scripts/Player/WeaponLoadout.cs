@@ -30,6 +30,7 @@ public class WeaponLoadout : MonoBehaviour
         Apply(Override ?? Profile.SelectedWeapon, pc);
         ApplyCostume(Profile.SelectedCostume, pc);
         pc.maxHealth += Economy.StartHealthBonus(Profile.BonusLevel(BonusId.StartHealth));
+        if (GameMode.IsHard) pc.maxHealth = Mathf.Round(pc.maxHealth * ModeRules.HardPlayerHealthMul);
     }
 
     void Start()

@@ -37,7 +37,16 @@ public class Progression : MonoBehaviour
 
     public int Need(int level) => baseXp + linear * (level - 1) + Mathf.RoundToInt(quadratic * (level - 1) * (level - 1));
 
-    void OnKilled(Zombie z) => AddXp(z.IsRunner ? runnerXp : z.xp);
+    float xpCarry;
+
+    // Hard mode: kills give less XP (fraction carried over so walkers still count).
+    void OnKilled(Zombie z)
+    {
+        xpCarry += (z.IsRunner ? runnerXp : z.xp) * ModeRules.XpMul(GameMode.Current);
+        int add = (int)xpCarry;
+        xpCarry -= add;
+        if (add > 0) AddXp(add);
+    }
 
     public void AddXp(int amount)
     {

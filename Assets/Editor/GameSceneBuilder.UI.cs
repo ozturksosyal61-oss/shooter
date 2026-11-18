@@ -360,9 +360,20 @@ public static partial class GameSceneBuilder
         var againLabel = Txt("Label", again.transform, 84, TextAnchor.MiddleCenter, UiInk);
         Stretch(againLabel.rectTransform);
         L(againLabel, "over.again");
+        againLabel.resizeTextForBestFit = true; againLabel.resizeTextMinSize = 30; againLabel.resizeTextMaxSize = 84; // "SONRAKİ BÖLÜM"
+        againLabel.rectTransform.offsetMin = new Vector2(24f, 0f); againLabel.rectTransform.offsetMax = new Vector2(-24f, 0f);
         againLabel.GetComponent<Outline>().effectColor = new Color(1f, 1f, 1f, 0.35f);
         againLabel.GetComponent<Outline>().effectDistance = new Vector2(2f, -2f);
         againLabel.GetComponent<Shadow>().enabled = false;
+        // Campaign victory: three stars where the record line sits.
+        hud.victoryStars = new Image[3];
+        for (int k = 0; k < 3; k++)
+        {
+            var st = Img("Star" + k, go.transform, ui.star, UiGold);
+            Anchor(st.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2((k - 1) * 130f, 180f + (k == 1 ? 14f : 0f)), new Vector2(110f, 110f));
+            st.gameObject.SetActive(false);
+            hud.victoryStars[k] = st;
+        }
         go.gameObject.SetActive(false);
         hud.gameOverPanel = go.gameObject; hud.gameOverTitle = title; hud.gameOverStats = stats; hud.recordText = record;
         hud.restartButton = again.rectTransform;

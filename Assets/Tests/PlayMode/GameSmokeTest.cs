@@ -25,6 +25,7 @@ public class GameSmokeTest
         Store.UseFake = Ads.UseFake = true;
         Store.Backend = null; Ads.Backend = null;
         GameManager.TimeScale = 1f;
+        GameMode.Set(RunMode.Endless);
     }
 
     [TearDown]
@@ -32,6 +33,7 @@ public class GameSmokeTest
     {
         if (mouse != null) InputSystem.RemoveDevice(mouse);
         GameManager.TimeScale = 1f;
+        GameMode.Set(RunMode.Endless);
         SaveSystem.Store = null;
     }
 
@@ -837,6 +839,82 @@ public class GameSmokeTest
     }
 
     [UnityTest, Timeout(300000)]
+    public IEnumerator CampaignAndHardMode()
+    {
+        // ---- Chapter 1 (flare → supply → reach): objectives in order, victory, stars, reward, chapter 2 unlocked.
+        GameMode.Set(RunMode.Campaign, 0);
+        GameManager.TimeScale = 2f;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var p = gm.player;
+        var od = ObjectiveDirector.I;
+        WaveDirector.I.enabled = false;
+        od.holdScale = 0.12f;
+        od.issueDelay = 0.3f;
+        Assert.IsInstanceOf<CampaignPlan>(od.Plan, "campaign plan");
+        Assert.IsFalse(p.weapon.limitedAmmo, "campaign: normal ammo");
+        int gold0 = SaveSystem.Data.wallet.gold;
+        var def = Campaign.Get(0);
+        for (int i = 0; i < def.steps.Length; i++)
+        {
+            yield return WaitUntil(() => od.HasActive, 8f);
+            Assert.IsTrue(od.HasActive, "step " + i + " issued");
+            Assert.AreEqual(def.steps[i], od.Step.kind);
+            Assert.AreEqual(i, od.ChapterIndex);
+            if (od.Step.kind == ObjectiveKind.Supply) p.TakeDamage(60f, Vector3.forward); // crate heals instead of a card pick
+            Teleport(p, od.TargetLocal);
+            yield return WaitUntil(() => !od.HasActive, 15f);
+            Assert.IsFalse(od.HasActive, def.steps[i] + " should complete");
+        }
+        yield return WaitUntil(() => gm.hud.gameOverPanel.activeSelf, 6f);
+        Assert.IsTrue(gm.Won && gm.IsGameOver, "chapter won");
+        Assert.AreEqual(3, Campaign.StarsOf(SaveSystem.Data.campaign, 0), "fast + full health = 3 stars");
+        Assert.IsTrue(Campaign.Unlocked(SaveSystem.Data.campaign, 1), "next chapter unlocked");
+        Assert.GreaterOrEqual(SaveSystem.Data.wallet.gold, gold0 + def.gold, "first-clear gold");
+        Assert.IsTrue(gm.hud.victoryStars[2].gameObject.activeSelf, "stars on the victory screen");
+        float hp = p.Health;
+        p.TakeDamage(500f, Vector3.forward);
+        Assert.AreEqual(hp, p.Health, "safe after the chapter");
+
+        // ---- Siteless steps: survive runs wherever you are.
+        GameMode.Set(RunMode.Campaign, 1);
+        yield return LoadGame();
+        gm = GameManager.I; p = gm.player; od = ObjectiveDirector.I;
+        WaveDirector.I.enabled = false;
+        od.holdScale = 0.1f;
+        Assert.AreEqual(Campaign.Get(1).startWave - 1, WaveDirector.I.Wave, "chapter start wave");
+        od.ForceIssue(ObjectiveKind.Survive);
+        Assert.IsTrue(od.HasActive && !od.Step.HasSite);
+        yield return WaitUntil(() => !od.HasActive, 15f);
+        Assert.IsFalse(od.HasActive, "survive completes on the clock");
+
+        // ---- Hard: harder waves, smaller health pool, limited ammo + ammo boxes, no breather regen.
+        GameMode.Set(RunMode.Hard);
+        yield return LoadGame();
+        gm = GameManager.I; p = gm.player;
+        var w = p.weapon;
+        Assert.IsTrue(w.limitedAmmo, "hard: limited ammo");
+        Assert.AreEqual(w.magazineSize * ModeRules.StartReserveMags, w.Reserve, "start reserve");
+        Assert.Less(p.maxHealth, 100f, "hard: lower health pool");
+        Assert.AreEqual(Difficulty.ForWave(1, true).contactDamage, WaveDirector.I.Params.contactDamage, 0.01f);
+        WaveDirector.I.JumpToBreakBefore(2);
+        WaveDirector.I.enabled = false;
+        w.SetAmmo(0, 0);
+        yield return null;
+        Assert.IsTrue(w.OutOfAmmo, "empty");
+        w.StartReload();
+        Assert.IsFalse(w.IsReloading, "no reload without reserve");
+        Pickups.I.DropAmmo(p.transform.position + Vector3.right * 2f);
+        yield return WaitUntil(() => w.Ammo > 0, 6f);
+        Assert.AreEqual(w.magazineSize, w.Ammo, "ammo box → one magazine");
+        Assert.AreEqual(0, w.Reserve);
+        p.TakeDamage(20f, Vector3.forward);
+        float hurt = p.Health;
+        yield return Wait(3.5f);
+        Assert.AreEqual(hurt, p.Health, 0.01f, "hard: no breather regeneration");
+    }
+
+    [UnityTest, Timeout(600000)]
     public IEnumerator CityAndObjectives()
     {
         GameManager.TimeScale = 2f;
@@ -1259,6 +1337,14 @@ public class GameSmokeTest
         yield return null;
         ShotCanvas(Path.Combine(dir, "menu_settings.png"), mm.GetComponent<Canvas>());
         mm.settingsPanel.Close();
+        if (mm.login) mm.login.root.SetActive(false); // the daily reward pops up on its own
+        mm.ShowPlay(true);
+        yield return null;
+        ShotCanvas(Path.Combine(dir, "menu_modes.png"), mm.GetComponent<Canvas>());
+        mm.campaignPanel.Open();
+        yield return null;
+        ShotCanvas(Path.Combine(dir, "menu_campaign.png"), mm.GetComponent<Canvas>());
+        mm.campaignPanel.root.SetActive(false);
         mm.PlayEndless();
         yield return WaitUntil(() => GameManager.I && !LoadingScreen.IsLoading, 20f);
         yield return Wait(2f);

@@ -122,3 +122,14 @@ F4'te beceri fark etmiyordu (71–95 sn). F5'te sabit duran ~100 sn'de ölüyor,
 ## Notlar
 - Ara turda (BaseAlive 10, basit kite botu) kite 188 sn'de köşeye sıkışıp öldü → bot "açık alana kaç" mantığıyla güçlendirildi; oyun tarafında değişiklik gerekmedi.
 - Takılma ölçümü: 100 ms üstü kareler profiler marker'larıyla loglanır. Ekran görüntüsü alınan turlarda görülen ~110–250 ms'lik kareler testin kendi PNG kodlamasıdır (45 sn aralıkla, ~1 MB GC).
+
+## F12 — Zor mod (2026-11-19)
+`PLAYTEST_MODE=hard`, timescale 8, M4. Kurallar `ModeRules` (`Assets/Scripts/Core/GameMode.cs`).
+
+| Tur | Ayar | human | kite | turret |
+|---|---|---|---|---|
+| 0 | can ×1.45, hasar ×1.5, yedek 3 şarjör, kutu %9 (az kalınca %30) | 93 sn / dalga 3 (12 sn mermisiz) | 62 sn / dalga 2 (27 sn mermisiz) | 28 sn |
+| 1 | can ×1.3, hasar ×1.4, yedek 5 şarjör, kutu %16 (az kalınca %45, 1.5 sn arayla), mıknatıs 8 m, ikmal +3 şarjör | **143 sn / dalga 4** (10 kutu, 0 sn mermisiz) | **194 sn / dalga 5** (23 kutu, boss'a ulaştı) | — |
+
+- Sonsuz modda human ~190–400 sn, kite 507–600 sn → zor modda süre ~1/3. Mermi artık "sürekli hareket et, kutuları topla" baskısı yaratıyor ama kesin ölüm sebebi değil.
+- Turret botu yerinde durduğu için kutu toplayamıyor; zor mod bilerek hareketi ödüllendiriyor.

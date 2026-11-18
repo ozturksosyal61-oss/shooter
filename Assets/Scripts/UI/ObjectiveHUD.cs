@@ -47,7 +47,7 @@ public class ObjectiveHUD : MonoBehaviour
     Camera cam;
     RectTransform root;
     const int MaxNum = 400;
-    readonly string[] distCache = new string[MaxNum], holdCache = new string[MaxNum];
+    readonly string[] distCache = new string[MaxNum], holdCache = new string[MaxNum], surviveCache = new string[MaxNum];
     string[] prefixes = new string[0];
     Lang cacheLang;
 
@@ -59,7 +59,7 @@ public class ObjectiveHUD : MonoBehaviour
     // Cached per value so the per-frame path does not allocate (filled lazily, reset on language change).
     string Cached(string[] cache, string key, int v)
     {
-        if (cacheLang != Loc.Current) { System.Array.Clear(distCache, 0, MaxNum); System.Array.Clear(holdCache, 0, MaxNum); cacheLang = Loc.Current; }
+        if (cacheLang != Loc.Current) { System.Array.Clear(distCache, 0, MaxNum); System.Array.Clear(holdCache, 0, MaxNum); System.Array.Clear(surviveCache, 0, MaxNum); cacheLang = Loc.Current; }
         return cache[v] ??= Loc.F(key, v);
     }
 
@@ -91,6 +91,7 @@ public class ObjectiveHUD : MonoBehaviour
         var hud = GameManager.I ? GameManager.I.hud : null;
         int bonus = ObjectiveDirector.I.LastBonus;
         if (!hud) return;
+        if (ObjectiveDirector.I.Plan.Finished) return; // chapter won: the victory screen takes over
         if (s.kind == ObjectiveKind.Helicopter) hud.ShowBanner(Loc.T("obj.heli_title"), Loc.F("obj.heli_sub", bonus), new Color(1f, 0.85f, 0.2f));
         else hud.ShowBanner(Loc.T("obj.done"), Loc.F("obj.done_sub", bonus), new Color(0.55f, 1f, 0.45f));
     }
@@ -151,15 +152,34 @@ public class ObjectiveHUD : MonoBehaviour
             return;
         }
         var kind = d.Step.kind;
-        Color col = kindColors[(int)kind];
+        int vi = Objectives.VisualIndex(kind);
+        Color col = kindColors[vi];
         if (kind != lastKind)
         {
             lastKind = kind;
-            trackerTitle.text = Loc.T("obj." + kind);
-            if (trackerIcon) { trackerIcon.sprite = kindIcons[(int)kind]; trackerIcon.color = col; }
-            if (markerIcon) { markerIcon.sprite = kindIcons[(int)kind]; markerIcon.color = col; }
+            // Campaign: "TITLE  2/4" (chapter progress).
+            trackerTitle.text = d.ChapterTotal > 0 ? Loc.T("obj." + kind) + "  " + (d.ChapterIndex + 1) + "/" + d.ChapterTotal : Loc.T("obj." + kind);
+            if (trackerIcon) { trackerIcon.sprite = kindIcons[vi]; trackerIcon.color = col; }
+            if (markerIcon) { markerIcon.sprite = kindIcons[vi]; markerIcon.color = col; }
             if (markerArrow) markerArrow.color = col;
             lastDist = lastHold = -1;
+        }
+
+        if (!d.Step.HasSite)
+        {
+            // Survive / Boss: no place to go — no marker, just the line (and the survive countdown).
+            if (marker && marker.gameObject.activeSelf) marker.gameObject.SetActive(false);
+            MarkerOnEdge = false;
+            bool timed = d.Step.hold > 0f;
+            if (progressRoot && progressRoot.activeSelf != timed) progressRoot.SetActive(timed);
+            if (progressFill) progressFill.anchorMax = new Vector2(d.Progress01, 1f);
+            if (timed)
+            {
+                int left = Mathf.Clamp(Mathf.CeilToInt(d.Hold - d.Held), 0, MaxNum - 1);
+                if (left != lastHold) { lastHold = left; trackerInfo.text = Cached(surviveCache, "obj.survive_left", left); }
+            }
+            else if (lastHold != -2) { lastHold = -2; trackerInfo.text = Loc.T("obj.boss_info"); }
+            return;
         }
 
         Vector3 target = d.TargetLocal;

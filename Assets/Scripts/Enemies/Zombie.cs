@@ -460,7 +460,7 @@ public class Zombie : MonoBehaviour
 
         var gm = GameManager.I;
         gm.RegisterKill(this);
-        if (Pickups.I) Pickups.I.MaybeDrop(transform.position);
+        if (Pickups.I) Pickups.I.MaybeDrop(transform.position, IsSpecial);
         gm.HitStop(0.06f);
         gm.Shake(IsSpecial ? 0.45f : 0.3f);
         GameAudio.Play(SfxId.Hit, point);

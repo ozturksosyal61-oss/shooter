@@ -46,6 +46,7 @@ public static partial class GameSceneBuilder
         BuildBulletPrefab(m);
         BuildSplatPrefab(m);
         BuildHealthPackPrefab(m, t);
+        BuildAmmoBoxPrefab(t);
         BuildTurretPrefab(m);
         BuildGrenadePrefab(m);
         BuildZombiePrefab(m, anims);
@@ -397,6 +398,38 @@ public static partial class GameSceneBuilder
         var b = go.AddComponent<Bullet>();
         b.tracer = q.transform;
         SavePrefab(go, $"{PrefabDir}/Bullet.prefab");
+    }
+
+    /// <summary>Hard-mode ammo box: olive crate, yellow band, brass rounds on top + an amber ground glow.</summary>
+    static void BuildAmmoBoxPrefab(Tex t)
+    {
+        const string lit = "Universal Render Pipeline/Simple Lit";
+        var olive = Mat("M_Ammo_Olive", lit, x => { x.SetColor("_BaseColor", new Color(0.33f, 0.38f, 0.2f)); x.SetTexture("_BaseMap", null); });
+        var band = Mat("M_Ammo_Band", lit, x => { x.SetColor("_BaseColor", new Color(1f, 0.78f, 0.15f)); x.SetTexture("_BaseMap", null); });
+        var brass = Mat("M_Ammo_Brass", lit, x => { x.SetColor("_BaseColor", new Color(0.85f, 0.62f, 0.25f)); x.SetTexture("_BaseMap", null); });
+        var glow = Mat("M_AmmoGlow", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", new Color(1f, 0.7f, 0.15f, 0.8f)); x.SetFloat("_VertexColor", 0f); });
+
+        var root = new GameObject("AmmoBox");
+        var visual = new GameObject("Visual").transform;
+        visual.SetParent(root.transform, false);
+        visual.localPosition = new Vector3(0f, 0.45f, 0f);
+        void Box(string n, Vector3 pos, Vector3 size, Material mat)
+        {
+            var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            b.name = n;
+            Object.DestroyImmediate(b.GetComponent<Collider>());
+            b.transform.SetParent(visual, false);
+            b.transform.localPosition = pos;
+            b.transform.localScale = size;
+            b.GetComponent<MeshRenderer>().sharedMaterial = mat;
+        }
+        Box("Case", Vector3.zero, new Vector3(0.7f, 0.36f, 0.42f), olive);
+        Box("Band", Vector3.zero, new Vector3(0.72f, 0.1f, 0.44f), band);
+        for (int i = 0; i < 4; i++) Box("Round" + i, new Vector3(-0.21f + i * 0.14f, 0.27f, 0f), new Vector3(0.07f, 0.18f, 0.07f), brass);
+        var g = Quad("Glow", root.transform, glow);
+        g.transform.localPosition = new Vector3(0f, 0.03f, 0f);
+        g.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
+        SavePrefab(root, $"{PrefabDir}/AmmoBox.prefab");
     }
 
     /// <summary>Medkit: white box with a red cross on top (bobs via Pickups) + a green ground glow.</summary>
@@ -778,6 +811,7 @@ public static partial class GameSceneBuilder
         new GameObject("WaveDirector").AddComponent<WaveDirector>();
         var pickups = new GameObject("Pickups").AddComponent<Pickups>();
         pickups.healthPackPrefab = LoadGo($"{PrefabDir}/HealthPack.prefab");
+        pickups.ammoBoxPrefab = LoadGo($"{PrefabDir}/AmmoBox.prefab");
         var spawner = new GameObject("ZombieSpawner").AddComponent<ZombieSpawner>();
         spawner.prefab = Load<Zombie>("Zombie");
         spawner.shieldPrefab = Load<Zombie>("ShieldZombie");

@@ -45,12 +45,14 @@ public class GameManager : MonoBehaviour
         I = this;
         Settings.ApplyFrameRate();
         Time.timeScale = TimeScale;
+        var rec = SaveSystem.Data.records;
+        bool hard = GameMode.IsHard;
         Records = new RunRecords
         {
-            bestScore = SaveSystem.Data.records.bestScore,
-            bestWave = SaveSystem.Data.records.bestWave,
-            bestKills = SaveSystem.Data.records.bestKills,
-            bestTime = SaveSystem.Data.records.bestTime,
+            bestScore = hard ? rec.hardScore : rec.bestScore,
+            bestWave = hard ? rec.hardWave : rec.bestWave,
+            bestKills = hard ? rec.hardKills : rec.bestKills,
+            bestTime = hard ? rec.hardTime : rec.bestTime,
         };
     }
 
@@ -80,6 +82,8 @@ public class GameManager : MonoBehaviour
     void Restart()
     {
         GameAudio.Play(SfxId.UiClick, Vector3.zero);
+        // Chapter cleared: the big button goes on to the next chapter.
+        if (Won && GameMode.IsCampaign && GameMode.Chapter + 1 < Campaign.Count) GameMode.Chapter++;
         Time.timeScale = TimeScale;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
@@ -251,12 +255,54 @@ public class GameManager : MonoBehaviour
         r.bestWave = Mathf.Max(r.bestWave, wave);
         r.bestKills = Mathf.Max(r.bestKills, Kills);
         r.bestTime = Mathf.Max(r.bestTime, GameTime);
-        Records = r;
         var rec = SaveSystem.Data.records;
-        rec.bestScore = r.bestScore; rec.bestWave = r.bestWave; rec.bestKills = r.bestKills; rec.bestTime = r.bestTime;
+        if (GameMode.IsHard) { rec.hardScore = r.bestScore; rec.hardWave = r.bestWave; rec.hardKills = r.bestKills; rec.hardTime = r.bestTime; }
+        else if (!GameMode.IsCampaign) { rec.bestScore = r.bestScore; rec.bestWave = r.bestWave; rec.bestKills = r.bestKills; rec.bestTime = r.bestTime; }
+        else r.newScore = false; // chapters have stars, not score records
+        Records = r;
         SaveSystem.Write();
         GameOverStarted?.Invoke();
         gameOverCo = StartCoroutine(GameOverRoutine(wave));
+    }
+
+    /// <summary>Campaign chapter cleared (true) — the run ends with the victory screen.</summary>
+    public bool Won { get; private set; }
+    public int ChapterStars { get; private set; }
+    public int ChapterGold { get; private set; }
+    public int ChapterGems { get; private set; }
+    public bool ChapterFirstClear { get; private set; }
+
+    /// <summary>The last objective of a chapter is done: stars, first-clear reward, victory screen.</summary>
+    public void TriggerVictory()
+    {
+        if (IsGameOver) return;
+        Won = true;
+        IsGameOver = true;
+        hitStopActive = false;
+        Time.timeScale = 0.5f * TimeScale;
+        int ch = GameMode.Chapter;
+        var def = Campaign.Get(ch);
+        float h01 = player ? player.Health / Mathf.Max(1f, player.maxHealth) : 0f;
+        ChapterStars = Campaign.Stars(GameTime, def.parSeconds, h01);
+        ChapterFirstClear = Campaign.Record(SaveSystem.Data.campaign, ch, ChapterStars);
+        Campaign.Reward(ch, ChapterFirstClear, out int gold, out int gems);
+        ChapterGold = gold; ChapterGems = gems;
+        Profile.Grant(gold, gems, "chapter");
+        SaveSystem.Write();
+        if (MusicDirector.I) MusicDirector.I.Duck(0.4f, 1.5f);
+        GameOverStarted?.Invoke();
+        gameOverCo = StartCoroutine(VictoryRoutine());
+    }
+
+    IEnumerator VictoryRoutine()
+    {
+        yield return new WaitForSecondsRealtime(1.2f);
+        Time.timeScale = TimeScale;
+        GameAudio.Play(SfxId.NewRecord, PlayerPos);
+        int wave = WaveDirector.I ? WaveDirector.I.Wave : 0;
+        if (hud) hud.ShowVictory(GameMode.Chapter, ChapterStars, Score, GameTime, Kills, wave, ChapterGold, ChapterGems);
+        yield return new WaitForSecondsRealtime(0.4f);
+        canRestart = true;
     }
 
     IEnumerator GameOverRoutine(int wave)

@@ -68,6 +68,9 @@ public class PlayerController : MonoBehaviour
         Health = maxHealth;
     }
 
+    // WeaponLoadout (Awake) changes maxHealth (start-health bonus, hard mode): start full on that.
+    void Start() => Health = maxHealth;
+
     void Update()
     {
         float dt = Time.deltaTime;
@@ -101,7 +104,7 @@ public class PlayerController : MonoBehaviour
             }
         }
         var waves = WaveDirector.I;
-        if (waves && waves.InBreak && Health < maxHealth && Time.time - lastDamageTime > 2f)
+        if (waves && waves.InBreak && ModeRules.BreatherRegen(GameMode.Current) && Health < maxHealth && Time.time - lastDamageTime > 2f)
             Health = Mathf.Min(maxHealth, Health + breatherRegen * dt);
         if (GameAudio.I)
         {
@@ -183,6 +186,7 @@ public class PlayerController : MonoBehaviour
     public void TakeDamage(float amount, Vector3 fromDir, float knockForce)
     {
         if (IsDead || Time.time < invulnUntil) return;
+        if (GameManager.I && GameManager.I.Won) return; // chapter cleared: the soldier is safe
         invulnUntil = Time.time + invulnerableTime;
         lastDamageTime = Time.time;
         Health = Mathf.Max(0f, Health - amount);

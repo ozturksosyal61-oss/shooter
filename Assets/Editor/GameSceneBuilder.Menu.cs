@@ -300,16 +300,20 @@ public static partial class GameSceneBuilder
         var shopLock = Img("Lock", mm.shop.transform, lockIcon, UiCream);
         Anchor(shopLock.rectTransform, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-10f, -10f), new Vector2(46f, 46f));
         var play = Rect("PlayButtons", root); Stretch(play);
-        mm.campaign = MakeButton("Campaign", play, "menu.campaign", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(-330f, -110f), new Vector2(560f, 210f), 60);
-        var cLbl = mm.campaign.GetComponentInChildren<Text>(); cLbl.rectTransform.offsetMin = new Vector2(0f, 50f);
-        var cSub = Label("Sub", mm.campaign.transform, 34, TextAnchor.MiddleCenter, UiGold, "menu.locked");
-        Stretch(cSub.rectTransform); cSub.rectTransform.offsetMax = new Vector2(0f, -110f);
-        var cLock = Img("Lock", mm.campaign.transform, lockIcon, UiCream);
-        Anchor(cLock.rectTransform, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-24f, -24f), new Vector2(60f, 60f));
-        mm.endless = MakeButton("Endless", play, "menu.endless", UiOrange, new Vector2(0.5f, 0.5f), new Vector2(330f, -110f), new Vector2(560f, 210f), 60, UiInk);
-        var eLbl = mm.endless.GetComponentInChildren<Text>(); eLbl.rectTransform.offsetMin = new Vector2(0f, 50f);
-        var eSub = Label("Sub", mm.endless.transform, 30, TextAnchor.MiddleCenter, UiInk, "menu.endless_sub");
-        Stretch(eSub.rectTransform); eSub.rectTransform.offsetMax = new Vector2(0f, -110f);
+        // Play: Story (chapter select) / Endless / Hard.
+        Text ModeButton(ref Button btn, string name, string key, Color color, Color text, float x, string subKey)
+        {
+            btn = MakeButton(name, play, key, color, new Vector2(0.5f, 0.5f), new Vector2(x, -110f), new Vector2(440f, 210f), 60, text);
+            var lbl = btn.GetComponentInChildren<Text>(); lbl.rectTransform.offsetMin = new Vector2(0f, 50f);
+            var sub = Label("Sub", btn.transform, 28, TextAnchor.MiddleCenter, text == UiInk ? UiInk : UiGold, subKey);
+            Stretch(sub.rectTransform); sub.rectTransform.offsetMin = new Vector2(12f, 0f); sub.rectTransform.offsetMax = new Vector2(-12f, -110f);
+            return sub;
+        }
+        mm.storySub = ModeButton(ref mm.campaign, "Campaign", "menu.story", UiKhaki, UiCream, -470f, null);
+        ModeButton(ref mm.endless, "Endless", "menu.endless", UiOrange, UiInk, 0f, "menu.endless_sub");
+        mm.hardSub = ModeButton(ref mm.hard, "Hard", "menu.hard", new Color(0.55f, 0.13f, 0.1f), UiCream, 470f, null);
+        var skull = Img("Skull", mm.hard.transform, ui.skull, UiCream);
+        Anchor(skull.rectTransform, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-34f, -34f), new Vector2(54f, 54f));
         mm.back = MakeButton("Back", play, "menu.back", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(0f, -320f), new Vector2(320f, 100f), 44);
         mm.mainButtons = main.gameObject; mm.playButtons = play.gameObject;
 

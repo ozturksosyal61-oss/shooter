@@ -72,7 +72,7 @@ public class ObjectiveVisuals : MonoBehaviour
         var d = ObjectiveDirector.I;
         if (!cam) cam = Camera.main;
         UpdateCrateOutro();
-        if (!d || !d.HasActive)
+        if (!d || !d.HasActive || !d.Step.HasSite)
         {
             if (beacon && beacon.gameObject.activeSelf) SetAll(false);
             return;
@@ -80,7 +80,7 @@ public class ObjectiveVisuals : MonoBehaviour
         if (beacon && !beacon.gameObject.activeSelf) SetAll(true);
         var kind = d.Step.kind;
         Vector3 p = d.TargetLocal;
-        Color c = kindColors[(int)kind];
+        Color c = kindColors[Objectives.VisualIndex(kind)];
         float t = Time.time;
 
         if (beacon)

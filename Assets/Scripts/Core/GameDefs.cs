@@ -77,7 +77,16 @@ public static class Difficulty
     public static float BaseDamage = 9f;
     public static float DamagePerWave = 1.5f;
 
-    public static WaveParams ForWave(int n)
+    /// <summary>Wave tuning for the current mode (hard mode hardens it).</summary>
+    public static WaveParams ForWave(int n) => ForWave(n, GameMode.IsHard);
+
+    public static WaveParams ForWave(int n, bool hard)
+    {
+        var w = Base(n);
+        return hard ? ModeRules.Harden(w) : w;
+    }
+
+    static WaveParams Base(int n)
     {
         int k = Mathf.Max(0, n - 1);
         float kd = DensityStep(n);

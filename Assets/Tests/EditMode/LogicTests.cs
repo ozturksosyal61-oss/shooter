@@ -334,7 +334,7 @@ public class LocTests
         Loc.Current = Lang.Tr;
         Assert.AreEqual("DALGA 3", Loc.F("hud.wave", 3));
         Assert.AreEqual("Holdout", Loc.T("game.title"));
-        Assert.AreEqual("Holdout: Zombi Avı", Loc.T("game.store_title"));
+        Assert.AreEqual("Holdout: Last City", Loc.T("game.store_title"));
         Assert.AreEqual("Son Devriye", Loc.T("game.story"));
         for (int i = 1; i <= LoadingScreen.TipCount; i++) Assert.IsTrue(Loc.Has("tip." + i), "loading tip " + i);
         Assert.AreEqual("ÇİFT MERMİ", Loc.Upper("Çift Mermi"));
@@ -347,7 +347,7 @@ public class LocTests
         Loc.Changed -= h;
         Assert.AreEqual(1, changed);
         Assert.AreEqual("WAVE 3", Loc.F("hud.wave", 3));
-        Assert.AreEqual("Holdout: Zombie Survival", Loc.T("game.store_title"));
+        Assert.AreEqual("Holdout: Last City", Loc.T("game.store_title"));
         Assert.AreEqual("DOUBLE SHOT", Loc.Upper("Double Shot"));
         UnityEngine.TestTools.LogAssert.Expect(LogType.Warning, "Loc: missing key missing.key");
         Assert.AreEqual("missing.key", Loc.T("missing.key"));
@@ -799,5 +799,102 @@ public class ScriptFileTests
             if (!typeof(MonoBehaviour).IsAssignableFrom(t) || t.IsAbstract || t.IsNested || runtimeOnly.Contains(t.Name)) continue;
             Assert.IsTrue(files.Contains(t.Name), $"{t.Name} must be in {t.Name}.cs");
         }
+    }
+}
+
+public class ModeTests
+{
+    [Test]
+    public void HardIsHarderEveryWave()
+    {
+        for (int n = 1; n <= 25; n++)
+        {
+            var e = Difficulty.ForWave(n, false);
+            var h = Difficulty.ForWave(n, true);
+            Assert.Greater(h.healthMultiplier, e.healthMultiplier, "health w" + n);
+            Assert.Greater(h.contactDamage, e.contactDamage, "damage w" + n);
+            Assert.Less(h.spawnInterval, e.spawnInterval, "interval w" + n);
+            Assert.GreaterOrEqual(h.maxAlive, e.maxAlive, "alive w" + n);
+            Assert.GreaterOrEqual(h.speedMultiplier, e.speedMultiplier, "speed w" + n);
+            Assert.GreaterOrEqual(h.specialChance, e.specialChance, "special w" + n);
+        }
+        Assert.AreEqual(0f, Difficulty.ForWave(1, true).specialChance);
+        Assert.Greater(Difficulty.ForWave(2, true).specialChance, 0f, "hard: mutations from wave 2");
+    }
+
+    [Test]
+    public void BossWavesPerMode()
+    {
+        Assert.IsTrue(ModeRules.IsBossWave(RunMode.Endless, 6));
+        Assert.IsFalse(ModeRules.IsBossWave(RunMode.Endless, 5));
+        Assert.IsTrue(ModeRules.IsBossWave(RunMode.Hard, 5));
+        Assert.IsTrue(ModeRules.IsBossWave(RunMode.Hard, 9));
+        Assert.IsFalse(ModeRules.IsBossWave(RunMode.Hard, 6));
+        for (int w = 1; w < 30; w++) Assert.IsFalse(ModeRules.IsBossWave(RunMode.Campaign, w));
+        Assert.AreEqual(1, ModeRules.BossIndex(RunMode.Hard, 9));
+    }
+
+    [Test]
+    public void HardAmmoRules()
+    {
+        Assert.IsTrue(ModeRules.LimitedAmmo(RunMode.Hard));
+        Assert.IsFalse(ModeRules.LimitedAmmo(RunMode.Endless));
+        Assert.IsFalse(ModeRules.LimitedAmmo(RunMode.Campaign));
+        Assert.IsFalse(ModeRules.BreatherRegen(RunMode.Hard));
+        Assert.AreEqual(1f, ModeRules.AmmoDrop(true, 999, 40), "mutations always drop ammo");
+        Assert.Greater(ModeRules.AmmoDrop(false, 10, 40), ModeRules.AmmoDrop(false, 100, 40), "pity when low");
+        Assert.AreEqual(40 * ModeRules.MaxReserveMags, ModeRules.ReserveCap(40));
+        Assert.Greater(ModeRules.GoldMul(RunMode.Hard), 1f);
+    }
+
+    [Test]
+    public void ChapterPlanRunsInOrderAndFinishes()
+    {
+        var rng = new System.Random(1);
+        for (int c = 0; c < Campaign.Count; c++)
+        {
+            var def = Campaign.Get(c);
+            var plan = new CampaignPlan(def);
+            for (int i = 0; i < def.steps.Length; i++)
+            {
+                Assert.IsFalse(plan.Finished);
+                Assert.IsTrue(plan.ShouldIssue(1, -1, false));
+                Assert.IsFalse(plan.ShouldIssue(1, -1, true), "one at a time");
+                var s = plan.Next(rng);
+                Assert.AreEqual(def.steps[i], s.kind);
+                if (s.kind == ObjectiveKind.Survive) { Assert.AreEqual(def.surviveSeconds, s.hold); Assert.IsFalse(s.HasSite); }
+                if (s.kind == ObjectiveKind.Boss) Assert.IsFalse(s.HasSite);
+                if (s.kind == ObjectiveKind.Reach) Assert.IsTrue(CityLayout.IsLandmark(s.site));
+                plan.Completed(s);
+            }
+            Assert.IsTrue(plan.Finished, "chapter " + c);
+            Assert.IsFalse(plan.ShouldIssue(1, -1, false));
+            Assert.IsTrue(Loc.Has("chapter." + def.key + ".title") && Loc.Has("chapter." + def.key + ".desc"), def.key);
+        }
+        Assert.IsTrue(Loc.Has("obj.Reach") && Loc.Has("obj.Survive") && Loc.Has("obj.Boss"));
+    }
+
+    [Test]
+    public void StarsUnlockAndRewards()
+    {
+        Assert.AreEqual(1, Campaign.Stars(999f, 300f, 0.1f));
+        Assert.AreEqual(2, Campaign.Stars(200f, 300f, 0.1f));
+        Assert.AreEqual(2, Campaign.Stars(999f, 300f, 0.8f));
+        Assert.AreEqual(3, Campaign.Stars(200f, 300f, 0.5f));
+
+        var d = new CampaignData();
+        Assert.IsTrue(Campaign.Unlocked(d, 0));
+        Assert.IsFalse(Campaign.Unlocked(d, 1));
+        Assert.IsTrue(Campaign.Record(d, 0, 2), "first clear");
+        Assert.IsTrue(Campaign.Unlocked(d, 1));
+        Assert.IsFalse(Campaign.Record(d, 0, 1), "replay");
+        Assert.AreEqual(2, Campaign.StarsOf(d, 0), "best stars kept");
+        Campaign.Record(d, 0, 3);
+        Assert.AreEqual(3, Campaign.TotalStars(d));
+
+        Campaign.Reward(0, true, out int g1, out int gem1);
+        Campaign.Reward(0, false, out int g2, out int gem2);
+        Assert.Greater(g1, g2); Assert.Greater(gem1, 0); Assert.AreEqual(0, gem2);
+        Assert.AreEqual(ObjectiveKind.Helicopter, Campaign.Get(Campaign.Count - 1).steps[Campaign.Get(Campaign.Count - 1).steps.Length - 1], "finale: the chopper");
     }
 }

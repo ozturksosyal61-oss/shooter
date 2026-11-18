@@ -314,6 +314,46 @@ public static partial class GameSceneBuilder
         return lp;
     }
 
+    static CampaignPanel BuildCampaign(Transform root, LoadoutPanel loadout)
+    {
+        var cp = new GameObject("Campaign").AddComponent<CampaignPanel>();
+        cp.transform.SetParent(root, false);
+        cp.root = Dim("CampaignPanel", root, out var p, new Vector2(1700f, 900f));
+        var t = Label("Title", p, 60, TextAnchor.MiddleCenter, UiOrange, "camp.title");
+        Anchor(t.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -18f), new Vector2(1000f, 80f));
+        cp.total = Txt("Total", p, 30, TextAnchor.MiddleRight, UiGold);
+        Anchor(cp.total.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-40f, -36f), new Vector2(520f, 50f));
+        int n = Campaign.Count;
+        cp.chapterButtons = new Button[n]; cp.numbers = new Text[n]; cp.titles = new Text[n]; cp.descs = new Text[n]; cp.infos = new Text[n];
+        cp.stars = new Image[n * 3]; cp.locks = new GameObject[n];
+        for (int i = 0; i < n; i++)
+        {
+            int col = i % 3, row = i / 3;
+            var b = MakeButton("Chapter" + i, p, null, UiKhaki, new Vector2(0.5f, 0.5f), new Vector2(-540f + col * 540f, 165f - row * 330f), new Vector2(510f, 300f), 44, UiCream, 0f);
+            var title = b.GetComponentInChildren<Text>();
+            title.alignment = TextAnchor.UpperCenter;
+            title.rectTransform.offsetMin = new Vector2(12f, 0f); title.rectTransform.offsetMax = new Vector2(-12f, -62f);
+            var num = Txt("Number", b.transform, 28, TextAnchor.UpperCenter, UiOrange);
+            Stretch(num.rectTransform); num.rectTransform.offsetMax = new Vector2(0f, -20f);
+            var desc = Txt("Desc", b.transform, 26, TextAnchor.MiddleCenter, UiCream);
+            Stretch(desc.rectTransform); desc.rectTransform.offsetMin = new Vector2(24f, 70f); desc.rectTransform.offsetMax = new Vector2(-24f, -120f);
+            var info = Txt("Info", b.transform, 24, TextAnchor.LowerCenter, UiToxic);
+            Stretch(info.rectTransform); info.rectTransform.offsetMin = new Vector2(12f, 84f);
+            for (int k = 0; k < 3; k++)
+            {
+                var st = Img("Star" + k, b.transform, ui.star, UiGold);
+                Anchor(st.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), new Vector2((k - 1) * 66f, 44f), new Vector2(58f, 58f));
+                cp.stars[i * 3 + k] = st;
+            }
+            var lk = Img("Lock", b.transform, lockIcon, UiCream);
+            Anchor(lk.rectTransform, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-34f, -34f), new Vector2(52f, 52f));
+            cp.chapterButtons[i] = b; cp.numbers[i] = num; cp.titles[i] = title; cp.descs[i] = desc; cp.infos[i] = info; cp.locks[i] = lk.gameObject;
+        }
+        cp.back = MakeButton("Back", p, "menu.back", UiKhakiDark, new Vector2(0.5f, 0f), new Vector2(0f, 66f), new Vector2(320f, 96f), 40, null, 0f);
+        cp.loadout = loadout;
+        return cp;
+    }
+
     static DailyLoginPanel BuildLogin(Transform root)
     {
         var dp = new GameObject("DailyLogin").AddComponent<DailyLoginPanel>();
@@ -386,6 +426,9 @@ public static partial class GameSceneBuilder
         mm.loginBadge = Badge(mm.loginButton);
         mm.shopUI = BuildShop(root, stage, rt);
         mm.loadout = BuildLoadout(root, mm.shopUI);
+        mm.campaignPanel = BuildCampaign(root, mm.loadout);
+        // The loadout opens on top of the chapter list.
+        mm.loadout.root.transform.SetAsLastSibling();
         mm.login = BuildLogin(root);
         mm.quests = BuildQuests(root);
         // Shop / panels above the settings panel and under the splash.

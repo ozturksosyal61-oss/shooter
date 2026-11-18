@@ -49,7 +49,7 @@ public class RunRewards : MonoBehaviour
     {
         var gm = GameManager.I;
         int wave = WaveDirector.I ? WaveDirector.I.Wave : 1;
-        int earned = Economy.RunGold(gm.Score, wave, gm.Kills, objectives, bosses, Profile.GoldMultiplier);
+        int earned = Economy.RunGold(gm.Score, wave, gm.Kills, objectives, bosses, Profile.GoldMultiplier * ModeRules.GoldMul(GameMode.Current));
         int delta = Mathf.Max(0, earned - paidBase);
         paidBase = earned;
         LastGold = delta;
@@ -72,7 +72,7 @@ public class RunRewards : MonoBehaviour
     {
         var gm = GameManager.I;
         bool vip = Profile.Vip;
-        bool canContinue = gm.Continues == 0;
+        bool canContinue = gm.Continues == 0 && !gm.Won;
         if (doubleButton) doubleButton.gameObject.SetActive(!Doubled && LastGold > 0 && Ads.Available);
         if (continueAdButton) continueAdButton.gameObject.SetActive(canContinue && Ads.Available);
         if (continueGemButton) continueGemButton.gameObject.SetActive(canContinue);

@@ -23,6 +23,9 @@ public class RecordsData
 {
     public int bestScore, bestWave, bestKills;
     public float bestTime;
+    // Hard mode keeps its own records.
+    public int hardScore, hardWave, hardKills;
+    public float hardTime;
 }
 
 [Serializable]

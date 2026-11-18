@@ -48,6 +48,7 @@ public class PlaytestBot
     public void TearDown()
     {
         GameManager.TimeScale = 1f;
+        GameMode.Set(RunMode.Endless);
         Time.maximumDeltaTime = 0.3333333f;
         Time.captureDeltaTime = 0f;
         ChunkManager.SeedOverride = 0;
@@ -80,6 +81,8 @@ public class PlaytestBot
         SaveSystem.Data.tutorialDone = Env("PLAYTEST_TUTORIAL", "0") != "1";
         string weapon = Env("PLAYTEST_WEAPON", "");
         WeaponLoadout.Override = System.Enum.TryParse(weapon, out WeaponId wid) ? wid : (WeaponId?)null;
+        // PLAYTEST_MODE=hard → hard mode (limited ammo, tougher waves).
+        GameMode.Set(Env("PLAYTEST_MODE", "") == "hard" ? RunMode.Hard : RunMode.Endless);
         SceneManager.LoadScene("Game");
         yield return null;
         // GameManager caps the game at 60 fps; at timescale N allow 60·N so a frame is still ~1/60 s of game time.
@@ -166,6 +169,8 @@ public class PlaytestBot
         log.AppendLine("t\twave\tphase\thp\tscore\tkills\talive\tnear\tammo\tcombo\tmult");
         float nextLog = 0f, nextShot = Env("PLAYTEST_TUTORIAL", "0") == "1" ? 2f : 6f, firstHurt = -1f;
         int maxAlive = 0, hitchCount = 0, shotIndex = 0;
+        int ammoBoxes = 0, lastReserve = int.MaxValue;
+        float dryTime = 0f;
         Vector3 wander = Vector3.forward;
         float wanderT = 0f, rPulse = 0f;
         Vector3 lastMove = Vector3.forward;
@@ -413,6 +418,10 @@ public class PlaytestBot
 
                 if (hurts > 0 && firstHurt < 0f) firstHurt = gm.GameTime;
                 maxAlive = Mathf.Max(maxAlive, Zombie.Active.Count);
+                var bw = gm.player.weapon;
+                if (bw.Reserve > lastReserve) ammoBoxes++;
+                lastReserve = bw.Reserve;
+                if (bw.OutOfAmmo) dryTime += Time.deltaTime;
                 float frameMs = Time.unscaledDeltaTime * 1000f;
                 if (gm.GameTime > 2f && frameMs > 100f && hitchCount < 30)
                 {
@@ -452,7 +461,7 @@ public class PlaytestBot
 
         float realSec = Time.realtimeSinceStartup - realStart;
         string summary =
-            $"PLAYTEST {strat}: ts={ts:0} speedup={gm.GameTime / Mathf.Max(0.01f, realSec):0.0}x real={realSec:0}s survived={gm.GameTime:0}s wave={WaveDirector.I.Wave} dead={gm.IsGameOver} score={gm.Score} kills={kills} " +
+            $"PLAYTEST {strat}{(GameMode.IsHard ? "[hard]" : "")}: ts={ts:0} speedup={gm.GameTime / Mathf.Max(0.01f, realSec):0.0}x real={realSec:0}s survived={gm.GameTime:0}s wave={WaveDirector.I.Wave} dead={gm.IsGameOver} score={gm.Score} kills={kills} " +
             $"acc={(shotsFired > 0 ? 100f * hits / shotsFired : 0):0}% hurts={hurts} firstHurt={firstHurt:0}s packs={packs} comboBreaks={breaks} " +
             $"bestCombo={gm.BestCombo} reloads={reloads} perfect={perfect} jams={jams} vaults={vaults} maxAlive={maxAlive} hitches={hitchCount} " +
             $"level={Progression.I.Level} picks={Upgrades.I.Picks} specials={gm.SpecialKills} blocks={blocks} bombs={bombs} barrels={barrels} grabs={grabs} snaps={snaps} " +
@@ -461,6 +470,7 @@ public class PlaytestBot
             $"bossFight={(bossDir && bossDir.BossesDefeated > 0 ? bossDir.LastFightTime : bossSeen >= 0f ? gm.GameTime - bossSeen : 0):0}s " +
             $"bossHpLeft={(bossDir && bossDir.Boss && bossDir.BossAlive ? 100f * bossDir.Boss.Health / bossDir.Boss.MaxHealth : 0):0}% " +
             $"bossHurts={(bossSeen >= 0f ? hurts - bossHurtStart : 0):0} " +
+            (gm.player.weapon.limitedAmmo ? $"reserve={gm.player.weapon.Reserve} ammoBoxes={ammoBoxes} dryTime={dryTime:0}s " : "") +
             (bossDir && bossDir.Boss is ButcherZombie bb ? $"charges={bb.Charges} throws={bb.Throws} chargeHits={bb.ChargeHits} slamHits={bb.SlamHits} shoves={bb.ShoveHits}" : "");
         log.AppendLine(summary);
         log.AppendLine("cards: " + cardLog);

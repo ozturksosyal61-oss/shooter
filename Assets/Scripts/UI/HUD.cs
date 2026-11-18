@@ -62,6 +62,8 @@ public class HUD : MonoBehaviour
     public Text gameOverStats;
     public Text recordText;
     public RectTransform restartButton;
+    [Tooltip("Victory screen: three star images (campaign chapter result).")]
+    public Image[] victoryStars;
 
     const string TutorialKey = "tutorial_done";
     static readonly Color Gold = new Color(1f, 0.85f, 0.2f);
@@ -72,6 +74,7 @@ public class HUD : MonoBehaviour
     int fpsFrames;
     string[] ammoStrings;
     bool tutorialActive, recordActive;
+    int lastReserve = -1;
     Vector2 brokenStart;
     int lastLevel = -1;
     float xpShown, levelPunch, healthLagShown = 1f, lagHold, heartPunch, lastHealth = -1f;
@@ -315,7 +318,17 @@ public class HUD : MonoBehaviour
             }
             return;
         }
-        if (w.Ammo != lastAmmo)
+        if (w.limitedAmmo)
+        {
+            // Hard mode: magazine / reserve (string only rebuilt when a number changes).
+            if (w.Ammo != lastAmmo || w.Reserve != lastReserve)
+            {
+                if (w.Ammo > lastAmmo || w.Reserve > lastReserve) ammoPunch = 1f;
+                lastAmmo = w.Ammo; lastReserve = w.Reserve;
+                ammoText.text = w.Ammo + "<size=28> / " + w.Reserve + "</size>";
+            }
+        }
+        else if (w.Ammo != lastAmmo)
         {
             if (w.Ammo > lastAmmo) ammoPunch = 1f;
             lastAmmo = w.Ammo;
@@ -326,7 +339,7 @@ public class HUD : MonoBehaviour
             }
             ammoText.text = ammoStrings[Mathf.Clamp(w.Ammo, 0, w.magazineSize)];
         }
-        bool low = w.Ammo <= w.magazineSize / 5;
+        bool low = w.Ammo <= w.magazineSize / 5 || (w.ReserveLow && Mathf.Repeat(Time.unscaledTime * 2f, 1f) < 0.5f);
         ammoText.color = w.BonusShots > 0 ? Gold : low ? new Color(1f, 0.35f, 0.3f) : Color.white;
         ammoPunch = Mathf.MoveTowards(ammoPunch, 0f, dt * 4f);
         ammoText.transform.localScale = Vector3.one * (1f + 0.25f * ammoPunch);
@@ -418,9 +431,43 @@ public class HUD : MonoBehaviour
 
     public void HideGameOver() => gameOverPanel.SetActive(false);
 
+    void SetRestartLabel(string key)
+    {
+        var lt = restartButton ? restartButton.GetComponentInChildren<LocText>(true) : null;
+        if (lt) { lt.key = key; lt.Apply(); }
+    }
+
+    void ShowStars(int n)
+    {
+        if (victoryStars == null) return;
+        for (int i = 0; i < victoryStars.Length; i++)
+        {
+            if (!victoryStars[i]) continue;
+            victoryStars[i].gameObject.SetActive(n >= 0);
+            victoryStars[i].color = i < n ? Gold : new Color(0f, 0f, 0f, 0.45f);
+        }
+    }
+
+    /// <summary>Campaign chapter cleared: title, stars, time vs par, reward; the big button goes to the next chapter.</summary>
+    public void ShowVictory(int chapter, int stars, int score, float time, int kills, int wave, int gold, int gems)
+    {
+        gameOverPanel.SetActive(true);
+        breakText.gameObject.SetActive(false);
+        var def = Campaign.Get(chapter);
+        gameOverTitle.text = Loc.T("victory.title");
+        gameOverStats.text = Loc.F("victory.stats", Loc.T("chapter." + def.key + ".title"), score, Time2(time), Time2(def.parSeconds), kills, gold, gems)
+            + "\n<size=28>" + Loc.F("victory.stars_hint", Time2(def.parSeconds), Mathf.RoundToInt(Campaign.ThreeStarHealth * 100f)) + "</size>";
+        recordActive = false;
+        recordText.gameObject.SetActive(false);
+        ShowStars(stars);
+        SetRestartLabel(chapter + 1 < Campaign.Count ? "victory.next" : "over.again");
+    }
+
     public void ShowGameOver(int score, float time, int kills, int bestCombo, int wave, GameManager.RunRecords rec)
     {
         gameOverPanel.SetActive(true);
+        ShowStars(-1);
+        SetRestartLabel("over.again");
         breakText.gameObject.SetActive(false);
         gameOverTitle.text = Loc.T("over.title");
         gameOverStats.text = Loc.F("over.stats", score, rec.bestScore, Time2(time), wave, kills, bestCombo);

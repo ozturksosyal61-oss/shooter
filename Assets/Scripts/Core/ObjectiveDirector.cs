@@ -70,9 +70,34 @@ public class ObjectiveDirector : MonoBehaviour
         I = this;
         int seed = ChunkManager.I ? ChunkManager.I.seed : 1;
         rng = new System.Random(seed ^ 0x0b1ec7);
+        if (GameMode.IsCampaign) Plan = new CampaignPlan(Campaign.Get(GameMode.Chapter));
     }
 
-    void Start() => cooldown = 0f;
+    bool bossSubscribed;
+
+    void Start()
+    {
+        cooldown = Plan is CampaignPlan ? 3f : 0f;
+        SubscribeBoss();
+    }
+
+    void SubscribeBoss()
+    {
+        if (bossSubscribed || !BossDirector.I) return;
+        BossDirector.I.BossDefeated += OnBossDefeated;
+        bossSubscribed = true;
+    }
+
+    void OnDestroy() { if (bossSubscribed && BossDirector.I) BossDirector.I.BossDefeated -= OnBossDefeated; }
+
+    void OnBossDefeated(Zombie z)
+    {
+        if (HasActive && Step.kind == ObjectiveKind.Boss) Complete();
+    }
+
+    /// <summary>Campaign chapter progress (0 when not in a chapter).</summary>
+    public int ChapterIndex => Plan is CampaignPlan cp ? cp.Index : 0;
+    public int ChapterTotal => Plan is CampaignPlan cp ? cp.Total : 0;
 
     void Update()
     {
@@ -89,9 +114,25 @@ public class ObjectiveDirector : MonoBehaviour
             return;
         }
 
+        float dt = Time.deltaTime;
+        if (!Step.HasSite)
+        {
+            // Survive: the clock runs wherever you are. Boss: completes when the boss falls (event).
+            PlayerInZone = false;
+            if (Step.kind == ObjectiveKind.Survive)
+            {
+                Held += dt;
+                if (Held >= nextBeep) { nextBeep += 10f * holdScale; GameAudio.Play(SfxId.ObjectiveTick, gm.player.transform.position, 1f + 0.5f * Progress01); }
+                if (!halfSaid && Progress01 >= 0.5f) { halfSaid = true; Say("radio.survive_half"); }
+                if (Held >= Hold) Complete();
+            }
+            else if (Step.kind == ObjectiveKind.Boss && BossDirector.I && !BossDirector.I.HoldsWave && gm.GameTime - IssuedAt > 8f)
+                BossDirector.I.Summon(); // safety: the boss got recycled / never came
+            return;
+        }
+
         Vector3 d = gm.player.transform.position - TargetLocal; d.y = 0f;
         PlayerInZone = d.sqrMagnitude < Step.radius * Step.radius && !gm.player.IsDead;
-        float dt = Time.deltaTime;
 
         if (Step.hold <= 0f)
         {
@@ -127,6 +168,15 @@ public class ObjectiveDirector : MonoBehaviour
         var gm = GameManager.I;
         var cm = ChunkManager.I;
         Vector3 pg = FloatingOrigin.ToGlobal(gm.player.transform.position);
+        if (!step.HasSite)
+        {
+            SubscribeBoss();
+            Begin(step, pg);
+            Radio?.Invoke(new RadioMsg { key = step.briefKey, num = Mathf.RoundToInt(step.hold * holdScale) });
+            Issued?.Invoke(step);
+            if (step.kind == ObjectiveKind.Boss && BossDirector.I) BossDirector.I.Summon();
+            return;
+        }
         var from = new Vector2Int(Mathf.FloorToInt(pg.x / CityLayout.Size), Mathf.FloorToInt(pg.z / CityLayout.Size));
         Vector2Int site = default;
         bool found = cm && CityLayout.IsLandmark(step.site) && cm.FindType(step.site, from, searchMin, searchMax, out site);
@@ -146,7 +196,17 @@ public class ObjectiveDirector : MonoBehaviour
             if (cm) cm.ForceType(site, step.site);
         }
         SiteChunk = site;
-        TargetGlobal = CityLayout.SiteGlobal(site, step.site);
+        Begin(step, CityLayout.SiteGlobal(site, step.site));
+
+        Vector3 delta = TargetGlobal - pg;
+        Radio?.Invoke(new RadioMsg { key = step.briefKey, argKey = Objectives.DirectionKey(new Vector2(delta.x, delta.z)), num = Mathf.RoundToInt(step.hold * holdScale) });
+        Issued?.Invoke(step);
+    }
+
+    void Begin(ObjectiveStep step, Vector3 targetGlobal)
+    {
+        var gm = GameManager.I;
+        TargetGlobal = targetGlobal;
         Step = step;
         HasActive = true;
         Held = 0f;
@@ -154,10 +214,6 @@ public class ObjectiveDirector : MonoBehaviour
         halfSaid = heliSaid = wasInside = PlayerInZone = false;
         IssuedAt = gm.GameTime;
         LastIssuedWave = WaveDirector.I ? WaveDirector.I.Wave : 0;
-
-        Vector3 delta = TargetGlobal - pg;
-        Radio?.Invoke(new RadioMsg { key = step.briefKey, argKey = Objectives.DirectionKey(new Vector2(delta.x, delta.z)), num = Mathf.RoundToInt(step.hold * holdScale) });
-        Issued?.Invoke(step);
     }
 
     void Complete()
@@ -179,19 +235,26 @@ public class ObjectiveDirector : MonoBehaviour
             case ObjectiveKind.Supply:
                 if (Objectives.SupplyGivesHeal(player.Health / player.maxHealth)) { player.Heal(player.maxHealth); Say("radio.supply_heal"); }
                 else { if (Progression.I) Progression.I.GrantPick(); Say("radio.supply_card"); }
+                if (ModeRules.LimitedAmmo(GameMode.Current) && player.weapon) player.weapon.AddReserveMags(ModeRules.SupplyAmmoMags);
                 break;
+            case ObjectiveKind.Reach: Say("radio.reach_done"); break;
+            case ObjectiveKind.Survive: Say("radio.survive_done"); break;
+            case ObjectiveKind.Boss: break; // the boss director talks
             case ObjectiveKind.Helicopter:
                 Helicopters++;
                 player.Heal(player.maxHealth);
+                if (Plan.Finished) { Say("radio.escape"); break; } // campaign finale: this time it waits
                 pickAt = gm.GameTime + 3.5f;
                 Say("radio.heli_done");
                 break;
         }
+        bool won = Plan.Finished;
         if (Progression.I) Progression.I.AddXp(xp);
         GameAudio.Play(step.kind == ObjectiveKind.Helicopter ? SfxId.ObjectiveBig : SfxId.ObjectiveDone, player.transform.position);
         cooldown = issueDelay;
         LastBonus = score;
         Completed?.Invoke(step);
+        if (won) { gm.TriggerVictory(); return; }
         if (step.kind == ObjectiveKind.Helicopter) Say("radio.heli_after");
         else if (Plan is EndlessPlan ep && ep.HelicopterDue) Say("radio.heli_soon");
     }

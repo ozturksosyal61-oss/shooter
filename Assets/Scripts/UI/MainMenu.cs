@@ -2,8 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Main menu: HOLDOUT logo over a live city with a slowly orbiting camera; Play (Campaign — locked "coming soon" /
-/// Endless), Shop (coming soon), Settings; gold / gem counters from the save. The OZT Digital splash plays once
+/// Main menu: HOLDOUT logo over a live city with a slowly orbiting camera; Play (Story chapters / Endless / Hard),
+/// Shop, Settings; gold / gem counters from the save. The OZT Digital splash plays once
 /// per app session (after the Unity splash).
 /// </summary>
 public class MainMenu : MonoBehaviour
@@ -11,7 +11,9 @@ public class MainMenu : MonoBehaviour
     public static MainMenu I { get; private set; }
 
     public GameObject mainButtons, playButtons;
-    public Button play, shop, settings, campaign, endless, back;
+    public Button play, shop, settings, campaign, endless, hard, back;
+    public Text storySub, hardSub;
+    public CampaignPanel campaignPanel;
     public Text gold, gems;
     public RectTransform logo;
     public CanvasGroup splash;
@@ -38,8 +40,10 @@ public class MainMenu : MonoBehaviour
     {
         play.onClick.AddListener(() => { Click(); ShowPlay(true); });
         back.onClick.AddListener(() => { Click(); ShowPlay(false); });
-        endless.onClick.AddListener(() => { Click(); if (loadout) loadout.Open(); else PlayEndless(); });
-        campaign.onClick.AddListener(() => { Click(); Toast(Loc.T("menu.soon")); });
+        endless.onClick.AddListener(() => { Click(); StartMode(RunMode.Endless); });
+        if (hard) hard.onClick.AddListener(() => { Click(); StartMode(RunMode.Hard); });
+        campaign.onClick.AddListener(() => { Click(); if (campaignPanel) campaignPanel.Open(); else Toast(Loc.T("menu.soon")); });
+        Loc.Changed += RefreshModes;
         shop.onClick.AddListener(() => { Click(); if (shopUI) shopUI.Open(ShopUI.Tab.Weapons); else Toast(Loc.T("menu.soon")); });
         if (questsButton) questsButton.onClick.AddListener(() => { Click(); quests.Open(); });
         if (loginButton) loginButton.onClick.AddListener(() => { Click(); login.Open(); });
@@ -53,7 +57,20 @@ public class MainMenu : MonoBehaviour
         else { splash.gameObject.SetActive(false); AutoLogin(); }
     }
 
-    void OnDestroy() { SaveSystem.Changed -= RefreshWallet; Profile.Changed -= RefreshWallet; }
+    void OnDestroy() { SaveSystem.Changed -= RefreshWallet; Profile.Changed -= RefreshWallet; Loc.Changed -= RefreshModes; }
+
+    void StartMode(RunMode m)
+    {
+        GameMode.Set(m);
+        if (loadout) loadout.Open(); else PlayEndless();
+    }
+
+    void RefreshModes()
+    {
+        var d = SaveSystem.Data;
+        if (storySub) storySub.text = Loc.F("menu.story_sub", Campaign.TotalStars(d.campaign), Campaign.Count * 3);
+        if (hardSub) hardSub.text = d.records.hardWave > 0 ? Loc.F("menu.hard_best", d.records.hardWave) : Loc.T("menu.hard_sub");
+    }
 
     static void Click() { if (GameAudio.I) GameAudio.Play(SfxId.UiClick, Vector3.zero); }
 
@@ -80,6 +97,7 @@ public class MainMenu : MonoBehaviour
     {
         mainButtons.SetActive(!on);
         playButtons.SetActive(on);
+        if (on) RefreshModes();
     }
 
     public void PlayEndless() => LoadingScreen.Load(LoadingScreen.GameScene);

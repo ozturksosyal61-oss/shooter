@@ -53,6 +53,14 @@ public class Weapon : MonoBehaviour
     public float jamPenalty = 0.6f;
     public float perfectDamageBonus = 0.15f;
 
+    [Header("Limited ammo (hard mode)")]
+    [Tooltip("Reloads draw from a reserve refilled by ammo boxes; set from the mode in Start.")]
+    public bool limitedAmmo;
+    /// <summary>Spare rounds outside the magazine (limited ammo only).</summary>
+    public int Reserve { get; private set; }
+    public bool OutOfAmmo => limitedAmmo && Ammo == 0 && Reserve == 0 && !IsReloading;
+    public bool ReserveLow => limitedAmmo && Reserve < magazineSize;
+
     public bool IsFiring { get; private set; }
     public bool IsReloading { get; private set; }
     public float ReloadProgress => IsReloading ? Mathf.Clamp01(reloadT / reloadTime) : 0f;
@@ -76,6 +84,27 @@ public class Weapon : MonoBehaviour
         pool = new Pool<Bullet>(bulletPrefab, container, 40);
         if (muzzleFlash) muzzleFlash.gameObject.SetActive(false);
         Ammo = magazineSize;
+    }
+
+    void Start()
+    {
+        limitedAmmo = ModeRules.LimitedAmmo(GameMode.Current);
+        if (limitedAmmo) Reserve = magazineSize * ModeRules.StartReserveMags;
+    }
+
+    /// <summary>Sets magazine + reserve directly (tests, scripted scenarios).</summary>
+    public void SetAmmo(int magazine, int reserve)
+    {
+        Ammo = Mathf.Clamp(magazine, 0, magazineSize);
+        Reserve = Mathf.Max(0, reserve);
+    }
+
+    /// <summary>Ammo box / supply crate: adds whole magazines to the reserve (capped).</summary>
+    public void AddReserveMags(int mags)
+    {
+        if (!limitedAmmo || mags <= 0) return;
+        Reserve = Mathf.Min(Reserve + mags * magazineSize, ModeRules.ReserveCap(magazineSize));
+        if (Ammo == 0 && !IsReloading) StartReload();
     }
 
     public void Tick(float dt, Vector3 moveDir)
@@ -103,15 +132,16 @@ public class Weapon : MonoBehaviour
         UpdateMagazine(dt);
 
         // Dry trigger: pulling the trigger while the magazine is being swapped (once per pull).
-        if (IsFiring && IsReloading && !dryFired)
+        if (IsFiring && (IsReloading || OutOfAmmo) && !dryFired)
         {
             dryFired = true;
             GameAudio.Play(SfxId.DryFire, muzzle.position);
+            if (OutOfAmmo && DamageNumbers.I) DamageNumbers.I.ShowText(owner.transform.position + Vector3.up * 2.3f, Loc.T("hud.no_ammo"), new Color(1f, 0.35f, 0.3f));
         }
         if (!IsFiring) dryFired = false;
 
         cooldown -= dt;
-        if (IsFiring && !IsReloading && aim.sqrMagnitude > 0.01f && cooldown <= 0f &&
+        if (IsFiring && !IsReloading && Ammo > 0 && aim.sqrMagnitude > 0.01f && cooldown <= 0f &&
             Vector3.Angle(owner.transform.forward, aim) < maxAimAngleToFire)
         {
             Fire(aim);
@@ -134,7 +164,13 @@ public class Weapon : MonoBehaviour
             if (reloadT >= reloadTime)
             {
                 IsReloading = false;
-                Ammo = magazineSize;
+                if (limitedAmmo)
+                {
+                    int take = Mathf.Min(magazineSize - Ammo, Reserve);
+                    Ammo += take;
+                    Reserve -= take;
+                }
+                else Ammo = magazineSize;
                 lowAmmoWarned = false;
                 GameAudio.Play(SfxId.ReloadEnd, owner.transform.position);
             }
@@ -149,7 +185,7 @@ public class Weapon : MonoBehaviour
 
     public void StartReload()
     {
-        if (IsReloading || Ammo >= magazineSize || owner.IsDead) return;
+        if (IsReloading || Ammo >= magazineSize || owner.IsDead || (limitedAmmo && Reserve <= 0)) return;
         IsReloading = true;
         reloadT = 0f;
         idleT = 0f;

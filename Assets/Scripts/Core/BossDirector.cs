@@ -58,8 +58,16 @@ public class BossDirector : MonoBehaviour
 
     void OnWaveStarted(int wave)
     {
-        if (!BossRules.IsBossWave(wave) || BossAlive) return;
+        if (!ModeRules.IsBossWave(GameMode.Current, wave) || BossAlive) return;
         pendingWave = wave;
+        pendingT = spawnDelay;
+    }
+
+    /// <summary>Campaign objective: the boss comes now (after the usual delay), holding the current wave.</summary>
+    public void Summon()
+    {
+        if (BossAlive || pendingWave > 0) return;
+        pendingWave = Mathf.Max(1, WaveDirector.I ? WaveDirector.I.Wave : 1);
         pendingT = spawnDelay;
     }
 
@@ -90,7 +98,8 @@ public class BossDirector : MonoBehaviour
         Vector3 p = gm.player.transform.position;
         Vector3 pos = at ?? FindSpot(p);
         var wp = Difficulty.ForWave(Mathf.Max(1, wave));
-        Boss = spawner.SpawnBoss(pos, wp, BossRules.BossIndex(wave));
+        int index = GameMode.IsCampaign ? BossesSpawned : ModeRules.BossIndex(GameMode.Current, wave);
+        Boss = spawner.SpawnBoss(pos, wp, index);
         if (!Boss) return null;
         if (Boss is ButcherZombie b) b.SetSeed(seed + wave);
         BossesSpawned++;

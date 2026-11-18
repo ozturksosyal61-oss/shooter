@@ -24,7 +24,9 @@ public class WaveDirector : MonoBehaviour
     {
         I = this;
         PhaseTimeLeft = firstWaveDelay;
-        Params = Difficulty.ForWave(1);
+        // Campaign chapters start further in (the first wave is the chapter's start wave).
+        if (GameMode.IsCampaign) Wave = Mathf.Max(0, Campaign.Get(GameMode.Chapter).startWave - 1);
+        Params = Difficulty.ForWave(Mathf.Max(1, Wave));
     }
 
     /// <summary>Skips ahead: the breather before <paramref name="wave"/> starts now (bots / scripted scenarios).</summary>
