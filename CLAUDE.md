@@ -10,7 +10,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 - **Tüm oyun içi metinler tek localization tablosundan:** `Assets/Scripts/Core/Loc.cs` (`Loc.T(key)`, `Loc.F(key, args)`, `Loc.Upper` Türkçe i/İ uyumlu; sütunlar tr/en; dil kayıt dosyasında `settings.lang`, `Settings.Apply` → `Loc.Current`). Sabit UI etiketleri `LocText` (builder'da `L(text, key)`). Kodda/builder'da oyuncuya görünen düz string yazma — anahtar ekle. Kart metinleri `card.<CardId>.title/.1/.2/.3` (+ opsiyonel `.icon`). Yeni karakter gerekirse `Warmup.Glyphs`'e ekle.
 
 ## Yayın ayarları
-- `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **5** (Android versionCode 5; her TestFlight yüklemesinde artır), minimum iOS **15.0**, yalnız yatay (sol/sağ).
+- `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **6** (Android versionCode 6; her TestFlight yüklemesinde artır), minimum iOS **15.0**, yalnız yatay (sol/sağ).
 - **İkon:** `Assets/Art/Icon/AppIcon.png` (1024², opak RGB, kare; kaynak masaüstü `ikon.png`) → varsayılan + iOS tüm boyutlar + App Store marketing 1024; Android adaptive (`AppIcon_Foreground.png` şeffaf, %66 güvenli alan + `AppIcon_Background.png` düz #23261F); Unity 6.6'da round/legacy tipleri kaldırıldı → eski launcher'lar varsayılan ikonu kullanır.
 - `IosPostBuild` (her iOS build'de, Unity Cloud Build dahil; `[PostProcessBuild(1000)]`, LevelPlay'inkinden sonra): `CADisableMinimumFrameDurationOnPhone` (ProMotion), `CFBundleDisplayName` Holdout, `ITSAppUsesNonExemptEncryption` false, `NSUserTrackingUsageDescription` (temel EN "Used to show you more relevant ads.", `tr.lproj/InfoPlist.strings` TR "Sana daha uygun reklamlar göstermek için kullanılır."; `en.lproj` + `CFBundleLocalizations` en/tr; .lproj klasör referansı olarak eklenir), `SKAdNetworkItems` (LevelPlay'in önerdiği ironSource + Unity Ads listeleri, 82 kimlik koda gömülü, var olanlarla birleştirilir). ATT izni LevelPlay.Init'ten önce istenir (`LevelPlayAdBackend.Init`, Unity iOS Support).
 - iOS build: `Unity.exe -batchmode -nographics -projectPath . -buildTarget iOS -executeMethod ProjectSetup.BuildIos -quit -logFile <log>` → `Builds/iOS` (Xcode projesi), zip `Builds/Holdout_iOS_<sürüm>.zip`. `Builds/` git'e girmez.
@@ -33,7 +33,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 - **Mağaza** `ShopUI`: sekmeler Silahlar / **Karakterler** (Devriye = asker + Özel Harekat + İtfaiyeci; askeri seçmek son derisini geri getirir, `Profile.SoldierSkin` / `SelectCharacter`, kayıtta `inventory.soldierSkin`) / **Kostümler** (asker derileri; ikisi aynı kart panelini paylaşır; her kartta karakterin durağan görüntüsü `PreviewStage.Snapshot` → kart başına küçük RT, seçili kart canlı döner) / Bonuslar / Elmas (TL paketleri: kartta "150 ELMAS", buton "99,99 TL"; elmas yetmezse karakter butonu Elmas sekmesini açar), 3D dönen önizleme (`PreviewStage`, layer 12 Preview, kendi kamerası → `PreviewRT`; `-nographics`'te kamera kapalı), kilitli/sahip/seçili durumları, satın alma onayı.
 - **IAP** `StoreService` (`IStoreBackend`: `UnityIapBackend` Unity IAP 5, editör/testte `FakeStoreBackend`); ürünler `Economy.Products` (`com.oztdigital.holdout.gems_small/medium/large/huge` = 49,99/99,99/149,99/299,99 TL → 70/150/250/550 elmas, `starter_pack` 79,99, `vip` 199,99; fiyat `ProductDef.tl`, mağaza bağlıyken yerelleştirilmiş fiyat; tablo `docs/economy.md`); ayarlarda "Satın alımları geri yükle".
 - **Mağaza görselleri:** `StoreAssets/IAP/<ürün>/` (`promo_1024.png` + `review_screenshot.png`, README: ID/fiyat/TR-EN ad ve açıklama, review notu) — `CaptureUI` + `python Tools/make_iap_images.py . <capture_dir>`.
-- **Ödüllü reklam** `AdService` (`IAdBackend`, Unity LevelPlay yeni API `LevelPlayRewardedAd`, `AdConfig`: iOS app key `29b3d33ed` / unit `zo4omkyj6tja4e71`, Android `29b3e5395` / `08q0pyan2usynqfd`; `TestMode` açık (test suite + `ValidateIntegration`) — mağaza yayınında kapat; varsayılan placement, yükleme hatasında 2→64 sn tekrar, kapanıştan sonra gelen ödül 0.6 sn beklenir): tur sonu 2x altın, ölünce turda 1 kez devam (alternatif 20 elmas), günlük 5 elmas. iOS ATT (`NSUserTrackingUsageDescription`, reddedilirse kişiselleştirilmemiş), COPPA kapalı. VIP: reklamsız ödül + %25 altın.
+- **Ödüllü reklam** `AdService` (`IAdBackend`, Unity LevelPlay yeni API `LevelPlayRewardedAd`, `AdConfig`: iOS app key `29b3d33ed` / unit `zo4omkyj6tja4e71`, Android `29b3e5395` / `08q0pyan2usynqfd`; `TestMode` **kapalı** (yayın build'i 6; test için geçici açılırsa test suite + `ValidateIntegration`); varsayılan placement, yükleme hatasında 2→64 sn tekrar, kapanıştan sonra gelen ödül 0.6 sn beklenir): tur sonu 2x altın, ölünce turda 1 kez devam (alternatif 20 elmas), günlük 5 elmas. iOS ATT (`NSUserTrackingUsageDescription`, reddedilirse kişiselleştirilmemiş), COPPA kapalı. VIP: reklamsız ödül + %25 altın.
 - **Kayıt:** `SaveData.CurrentVersion` 2 (göç), dosya XOR+base64 + SHA-256 imza (`SaveSystem.Hash`); imza tutmazsa yedeğe düşer. Testler gerçek kayda dokunmaz (`MemorySaveStore`).
 
 ## Modlar (F12)
@@ -179,10 +179,11 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
 ## Faz 15 — iOS mağaza hazırlığı (kontrol listesi)
 - [x] ATT izni LevelPlay init'ten önce; Info.plist: `NSUserTrackingUsageDescription` (TR/EN), `ITSAppUsesNonExemptEncryption` false, `SKAdNetworkItems`
 - [x] IAP ürünleri App Store Connect'te (`StoreAssets/IAP`), mağaza ekran görüntüleri (`StoreAssets/Screenshots`)
-- [ ] App Privacy formu (reklam / izleme verisi), destek / gizlilik / koşullar sayfaları yayında
-- [ ] TestFlight: sandbox satın alma + geri yükleme, ödüllü reklam, ATT penceresi TR/EN
-- [ ] **LevelPlay test modunu kapat** (`AdConfig.TestMode = false`, `Assets/Scripts/Core/AdService.cs`) — mağaza build'inden önce
-- [ ] Build numarasını artır (`ProjectSetup.IosBuildNumber`, Android versionCode)
+- [x] Mağaza metinleri, App Privacy / yaş / inceleme notu (`StoreAssets/AppStore/`), destek / gizlilik / koşullar sayfaları (`StoreAssets/Web/holdout/` → siteye yüklenecek)
+- [x] TestFlight: cihaz testi tamam (2026-11-19)
+- [x] **LevelPlay test modunu kapat** (`AdConfig.TestMode = false`, `Assets/Scripts/Core/AdService.cs`)
+- [x] Build numarası 6 (`ProjectSetup.IosBuildNumber`, Android versionCode 6)
+- [ ] Web sayfalarını siteye yükle, App Store Connect formları, build 6 + IAP'ler incelemeye
 
 ## İlerleme
 - [x] Proje kurulumu: URP, glTFast, Input System, Player Settings (landscape, bundle id), klasörler, Game sahnesi, git

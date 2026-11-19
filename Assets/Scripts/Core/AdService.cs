@@ -15,7 +15,7 @@ public static class AdConfig
     public const string AndroidAppKey = "29b3e5395";
     public const string IosRewardedUnit = "zo4omkyj6tja4e71";
     public const string AndroidRewardedUnit = "08q0pyan2usynqfd";
-    public const bool TestMode = true;
+    public const bool TestMode = false;
 }
 
 public interface IAdBackend
