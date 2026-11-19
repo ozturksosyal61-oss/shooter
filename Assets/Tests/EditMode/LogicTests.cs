@@ -929,10 +929,10 @@ public class CoopTests
     {
         var zs = new ZombieNetState[3];
         for (int i = 0; i < 3; i++)
-            zs[i] = new ZombieNetState { id = (ushort)(100 + i), kind = (ZombieKind)i, runner = i == 1, rising = i == 2, pos = new Vector3(1234.5f + i, 0f, -987.25f), yaw = 90f * i, gait = i * 0.9f, hp01 = 0.5f, maxHp = 140f };
+            zs[i] = new ZombieNetState { id = (ushort)(100 + i), kind = (ZombieKind)i, runner = i == 1, rising = i == 2, pos = new Vector3(1234.5f + i, 0f, -987.25f), yaw = 90f * i, gait = i * 0.9f, hp01 = 0.5f, maxHp = 140f, act = (byte)(i + 1), aux = (byte)(250 + i) };
         var buf = new byte[ZombieSnapshot.Size(3)];
         int len = ZombieSnapshot.Write(buf, new WaveNetState { wave = 7, inBreak = true, timeLeft = 4.3f }, zs, 3);
-        Assert.AreEqual(ZombieSnapshot.Size(3), len);
+        Assert.AreEqual(ZombieSnapshot.Size(3) - ZombieSnapshot.BossBytes + 1, len, "no boss: just the flag");
         ZombieNetState[] read = null;
         int n = ZombieSnapshot.Read(buf, len, out var w, ref read);
         Assert.AreEqual(3, n);
@@ -949,6 +949,8 @@ public class CoopTests
             Assert.AreEqual(zs[i].gait, read[i].gait, 0.01f);
             Assert.AreEqual(0.5f, read[i].hp01, 0.01f);
             Assert.AreEqual(140f, read[i].maxHp);
+            Assert.AreEqual(zs[i].act, read[i].act, "special phase");
+            Assert.AreEqual(zs[i].aux, read[i].aux, "target slot / boss type");
         }
         Assert.AreEqual(-1, ZombieSnapshot.Read(buf, 5, out _, ref read), "truncated buffer rejected");
         Assert.Less(ZombieSnapshot.Size(70), 1300, "70 zombies stay small");
@@ -970,14 +972,78 @@ public class CoopTests
     }
 
     [Test]
-    public void CoopWavesAreC1Safe()
+    public void BossStateRoundTrip()
+    {
+        var b = new BossNetState { id = 77, phase = (byte)ButcherZombie.Phase.LeapWind, phaseT = 0.63f, chargeYaw = 135f, chargeLen = 21.4f, windTime = 0.85f,
+            leapTo = new Vector3(512.25f, 0f, -33.5f), shockPos = new Vector3(-8f, 0f, 9.75f), shockT = 1.4f, enraged = true };
+        var zs = new[] { new ZombieNetState { id = 77, kind = ZombieKind.Boss, pos = new Vector3(500f, 0f, -30f), maxHp = 9000f, hp01 = 0.4f, aux = (byte)BossType.Leaper } };
+        var buf = new byte[ZombieSnapshot.Size(1)];
+        int len = ZombieSnapshot.Write(buf, new WaveNetState { wave = 11 }, zs, 1, b);
+        Assert.AreEqual(ZombieSnapshot.Size(1), len);
+        ZombieNetState[] read = null;
+        int n = ZombieSnapshot.Read(buf, len, out var w, ref read, out var rb);
+        Assert.AreEqual(1, n);
+        Assert.IsTrue(rb.HasValue, "boss block read");
+        var r = rb.Value;
+        Assert.AreEqual(77, r.id); Assert.AreEqual(b.phase, r.phase);
+        Assert.AreEqual(0.63f, r.phaseT, 0.011f); Assert.AreEqual(0f, Mathf.DeltaAngle(135f, r.chargeYaw), 1.5f);
+        Assert.AreEqual(21.4f, r.chargeLen, 0.21f); Assert.AreEqual(0.85f, r.windTime, 0.021f);
+        Assert.AreEqual(512.25f, r.leapTo.x, 1e-3f); Assert.AreEqual(9.75f, r.shockPos.z, 1e-3f);
+        Assert.AreEqual(1.4f, r.shockT, 0.021f); Assert.IsTrue(r.enraged);
+        Assert.AreEqual((byte)BossType.Leaper, read[0].aux);
+        Assert.AreEqual(-1, ZombieSnapshot.Read(buf, len - 3, out _, ref read, out _), "cut boss block rejected");
+    }
+
+    [Test]
+    public void EventCodecRoundTrip()
+    {
+        var w = new NetWriter(new byte[4]); // grows
+        w.U8((byte)CoopEv.ObjIssue); w.Bool(true); w.U16(65000); w.I32(-123456); w.U64(0xF00DCAFEBEEF1234UL);
+        w.F32(3.25f); w.XZ(new Vector3(1f, 99f, -2f)); w.V3(new Vector3(4f, 5f, 6f)); w.Str("radio.flare_brief"); w.Str("");
+        var r = new NetReader(w.buf, w.len);
+        Assert.AreEqual((byte)CoopEv.ObjIssue, r.U8()); Assert.IsTrue(r.Bool()); Assert.AreEqual(65000, r.U16()); Assert.AreEqual(-123456, r.I32());
+        Assert.AreEqual(0xF00DCAFEBEEF1234UL, r.U64()); Assert.AreEqual(3.25f, r.F32());
+        var xz = r.XZ(); Assert.AreEqual(1f, xz.x); Assert.AreEqual(0f, xz.y); Assert.AreEqual(-2f, xz.z);
+        Assert.AreEqual(new Vector3(4f, 5f, 6f), r.V3()); Assert.AreEqual("radio.flare_brief", r.Str()); Assert.AreEqual("", r.Str());
+        Assert.IsTrue(r.Ok);
+        r.U8();
+        Assert.IsFalse(r.Ok, "reading past the end is flagged");
+    }
+
+    [Test]
+    public void CoopWavesScaleWithTheTeam()
     {
         for (int n = 1; n <= 20; n++)
         {
-            var w = ModeRules.ForCoop(Difficulty.ForWave(n, false));
-            Assert.AreEqual(0f, w.specialChance, "no mutations over the network yet (C2)");
-            Assert.IsFalse(ModeRules.IsBossWave(RunMode.Coop, n));
+            var solo = Difficulty.ForWave(n, false);
+            var duo = ModeRules.ForCoop(solo, 2);
+            var four = ModeRules.ForCoop(solo, 4);
+            Assert.AreEqual(solo.specialChance, duo.specialChance, "C2: mutations in co-op too");
+            Assert.GreaterOrEqual(duo.maxAlive, solo.maxAlive); Assert.GreaterOrEqual(four.maxAlive, duo.maxAlive);
+            Assert.LessOrEqual(four.maxAlive, ModeRules.CoopAliveCap);
+            Assert.Less(four.spawnInterval, solo.spawnInterval);
+            Assert.Greater(four.healthMultiplier, solo.healthMultiplier);
+            Assert.AreEqual(solo.maxAlive, ModeRules.ForCoop(solo, 1).maxAlive, "alone = endless");
+            Assert.AreEqual(BossRules.IsBossWave(n), ModeRules.IsBossWave(RunMode.Coop, n), "co-op bosses like endless");
         }
+        Assert.Greater(ModeRules.GoldMul(RunMode.Coop), 1f, "playing together pays a bit more");
+    }
+
+    [Test]
+    public void ReviveAndTeamOverRules()
+    {
+        float p = 0f;
+        for (int i = 0; i < 30; i++) p = CoopTeam.Rules.StepRevive(p, true, 0.1f, 3f);
+        Assert.AreEqual(1f, p, 1e-4f, "3 s next to a teammate");
+        p = CoopTeam.Rules.StepRevive(0.5f, false, 1f, 3f);
+        Assert.Less(p, 0.5f, "progress fades when the helper leaves"); Assert.Greater(p, 0f);
+        Assert.AreEqual(10f, CoopTeam.Rules.StepBleed(10f, true, 1f), "no bleeding while being revived");
+        Assert.AreEqual(9f, CoopTeam.Rules.StepBleed(10f, false, 1f));
+        Assert.IsFalse(CoopTeam.Rules.TeamDown(false, new[] { true, true }, 2), "I'm standing");
+        Assert.IsFalse(CoopTeam.Rules.TeamDown(true, new[] { true, false }, 2), "a teammate stands");
+        Assert.IsTrue(CoopTeam.Rules.TeamDown(true, new[] { true, true }, 2), "nobody stands");
+        Assert.IsTrue(CoopTeam.Rules.TeamDown(true, new bool[0], 0), "alone and down");
+        Assert.AreEqual(600, CoopTeam.Rules.TeamScore(100, new[] { 200, 300 }, 2));
     }
 }
 

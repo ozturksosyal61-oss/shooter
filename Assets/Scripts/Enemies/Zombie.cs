@@ -103,8 +103,20 @@ public class Zombie : MonoBehaviour
     public ushort NetId { get; private set; }
     public bool Puppet { get; private set; }
     public Vector3 LastHitDir { get; private set; }
+    /// <summary>Co-op kill credit: client id of the last soldier who hurt it (host's own hits = host).</summary>
+    public ulong LastHitBy { get; private set; }
+    /// <summary>Set by the host right before applying a teammate's reported hit.</summary>
+    public ulong? PendingHitter { get; set; }
     Vector3 netPos;
     float netYaw;
+
+    /// <summary>Snapshot extras: a special phase (bomb swelling, tongue state…) and its argument.</summary>
+    public virtual byte NetAct => 0;
+    public virtual byte NetAux => 0;
+    /// <summary>Co-op client: the host's special phase for this puppet (visuals only).</summary>
+    protected virtual void ApplyNetAct(byte act, byte aux) { }
+    /// <summary>Co-op client: special death of a puppet (bomb bursts); true = handled, skip the default fall.</summary>
+    protected virtual bool PuppetKilled(Vector3 dir) => false;
     /// <summary>The killing blow was an explosion (kill-blast cards don't chain off these).</summary>
     public bool KilledByExplosion { get; private set; }
     public float MaxHealth => maxHp;
@@ -116,6 +128,8 @@ public class Zombie : MonoBehaviour
     {
         pool = owner;
         Puppet = false;
+        LastHitBy = NetZombies.LocalClientId;
+        PendingHitter = null;
         NetId = NetZombies.I && NetZombies.I.IsHost ? NetZombies.I.Register(this) : (ushort)0;
         target = null;
         hp = maxHp = health;
@@ -181,13 +195,17 @@ public class Zombie : MonoBehaviour
         netYaw = s.yaw;
         gait = s.gait;
         hp = s.hp01 * maxHp;
+        if (state != State.Dying) ApplyNetAct(s.act, s.aux);
     }
+
+    public Vector3 NetPosition => netPos;
 
     public ZombieNetState ToNetState() => new ZombieNetState
     {
         id = NetId, kind = kind, runner = runner, rising = state == State.Rising,
         pos = transform.position, yaw = transform.eulerAngles.y, gait = gait,
         hp01 = maxHp > 0f ? Mathf.Clamp01(hp / maxHp) : 0f, maxHp = maxHp,
+        act = NetAct, aux = NetAux,
     };
 
     void UpdatePuppet(float dt)
@@ -205,6 +223,7 @@ public class Zombie : MonoBehaviour
     public void PuppetDie(Vector3 dir)
     {
         if (state == State.Dying) return;
+        if (PuppetKilled(dir)) { ReleaseToPool(); return; }
         Die(dir, transform.position + Vector3.up, false, false);
     }
 
@@ -326,6 +345,37 @@ public class Zombie : MonoBehaviour
         if (!t) { turretTarget = null; return; }
         Vector3 toP = PlayerPos - transform.position; toP.y = 0f;
         turretTarget = dt2 < toP.magnitude * 0.8f ? t : null;
+    }
+
+    /// <summary>Mutations / bosses: the nearest standing soldier (no turret aggro), re-picked twice a second.</summary>
+    protected SquadMember PickSoldier(float dt)
+    {
+        retargetT -= dt;
+        if (retargetT <= 0f || !target || target.IsDead)
+        {
+            retargetT = 0.5f;
+            var t = Squad.Nearest(transform.position);
+            if (t) target = t;
+        }
+        return target ? target : Squad.Local;
+    }
+
+    /// <summary>Co-op: the network slot of a soldier (tongue target byte); 255 = none.</summary>
+    public static byte SlotOf(SquadMember m)
+    {
+        if (!m) return 255;
+        if (m.remote) return (byte)Mathf.Clamp(m.remote.Slot, 0, 254);
+        return (byte)(NetPlayer.Local ? Mathf.Clamp(NetPlayer.Local.Slot, 0, 254) : 0);
+    }
+
+    /// <summary>Co-op client: the soldier transform of a network slot (the local player or a teammate's avatar).</summary>
+    public static Transform SoldierOfSlot(byte slot)
+    {
+        var gm = GameManager.I;
+        if (slot == 255) return null;
+        var np = NetPlayer.BySlot(slot);
+        if (np == null || np == NetPlayer.Local) return gm && gm.player ? gm.player.transform : null;
+        return np.Avatar;
     }
 
     protected Vector3 ToPlayer(out float dist)
@@ -495,14 +545,19 @@ public class Zombie : MonoBehaviour
         LastHitDir = dir;
         if (Puppet)
         {
-            // Co-op client: feedback now, damage on the host.
+            // Co-op client: feedback now (a shield still sparks), damage on the host.
+            NetZombies.ReportHit(this, amount, crit, dir, point, explosive ? NetPlayer.HitExplosive : (byte)0);
+            if (!explosive && Deflects(dir, point)) return false;
+            if (!explosive) DirectionalMul(dir, point);
             flash.Flash(0.07f);
             punch = 1f;
             if (Fx.I) Fx.I.Hit(point, dir);
+            if (crit && DamageNumbers.I) DamageNumbers.I.Show(point + Vector3.up * 0.4f, Mathf.RoundToInt(amount), true);
             GameAudio.Play(crit ? SfxId.Crit : SfxId.Hit, point);
-            if (!explosive) NetZombies.ReportHit(this, amount, crit, dir, point);
             return true;
         }
+        LastHitBy = PendingHitter ?? NetZombies.LocalClientId;
+        PendingHitter = null;
         if (!explosive && Deflects(dir, point)) return false;
         amount *= DamageTakenMul;
         if (!explosive) amount *= DirectionalMul(dir, point);
@@ -547,7 +602,8 @@ public class Zombie : MonoBehaviour
         var gm = GameManager.I;
         if (scoring)
         {
-            gm.RegisterKill(this);
+            // Co-op host: the score / combo / XP go to whoever landed the killing blow (the event carries it to them).
+            gm.CreditKill(this, LastHitBy == NetZombies.LocalClientId);
             if (Pickups.I) Pickups.I.MaybeDrop(transform.position, IsSpecial);
         }
         gm.HitStop(0.06f);
@@ -559,7 +615,7 @@ public class Zombie : MonoBehaviour
         deathSpin = 0f;
         landed = true;
         landedT = 0f;
-        if (scoring && OnKilled(dir, explosive)) return;
+        if ((scoring || Puppet) && OnKilled(dir, explosive)) return;
 
         // Face the shooter so the throw and the dying animation both fall away from the shot.
         transform.rotation = Quaternion.LookRotation(-dir);

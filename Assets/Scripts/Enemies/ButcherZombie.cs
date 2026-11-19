@@ -119,7 +119,9 @@ public class ButcherZombie : Zombie
     Vector3 shockPos, lastPlayerPos, playerVel;
     Renderer zoneRenderer;
     Vector3 chargeDir;
-    bool hitPlayer, lockedLine;
+    bool lockedLine;
+    readonly System.Collections.Generic.HashSet<SquadMember> chargeHit = new System.Collections.Generic.HashSet<SquadMember>();
+    SquadMember velOf;
     System.Random rng = new System.Random(1);
     readonly Zombie[] flung = new Zombie[32];
     int flungCount;
@@ -211,7 +213,9 @@ public class ButcherZombie : Zombie
 
     protected override void UpdateBehaviour(float dt)
     {
-        var player = GameManager.I.player;
+        // Co-op: after the nearest standing soldier (single player: the player).
+        var player = PickSoldier(dt);
+        if (!player) return;
         Vector3 dir = ToPlayer(out float dist);
         phaseT += dt;
         chargeCd -= dt;
@@ -222,6 +226,7 @@ public class ButcherZombie : Zombie
         broodCd -= dt;
         knock *= 0.2f; // explosions barely move it
         Vector3 pp = player.transform.position;
+        if (velOf != player) { velOf = player; lastPlayerPos = pp; playerVel = Vector3.zero; }
         playerVel = Vector3.Lerp(playerVel, (pp - lastPlayerPos) / Mathf.Max(dt, 0.0001f), 1f - Mathf.Exp(-6f * dt));
         lastPlayerPos = pp;
         UpdateShock(dt, player);
@@ -275,7 +280,7 @@ public class ButcherZombie : Zombie
     }
 
     // ------------------------------------------------------------------ walk
-    void UpdateWalk(float dt, PlayerController player, Vector3 dir, float dist)
+    void UpdateWalk(float dt, SquadMember player, Vector3 dir, float dist)
     {
         bool far = dist > catchUpDistance;
         curSpeed = speed * (Enraged ? rageSpeedMul : 1f) * (far ? 2.2f : 1f);
@@ -379,7 +384,7 @@ public class ButcherZombie : Zombie
     void StartCharge()
     {
         traveled = 0f;
-        hitPlayer = false;
+        chargeHit.Clear();
         flungCount = 0;
         ShowTelegraphs(false, false);
         animator.CrossFadeInFixedTime(LocoState, 0.1f, 0);
@@ -388,7 +393,7 @@ public class ButcherZombie : Zombie
         SetPhase(Phase.Charge);
     }
 
-    void UpdateCharge(float dt, PlayerController player)
+    void UpdateCharge(float dt, SquadMember player)
     {
         gait = 2f;
         curSpeed = chargeSpeed * (Enraged ? 1.15f : 1f);
@@ -430,18 +435,19 @@ public class ButcherZombie : Zombie
         Footsteps(dt * 1.8f, 0f);
 
         FlingZombies(pos);
-        if (!hitPlayer && !player.IsDead)
+        // Every soldier in the way gets run over once per charge.
+        for (int mi = Squad.Members.Count - 1; mi >= 0; mi--)
         {
-            Vector3 d = player.transform.position - pos; d.y = 0f;
-            if (d.magnitude < body.radius + 0.6f)
-            {
-                hitPlayer = true;
-                ChargeHits++;
-                Vector3 side = Vector3.Cross(Vector3.up, chargeDir) * (Vector3.Dot(d, Vector3.Cross(Vector3.up, chargeDir)) >= 0f ? 1f : -1f);
-                player.TakeDamage(chargeDamage, (chargeDir + side).normalized, 18f);
-                GameAudio.Play(SfxId.BossSlam, player.transform.position, 1.3f, 0.7f);
-                GameManager.I.Shake(0.6f);
-            }
+            var m = Squad.Members[mi];
+            if (m.IsDead || chargeHit.Contains(m)) continue;
+            Vector3 d = m.Position - pos; d.y = 0f;
+            if (d.magnitude >= body.radius + 0.6f) continue;
+            chargeHit.Add(m);
+            ChargeHits++;
+            Vector3 side = Vector3.Cross(Vector3.up, chargeDir) * (Vector3.Dot(d, Vector3.Cross(Vector3.up, chargeDir)) >= 0f ? 1f : -1f);
+            m.TakeDamage(chargeDamage, (chargeDir + side).normalized, 18f);
+            GameAudio.Play(SfxId.BossSlam, m.Position, 1.3f, 0.7f);
+            GameManager.I.Shake(0.6f);
         }
         if (traveled >= chargeLen)
         {
@@ -564,7 +570,8 @@ public class ButcherZombie : Zombie
 
     Vector3 PickLeapTarget()
     {
-        var player = GameManager.I.player;
+        var player = target ? target : Squad.Local;
+        if (!player) return transform.position + transform.forward * leapMinDistance;
         Vector3 pos = transform.position;
         Vector3 aim = player.transform.position + Vector3.ClampMagnitude(playerVel, 7f) * 0.45f;
         Vector3 d = aim - pos; d.y = 0f;
@@ -634,7 +641,7 @@ public class ButcherZombie : Zombie
         SetPhase(Phase.Leap);
     }
 
-    void UpdateLeap(float dt, PlayerController player)
+    void UpdateLeap(float dt, SquadMember player)
     {
         gait = 0f;
         curSpeed = 0f;
@@ -648,7 +655,7 @@ public class ButcherZombie : Zombie
         if (k >= 1f) LandLeap(player);
     }
 
-    void LandLeap(PlayerController player)
+    void LandLeap(SquadMember player)
     {
         Vector3 pos = leapTo;
         transform.position = pos;
@@ -656,17 +663,7 @@ public class ButcherZombie : Zombie
         GameAudio.Play(SfxId.BossSlam, pos, 0.9f);
         GameManager.I.Shake(0.85f);
         if (Fx.I) { Fx.I.Explosion(pos, leapRadius * 0.6f, false); Fx.I.Dust(pos); }
-        if (!player.IsDead)
-        {
-            Vector3 d = player.transform.position - pos; d.y = 0f;
-            float m = d.magnitude;
-            if (m < leapRadius)
-            {
-                float f = 1f - 0.4f * Mathf.Clamp01(m / leapRadius);
-                LeapHits++;
-                player.TakeDamage(leapDamage * f, m > 0.05f ? d / m : transform.forward, 18f * f);
-            }
-        }
+        LeapHits += Squad.HitArea(pos, leapRadius, leapDamage, 0.4f, 18f, true, false, transform.forward);
         int n = Physics.OverlapSphereNonAlloc(pos + Vector3.up, leapRadius, Buffer, GameLayers.ZombieMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < n; i++)
         {
@@ -744,7 +741,7 @@ public class ButcherZombie : Zombie
         ShowTelegraphs(false, true);
     }
 
-    void UpdateSlamWind(float dt, PlayerController player, Vector3 dir)
+    void UpdateSlamWind(float dt, SquadMember player, Vector3 dir)
     {
         Hold(dt);
         Face(dir, dt);
@@ -761,17 +758,7 @@ public class ButcherZombie : Zombie
         GameAudio.Play(SfxId.BossSlam, pos);
         GameManager.I.Shake(0.75f);
         if (Fx.I) Fx.I.Explosion(pos, slamRadius * 0.6f, false);
-        if (!player.IsDead && !player.IsVaulting)
-        {
-            Vector3 d = player.transform.position - pos; d.y = 0f;
-            float m = d.magnitude;
-            if (m < slamRadius)
-            {
-                float f = 1f - 0.4f * Mathf.Clamp01(m / slamRadius);
-                SlamHits++;
-                player.TakeDamage(slamDamage * f, m > 0.05f ? d / m : transform.forward, 16f * f);
-            }
-        }
+        SlamHits += Squad.HitArea(pos, slamRadius, slamDamage, 0.4f, 16f, true, true, transform.forward);
         int n = Physics.OverlapSphereNonAlloc(pos + Vector3.up, slamRadius, Buffer, GameLayers.ZombieMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < n; i++)
         {
@@ -788,10 +775,17 @@ public class ButcherZombie : Zombie
         SetPhase(Phase.SlamRecover);
     }
 
-    void UpdateShock(float dt, PlayerController player)
+    void UpdateShock(float dt, SquadMember player)
     {
         if (shockT <= 0f) return;
         shockT -= dt;
+        ShockVisual();
+        if (shockT > 0f) Squad.SlowArea(shockPos, slamRadius, shockSlow, 0.12f);
+    }
+
+    /// <summary>The blue shock ring left by a slam (host and co-op puppets).</summary>
+    void ShockVisual()
+    {
         if (slamZone)
         {
             slamZone.position = shockPos + Vector3.up * 0.05f;
@@ -803,11 +797,6 @@ public class ButcherZombie : Zombie
                 mpb.SetColor(BaseColorId, new Color(0.35f, 0.75f, 1f, 1f) * Mathf.Clamp01(shockT / shockTime + 0.2f));
                 zoneRenderer.SetPropertyBlock(mpb);
             }
-        }
-        if (!player.IsDead)
-        {
-            Vector3 d = player.transform.position - shockPos; d.y = 0f;
-            if (d.sqrMagnitude < slamRadius * slamRadius) player.Slow(shockSlow, 0.12f);
         }
         if (shockT <= 0f)
         {
@@ -835,7 +824,7 @@ public class ButcherZombie : Zombie
         SetPhase(Phase.Throw);
     }
 
-    void UpdateThrow(float dt, PlayerController player, Vector3 dir, float dist)
+    void UpdateThrow(float dt, SquadMember player, Vector3 dir, float dist)
     {
         Hold(dt);
         Face(dir, dt * 2f);
@@ -850,12 +839,171 @@ public class ButcherZombie : Zombie
             // Extra ones fan out left / right of the soldier.
             if (i > 0) target += Vector3.Cross(Vector3.up, dir) * (i % 2 == 1 ? side0 : -side0) * ((i + 1) / 2);
             float flight = 0.9f + dist * 0.025f;
-            pr.Launch(transform.position + Vector3.up * (TopY * 0.75f) + transform.forward * 1.2f, target, flight);
+            Vector3 from = transform.position + Vector3.up * (TopY * 0.75f) + transform.forward * 1.2f;
+            pr.Launch(from, target, flight);
             Throws++;
+            Thrown?.Invoke(this, System.Array.IndexOf(projectiles, pr), from, target, flight);
         }
         GameAudio.Play(SfxId.GrenadeThrow, transform.position, 0.6f);
         throwCd = Cooldown(throwCooldown);
         BackToWalk();
+    }
+
+    // ------------------------------------------------------------------ co-op
+    /// <summary>Host: a projectile left the boss (index into <see cref="projectiles"/>) — the clients show it too.</summary>
+    public static event System.Action<ButcherZombie, int, Vector3, Vector3, float> Thrown;
+
+    public override byte NetAux => (byte)bossType;
+
+    public BossNetState ToBossNetState() => new BossNetState
+    {
+        id = NetId, phase = (byte)phase, phaseT = phaseT,
+        chargeYaw = Quaternion.LookRotation(chargeDir.sqrMagnitude > 0.001f ? chargeDir : transform.forward).eulerAngles.y,
+        chargeLen = chargeLen, windTime = windTime, leapTo = leapTo, shockPos = shockPos, shockT = shockT, enraged = Enraged,
+    };
+
+    /// <summary>Co-op client: show a projectile the host's boss threw (visual only; the host deals the damage).</summary>
+    public void PuppetThrow(int index, Vector3 from, Vector3 to, float flight)
+    {
+        if (projectiles == null || index < 0 || index >= projectiles.Length || !projectiles[index]) return;
+        projectiles[index].visualOnly = true;
+        projectiles[index].Launch(from, to, flight);
+        GameAudio.Play(SfxId.GrenadeThrow, transform.position, 0.6f);
+    }
+
+    /// <summary>Co-op client: the host boss's fight state → the same animations, sounds and telegraphs here.</summary>
+    public void ApplyBossState(BossNetState b)
+    {
+        chargeDir = Quaternion.Euler(0f, b.chargeYaw, 0f) * Vector3.forward;
+        chargeLen = b.chargeLen;
+        windTime = Mathf.Max(0.05f, b.windTime);
+        leapTo = b.leapTo;
+        if (b.shockT > 0f && shockT <= 0f) { shockPos = b.shockPos; if (slamZone) slamZone.gameObject.SetActive(true); }
+        shockT = b.shockT;
+        if (b.enraged && !Enraged)
+        {
+            Enraged = true;
+            GameAudio.Play(SfxId.BossRoar, transform.position, 0.85f);
+            if (DamageNumbers.I) DamageNumbers.I.ShowText(transform.position + Vector3.up * 5f, Loc.T("boss.rage"), new Color(1f, 0.3f, 0.2f));
+        }
+        var to = (Phase)b.phase;
+        if (to != phase && phase != Phase.Dead) { PuppetEnter(phase, to); SetPhase(to); phaseT = b.phaseT; }
+        else if (Mathf.Abs(phaseT - b.phaseT) > 0.3f) phaseT = b.phaseT;
+    }
+
+    void PuppetEnter(Phase from, Phase to)
+    {
+        var gm = GameManager.I;
+        Vector3 pos = transform.position;
+        if (from == Phase.Leap)
+        {
+            // Landed.
+            body.enabled = true;
+            GameAudio.Play(SfxId.BossSlam, leapTo, 0.9f);
+            gm.Shake(0.85f);
+            if (Fx.I) { Fx.I.Explosion(leapTo, leapRadius * 0.6f, false); Fx.I.Dust(leapTo); }
+            ResetMarkers();
+        }
+        animator.speed = 1f;
+        switch (to)
+        {
+            case Phase.Walk:
+                animator.CrossFadeInFixedTime(LocoState, 0.25f, 0);
+                ShowTelegraphs(false, false);
+                break;
+            case Phase.ChargeWind:
+                animator.CrossFadeInFixedTime(ScreamState, 0.15f, 0);
+                GameAudio.Play(SfxId.BossRoar, pos);
+                gm.Shake(0.25f);
+                ShowTelegraphs(true, false);
+                break;
+            case Phase.Charge:
+                ShowTelegraphs(false, false);
+                animator.CrossFadeInFixedTime(LocoState, 0.1f, 0);
+                GameAudio.Play(SfxId.BossCharge, pos);
+                break;
+            case Phase.Stunned:
+                GameAudio.Play(SfxId.BossSlam, pos, 0.8f);
+                GameAudio.Play(SfxId.HitConcrete, pos);
+                gm.Shake(0.7f);
+                if (Fx.I) Fx.I.Dust(pos + chargeDir * body.radius);
+                if (DamageNumbers.I) DamageNumbers.I.ShowText(pos + Vector3.up * 5.2f, Loc.T("boss.stunned"), weakColor);
+                animator.CrossFadeInFixedTime(LocoState, 0.1f, 0);
+                break;
+            case Phase.Tired:
+                if (from != Phase.Stunned && DamageNumbers.I) DamageNumbers.I.ShowText(pos + Vector3.up * TopY, Loc.T("boss.weak"), weakColor);
+                animator.CrossFadeInFixedTime(LocoState, 0.2f, 0);
+                ShowTelegraphs(false, false);
+                break;
+            case Phase.SlamWind:
+                animator.CrossFadeInFixedTime(AttackState, 0.1f, 0);
+                animator.speed = Mathf.Clamp(slamImpactTime / slamTelegraph, 0.5f, 3f);
+                GameAudio.Play(SfxId.BossRoar, pos, 1.15f, 0.6f);
+                ShowTelegraphs(false, true);
+                break;
+            case Phase.SlamRecover:
+                GameAudio.Play(SfxId.BossSlam, pos);
+                gm.Shake(0.75f);
+                if (Fx.I) Fx.I.Explosion(pos, slamRadius * 0.6f, false);
+                ShowTelegraphs(false, false);
+                if (slamZone) slamZone.gameObject.SetActive(true);
+                break;
+            case Phase.Throw:
+                animator.CrossFadeInFixedTime(animator.HasState(0, ThrowAnim) ? ThrowAnim : ScreamState, 0.15f, 0);
+                GameAudio.Play(SfxId.BossRoar, pos, 1.2f, 0.7f);
+                break;
+            case Phase.LeapWind:
+            {
+                bool own = leapImpactTime > 0f && animator.HasState(0, LeapAnim);
+                animator.CrossFadeInFixedTime(own ? LeapAnim : AttackState, 0.1f, 0);
+                animator.speed = Mathf.Clamp((own ? leapImpactTime : slamImpactTime) / (windTime + leapAirTime), 0.35f, 3f);
+                GameAudio.Play(SfxId.BossRoar, pos, 1.3f, 0.7f);
+                gm.Shake(0.2f);
+                if (slamRing) slamRing.gameObject.SetActive(true);
+                if (slamZone && shockT <= 0f) slamZone.gameObject.SetActive(true);
+                PlaceLeapMarker(0f);
+                break;
+            }
+            case Phase.Leap:
+                leapFrom = pos;
+                body.enabled = false;
+                GameAudio.Play(SfxId.BossCharge, pos, 1.2f);
+                break;
+            case Phase.Brood:
+                animator.CrossFadeInFixedTime(ScreamState, 0.15f, 0);
+                GameAudio.Play(SfxId.BossRoar, pos, 0.8f);
+                gm.Shake(0.3f);
+                if (DamageNumbers.I) DamageNumbers.I.ShowText(pos + Vector3.up * TopY, Loc.T("boss.brood"), new Color(1f, 0.7f, 0.2f));
+                break;
+        }
+    }
+
+    /// <summary>Co-op client, every frame: telegraphs follow the replicated phase (the snapshot moves the boss).</summary>
+    void PuppetTick(float dt)
+    {
+        phaseT += dt;
+        if (shockT > 0f) { shockT -= dt; ShockVisual(); }
+        switch (phase)
+        {
+            case Phase.ChargeWind: UpdateStrip(); break;
+            case Phase.SlamWind:
+                if (slamRing)
+                {
+                    float s = Mathf.Lerp(0.3f, 1f, Mathf.Clamp01(phaseT / slamTelegraph)) * slamRadius * 2f / transform.localScale.x;
+                    slamRing.localScale = new Vector3(s, s, 1f);
+                }
+                break;
+            case Phase.LeapWind: PlaceLeapMarker(phaseT / (windTime + leapAirTime)); break;
+            case Phase.Leap:
+            {
+                float k = Mathf.Clamp01(phaseT / leapAirTime);
+                Vector3 p = transform.position;
+                p.y = leapHeight * 4f * k * (1f - k);
+                transform.position = p;
+                PlaceLeapMarker((windTime + phaseT) / (windTime + leapAirTime));
+                break;
+            }
+        }
     }
 
     // ------------------------------------------------------------------ visuals (read-only on state)
@@ -890,6 +1038,7 @@ public class ButcherZombie : Zombie
     protected override void Animate(float dt)
     {
         base.Animate(dt);
+        if (Puppet && phase != Phase.Dead) PuppetTick(dt);
         if (phase == Phase.Stunned)
         {
             animator.SetFloat(AnimSpeed, 0.5f);

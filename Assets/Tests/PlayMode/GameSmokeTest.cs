@@ -945,7 +945,7 @@ public class GameSmokeTest
             yield return WaitUntil(() => Zombie.Active.Count > 0, 12f);
             Assert.Greater(Zombie.Active.Count, 0);
             foreach (var z in Zombie.Active) Assert.Greater(z.NetId, 0, "host zombies get network ids");
-            Assert.AreEqual(0f, WaveDirector.I.Params.specialChance, "C1: no mutations in co-op");
+            Assert.NotNull(CoopNet.I, "co-op event hub"); Assert.NotNull(CoopTeam.I, "co-op team rules");
             yield return Wait(0.5f);
             Assert.AreEqual(gm.player.transform.position.x, NetPlayer.Local.State.Value.pos.x, 0.5f, "owner writes its state");
             // A real snapshot of the host's zombies: the "network" input of the client below.
@@ -986,6 +986,98 @@ public class GameSmokeTest
             nz.ApplySnapshot(empty, elen);
             Assert.AreEqual(0, nz.Puppets, "missing from the snapshot -> gone");
             Assert.AreEqual(3, WaveDirector.I.Wave, "wave mirrored from the host");
+
+            // ---- C2: kill credit — only my killing blows score on my game.
+            var gmc = GameManager.I;
+            var p = gmc.player;
+            nz.ForcedLocalId = 5;
+            var two = new[]
+            {
+                new ZombieNetState { id = 901, kind = ZombieKind.Walker, pos = p.transform.position + new Vector3(9f, 0f, 0f), maxHp = 50f, hp01 = 1f },
+                new ZombieNetState { id = 902, kind = ZombieKind.Walker, pos = p.transform.position + new Vector3(-9f, 0f, 0f), maxHp = 50f, hp01 = 1f },
+            };
+            var sb = new byte[ZombieSnapshot.Size(2)];
+            int sl = ZombieSnapshot.Write(sb, new WaveNetState { wave = 3 }, two, 2);
+            nz.ApplySnapshot(sb, sl);
+            int kills0 = gmc.Kills, team0 = 0;
+            gmc.TeamKilled += _ => team0++;
+            nz.ApplyKill(901, Vector3.forward, 5);
+            Assert.AreEqual(kills0 + 1, gmc.Kills, "my kill: score / combo here");
+            nz.ApplyKill(902, Vector3.forward, 0);
+            Assert.AreEqual(kills0 + 1, gmc.Kills, "a teammate's kill isn't mine");
+            Assert.AreEqual(2, team0, "both count for the team (boss reward, drops)");
+
+            // ---- Host blast replayed: shown, no damage here (the host sends damage itself).
+            var net = CoopNet.I;
+            float hp0 = p.Health;
+            var w = new NetWriter(new byte[64]);
+            w.U8((byte)CoopEv.Explosion); w.XZ(p.transform.position); w.F32(4f); w.U16((ushort)SfxId.BombExplode); w.F32(0.5f); w.Bool(true);
+            net.Handle(w.buf, w.len, 0);
+            Assert.AreEqual(hp0, p.Health, "replayed blast doesn't hurt on the client");
+
+            // ---- Objective mirrored from the host: issue -> progress -> complete pays my XP.
+            var od = ObjectiveDirector.I;
+            Assert.IsTrue(od.Remote, "client objectives are remote");
+            Vector3 site = FloatingOrigin.ToGlobal(p.transform.position) + new Vector3(30f, 0f, 0f);
+            w = new NetWriter(new byte[64]);
+            w.U8((byte)CoopEv.ObjIssue); w.U8((byte)ObjectiveKind.Tower); w.U8((byte)ChunkType.SignalTower); w.F32(6f); w.F32(20f); w.Str("radio.tower_brief");
+            w.V3(site); w.I32(1); w.I32(0); w.Bool(false);
+            net.Handle(w.buf, w.len, 0);
+            Assert.IsTrue(od.HasActive); Assert.AreEqual(ObjectiveKind.Tower, od.Step.kind); Assert.AreEqual(site.x, od.TargetGlobal.x, 0.01f);
+            w = new NetWriter(new byte[32]);
+            w.U8((byte)CoopEv.ObjProgress); w.Bool(true); w.F32(10f); w.Bool(true);
+            net.Handle(w.buf, w.len, 0);
+            Assert.AreEqual(0.5f, od.Progress01, 0.01f, "host's hold progress");
+            int xp0 = Progression.I.Xp + Progression.I.Level * 1000;
+            w = new NetWriter(new byte[32]);
+            w.U8((byte)CoopEv.ObjComplete); w.U8((byte)ObjectiveKind.Tower); w.U16(25); w.I32(300); w.U8(0); w.Bool(false);
+            net.Handle(w.buf, w.len, 0);
+            Assert.IsFalse(od.HasActive); Assert.AreEqual(1, od.CompletedCount);
+            Assert.Greater(Progression.I.Xp + Progression.I.Level * 1000, xp0, "my XP for the team's objective");
+
+            // ---- Pickups: the host's drop appears; a teammate's pick-up removes ours.
+            w = new NetWriter(new byte[32]);
+            w.U8((byte)CoopEv.PickupSpawn); w.U16(77); w.XZ(p.transform.position + new Vector3(12f, 0f, 0f)); w.Bool(false);
+            net.Handle(w.buf, w.len, 0);
+            Assert.AreEqual(1, Pickups.I.ActiveCount, "host drop shown");
+            w = new NetWriter(new byte[16]);
+            w.U8((byte)CoopEv.PickupTaken); w.U16(77);
+            net.Handle(w.buf, w.len, 0);
+            Assert.AreEqual(0, Pickups.I.ActiveCount, "taken by a teammate");
+
+            // ---- Boss puppet: arrives from the snapshot, telegraphs follow the host's phase.
+            var bossZ = new[] { new ZombieNetState { id = 950, kind = ZombieKind.Boss, pos = p.transform.position + new Vector3(0f, 0f, 14f), maxHp = 8000f, hp01 = 1f, aux = (byte)BossType.Butcher } };
+            var bst = new BossNetState { id = 950, phase = (byte)ButcherZombie.Phase.SlamWind, phaseT = 0.1f, windTime = 1f, chargeLen = 10f };
+            sb = new byte[ZombieSnapshot.Size(1)];
+            sl = ZombieSnapshot.Write(sb, new WaveNetState { wave = 6 }, bossZ, 1, bst);
+            nz.ApplySnapshot(sb, sl);
+            var bpup = nz.PuppetById(950) as ButcherZombie;
+            Assert.NotNull(bpup, "boss puppet");
+            Assert.AreEqual(bpup, BossDirector.I.Boss, "boss HUD / music follow the puppet");
+            yield return WaitUntil(() => bpup.IsWalking, 5f);
+            nz.ApplySnapshot(sb, sl);
+            Assert.AreEqual(ButcherZombie.Phase.SlamWind, bpup.CurrentPhase);
+            Assert.IsTrue(bpup.slamRing.gameObject.activeSelf, "slam telegraph on the client");
+
+            // ---- C3: down, not out — revived at the wave break; the host's "team over" ends the run.
+            p.TakeDamage(10000f, Vector3.forward);
+            Assert.IsTrue(p.IsDead); Assert.IsTrue(CoopTeam.I.Downed, "downed, revivable");
+            Assert.IsFalse(gmc.IsGameOver, "the run goes on while the team stands");
+            yield return Wait(0.3f);
+            Assert.Less(CoopTeam.I.BleedLeft, CoopTeam.I.bleedOut, "bleeding out");
+            w = new NetWriter(new byte[8]); w.U8((byte)CoopEv.Respawn);
+            net.Handle(w.buf, w.len, 0);
+            Assert.IsFalse(p.IsDead, "wave break: back on its feet");
+            Assert.AreEqual(p.maxHealth * CoopTeam.I.reviveHealth, p.Health, 1f);
+            Assert.IsFalse(CoopTeam.I.Downed);
+            p.TakeDamage(10000f, Vector3.forward);
+            w = new NetWriter(new byte[8]); w.U8((byte)CoopEv.TeamOver);
+            net.Handle(w.buf, w.len, 0);
+            Assert.IsTrue(gmc.IsGameOver, "team over from the host");
+            yield return WaitUntil(() => gmc.hud.gameOverPanel.activeSelf, 6f);
+            var rs = Object.FindAnyObjectByType<ResultScreen>(FindObjectsInactive.Include);
+            Assert.IsTrue(rs.teamBox.activeSelf, "team table on the result screen");
+            Assert.IsFalse(rs.questBox.activeSelf);
         }
         finally
         {

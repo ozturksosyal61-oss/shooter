@@ -5,6 +5,8 @@ using UnityEngine;
 /// are pulled in by a magnet when the player is close and needs health, and blink out after a while.
 /// Hard mode adds ammo boxes (one reserve magazine each; mutations always drop one, more likely when the reserve
 /// is low) — same pool, a kind per slot.
+/// Co-op: the host decides the drops (for whoever is hurt) and tells everyone (<see cref="Dropped"/> →
+/// <see cref="RemoteSpawn"/>); each game collects for its own soldier and says so (<see cref="Taken"/> → <see cref="RemoteTaken"/>).
 /// </summary>
 public class Pickups : MonoBehaviour
 {
@@ -30,6 +32,13 @@ public class Pickups : MonoBehaviour
     float[] born;
     Vector3[] vel;
     float lastDrop = -100f;
+    ushort[] ids;
+    ushort nextId = 1;
+
+    /// <summary>Host (co-op): a pickup appeared (id, position, ammo box).</summary>
+    public event System.Action<ushort, Vector3, bool> Dropped;
+    /// <summary>This game's soldier picked one up (id) — teammates remove their copy.</summary>
+    public event System.Action<ushort> Taken;
 
     public int ActiveCount
     {
@@ -51,6 +60,7 @@ public class Pickups : MonoBehaviour
         born = new float[n];
         vel = new Vector3[n];
         isAmmo = new bool[n];
+        ids = new ushort[n];
         ammoRng = new System.Random((ChunkManager.I ? ChunkManager.I.seed : 1) ^ 0x4a3307);
         for (int i = 0; i < n; i++)
         {
@@ -72,7 +82,10 @@ public class Pickups : MonoBehaviour
             DropAmmo(pos + new Vector3(0.6f, 0f, 0f));
         }
         if (Time.time - lastDrop < minTimeBetweenDrops) return;
-        float chance = p && p.Health < p.maxHealth * 0.5f ? dropChanceWhenHurt : dropChance;
+        // Co-op: the most hurt soldier decides how likely a medkit is.
+        float h01 = p ? p.Health / Mathf.Max(1f, p.maxHealth) : 1f;
+        for (int i = 0; i < Squad.Members.Count; i++) if (!Squad.Members[i].IsDead) h01 = Mathf.Min(h01, Squad.Members[i].Health01);
+        float chance = h01 < 0.5f ? dropChanceWhenHurt : dropChance;
         if (GameMode.IsHard) chance *= ModeRules.HardMedkitMul;
         if (Random.value > chance) return;
         Drop(pos);
@@ -85,7 +98,9 @@ public class Pickups : MonoBehaviour
         if (Spawn(pos, true)) lastAmmoDrop = Time.time;
     }
 
-    bool Spawn(Vector3 pos, bool ammo)
+    bool Spawn(Vector3 pos, bool ammo) => Spawn(pos, ammo, 0) >= 0;
+
+    int Spawn(Vector3 pos, bool ammo, ushort id)
     {
         for (int i = 0; i < items.Length; i++)
         {
@@ -95,9 +110,27 @@ public class Pickups : MonoBehaviour
             items[i].gameObject.SetActive(true);
             born[i] = Time.time;
             vel[i] = Vector3.zero;
-            return true;
+            bool local = id == 0;
+            if (local) { if (nextId == 0) nextId = 1; id = nextId++; }
+            ids[i] = id;
+            if (local && GameMode.IsCoop) Dropped?.Invoke(id, items[i].position, ammo);
+            return i;
         }
-        return false;
+        return -1;
+    }
+
+    /// <summary>Co-op client: the host dropped pickup <paramref name="id"/>.</summary>
+    public void RemoteSpawn(ushort id, Vector3 pos, bool ammo)
+    {
+        if (id == 0) return;
+        Spawn(pos, ammo, id);
+    }
+
+    /// <summary>Co-op: a teammate picked pickup <paramref name="id"/> up — ours vanishes.</summary>
+    public void RemoteTaken(ushort id)
+    {
+        for (int i = 0; i < items.Length; i++)
+            if (ids[i] == id && items[i].gameObject.activeSelf) items[i].gameObject.SetActive(false);
     }
 
     void Update()
@@ -134,6 +167,7 @@ public class Pickups : MonoBehaviour
                     GameAudio.Play(SfxId.Pickup, pp);
                     if (Fx.I) Fx.I.Dust(t.position);
                     t.gameObject.SetActive(false);
+                    if (GameMode.IsCoop) Taken?.Invoke(ids[i]);
                     continue;
                 }
             }

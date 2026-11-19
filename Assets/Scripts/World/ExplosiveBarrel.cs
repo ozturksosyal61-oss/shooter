@@ -50,6 +50,8 @@ public class ExplosiveBarrel : MonoBehaviour
     public void Hit(float damage)
     {
         if (exploded) return;
+        // Co-op client: the host's barrel is the real one (its blast comes back as an event).
+        if (CoopNet.IsClient) { if (flash) flash.Flash(0.06f); CoopNet.I.ReportBarrelHit(transform.position, damage); return; }
         hp -= damage;
         if (flash) flash.Flash(0.06f);
         if (hp <= 0f) Explode();
@@ -57,7 +59,7 @@ public class ExplosiveBarrel : MonoBehaviour
 
     void OnExplosion(Vector3 pos, float r)
     {
-        if (exploded || fuse >= 0f || !gameObject.activeInHierarchy) return;
+        if (exploded || fuse >= 0f || !gameObject.activeInHierarchy || CoopNet.IsClient) return;
         Vector3 d = transform.position - pos; d.y = 0f;
         if (d.sqrMagnitude < 0.04f) return; // its own blast
         if (d.sqrMagnitude <= (r + 0.6f) * (r + 0.6f)) fuse = chainDelay;
@@ -70,9 +72,34 @@ public class ExplosiveBarrel : MonoBehaviour
         if (fuse <= 0f) Explode();
     }
 
+    /// <summary>Co-op client: the host's copy of this barrel blew up — just vanish (the blast is shown by the event).</summary>
+    public void RemoteExploded()
+    {
+        if (exploded) return;
+        exploded = true;
+        fuse = -1f;
+        if (model) model.SetActive(false);
+        if (colliders != null) foreach (var c in colliders) c.enabled = false;
+    }
+
+    /// <summary>Nearest intact barrel within <paramref name="maxDist"/> of a point (co-op: barrels are matched by position).</summary>
+    public static ExplosiveBarrel Near(Vector3 p, float maxDist)
+    {
+        ExplosiveBarrel best = null;
+        float bd = maxDist * maxDist;
+        foreach (var b in Active)
+        {
+            if (b.exploded) continue;
+            Vector3 d = b.transform.position - p; d.y = 0f;
+            if (d.sqrMagnitude < bd) { bd = d.sqrMagnitude; best = b; }
+        }
+        return best;
+    }
+
     public void Explode()
     {
         if (exploded) return;
+        if (CoopNet.IsClient) return;
         exploded = true;
         fuse = -1f;
         if (model) model.SetActive(false);

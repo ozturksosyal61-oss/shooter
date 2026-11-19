@@ -14,6 +14,9 @@ public struct RadioMsg
 /// comes next; the director picks a site in the city (a natural landmark nearby, or forces a chunk 4 chunks away),
 /// tracks the player in the zone, pays bonus score/XP and talks over the radio. Visuals and HUD only read it /
 /// listen to its events. Its randomness is its own seeded System.Random.
+/// Co-op: the host runs it (any standing soldier in the zone counts); clients are <see cref="Remote"/> and mirror the
+/// host's objective (<see cref="RemoteIssue"/> / <see cref="RemoteProgress"/> / <see cref="RemoteComplete"/>), each
+/// paying its own player the XP / heal / card.
 /// </summary>
 public class ObjectiveDirector : MonoBehaviour
 {
@@ -32,6 +35,11 @@ public class ObjectiveDirector : MonoBehaviour
     System.Random rng;
     float cooldown, lostRadioT, nextBeep, pickAt = -1f;
     bool halfSaid, heliSaid, wasInside;
+
+    /// <summary>Co-op client: the host owns the objectives.</summary>
+    public bool Remote { get; set; }
+    /// <summary>The site chunk's type was forced for this objective (co-op clients force the same chunk).</summary>
+    public bool SiteForced { get; private set; }
 
     public bool HasActive { get; private set; }
     public ObjectiveStep Step { get; private set; }
@@ -107,6 +115,7 @@ public class ObjectiveDirector : MonoBehaviour
         if (!gm || gm.IsGameOver || !gm.player) return;
         // Helicopter reward card comes after the story beat, not on top of it.
         if (pickAt >= 0f && gm.GameTime >= pickAt) { pickAt = -1f; if (Progression.I) Progression.I.GrantPick(); }
+        if (Remote) return;
         int wave = WaveDirector.I ? WaveDirector.I.Wave : 0;
 
         if (!HasActive)
@@ -133,8 +142,7 @@ public class ObjectiveDirector : MonoBehaviour
             return;
         }
 
-        Vector3 d = gm.player.transform.position - TargetLocal; d.y = 0f;
-        PlayerInZone = d.sqrMagnitude < Step.radius * Step.radius && !gm.player.IsDead;
+        PlayerInZone = AnyoneInZone(gm);
 
         if (Step.hold <= 0f)
         {
@@ -162,6 +170,26 @@ public class ObjectiveDirector : MonoBehaviour
         wasInside = PlayerInZone;
     }
 
+    /// <summary>The local soldier, or (co-op host) any standing teammate, is inside the zone.</summary>
+    bool AnyoneInZone(GameManager gm)
+    {
+        float r2 = Step.radius * Step.radius;
+        Vector3 c = TargetLocal;
+        if (Squad.Count == 0)
+        {
+            Vector3 d = gm.player.transform.position - c; d.y = 0f;
+            return d.sqrMagnitude < r2 && !gm.player.IsDead;
+        }
+        for (int i = 0; i < Squad.Members.Count; i++)
+        {
+            var m = Squad.Members[i];
+            if (m.IsDead) continue;
+            Vector3 d = m.Position - c; d.y = 0f;
+            if (d.sqrMagnitude < r2) return true;
+        }
+        return false;
+    }
+
     /// <summary>Starts an objective of a given kind right now (tests, campaign scripting).</summary>
     public void ForceIssue(ObjectiveKind kind) => Issue(Objectives.Step(kind, rng));
 
@@ -180,6 +208,7 @@ public class ObjectiveDirector : MonoBehaviour
             return;
         }
         var from = new Vector2Int(Mathf.FloorToInt(pg.x / CityLayout.Size), Mathf.FloorToInt(pg.z / CityLayout.Size));
+        SiteForced = false;
         Vector2Int site = default;
         bool found = cm && CityLayout.IsLandmark(step.site) && cm.FindType(step.site, from, searchMin, searchMax, out site);
         if (!found)
@@ -196,6 +225,7 @@ public class ObjectiveDirector : MonoBehaviour
                 break;
             }
             if (cm) cm.ForceType(site, step.site);
+            SiteForced = true;
         }
         SiteChunk = site;
         Begin(step, CityLayout.SiteGlobal(site, step.site));
@@ -255,6 +285,7 @@ public class ObjectiveDirector : MonoBehaviour
         GameAudio.Play(step.kind == ObjectiveKind.Helicopter ? SfxId.ObjectiveBig : SfxId.ObjectiveDone, player.transform.position);
         cooldown = issueDelay;
         LastBonus = score;
+        LastXp = xp;
         Completed?.Invoke(step);
         if (won) { gm.TriggerVictory(); return; }
         if (step.kind == ObjectiveKind.Helicopter) Say("radio.heli_after");
@@ -262,6 +293,58 @@ public class ObjectiveDirector : MonoBehaviour
     }
 
     public int LastBonus { get; private set; }
+    public int LastXp { get; private set; }
+
+    // ------------------------------------------------------------------ co-op client mirror
+    /// <summary>Co-op client: the host issued <paramref name="step"/> (same site; a forced chunk is forced here too).</summary>
+    public void RemoteIssue(ObjectiveStep step, Vector3 targetGlobal, Vector2Int siteChunk, bool forced)
+    {
+        SiteChunk = siteChunk;
+        SiteForced = forced;
+        if (forced && step.HasSite && ChunkManager.I) ChunkManager.I.ForceType(siteChunk, step.site);
+        Begin(step, targetGlobal);
+        Issued?.Invoke(step);
+    }
+
+    public void RemoteProgress(bool active, float held, bool inZone)
+    {
+        if (!HasActive) return;
+        Held = held;
+        PlayerInZone = inZone && active;
+    }
+
+    /// <summary>Co-op client: the team finished the objective — this player's share (XP, heal or card, helicopter heal).</summary>
+    public void RemoteComplete(ObjectiveKind kind, int xp, int bonus, int helicopters, bool finished)
+    {
+        var gm = GameManager.I;
+        var step = Step;
+        step.kind = kind;
+        HasActive = false;
+        PlayerInZone = false;
+        CompletedCount++;
+        Helicopters = helicopters;
+        LastBonus = bonus;
+        var player = gm ? gm.player : null;
+        if (player && !player.IsDead)
+        {
+            if (kind == ObjectiveKind.Supply)
+            {
+                if (Objectives.SupplyGivesHeal(player.Health / player.maxHealth)) player.Heal(player.maxHealth);
+                else if (Progression.I) Progression.I.GrantPick();
+            }
+            else if (kind == ObjectiveKind.Helicopter)
+            {
+                player.Heal(player.maxHealth);
+                if (!finished && gm) pickAt = gm.GameTime + 3.5f;
+            }
+        }
+        if (Progression.I) Progression.I.AddXp(xp);
+        if (player) GameAudio.Play(kind == ObjectiveKind.Helicopter ? SfxId.ObjectiveBig : SfxId.ObjectiveDone, player.transform.position);
+        Completed?.Invoke(step);
+    }
+
+    /// <summary>Co-op client: a radio line from the host.</summary>
+    public void RemoteRadio(RadioMsg m) => Radio?.Invoke(m);
 
     /// <summary>Radio line from HQ (also used by the boss director).</summary>
     public void Say(string key) => Radio?.Invoke(new RadioMsg { key = key });

@@ -84,7 +84,7 @@ public class GameManager : MonoBehaviour
         GameAudio.Play(SfxId.UiClick, Vector3.zero);
         if (GameMode.IsCoop)
         {
-            // Co-op (C1): no solo restart — back to the menu (C3: revive / team retry).
+            // Co-op: the room ends with the run — back to the menu (a new room is a new run).
             Time.timeScale = TimeScale;
             _ = CoopSession.Leave();
             LoadingScreen.Load(LoadingScreen.MenuScene);
@@ -107,6 +107,26 @@ public class GameManager : MonoBehaviour
 
     /// <summary>Raised for every kill (after scoring) — progression / cards listen.</summary>
     public event System.Action<Zombie> Killed;
+
+    /// <summary>Raised for every zombie the team kills (single player: every kill) — boss reward, kill events, drops.</summary>
+    public event System.Action<Zombie> TeamKilled;
+
+    /// <summary>
+    /// A zombie died on this (authoritative) game: the score / combo / XP go to this player only when they landed the
+    /// killing blow (<paramref name="mine"/>); a teammate's kill is credited on their own game via the kill event.
+    /// </summary>
+    public void CreditKill(Zombie z, bool mine)
+    {
+        if (mine || !GameMode.IsCoop) RegisterKill(z);
+        TeamKilled?.Invoke(z);
+    }
+
+    /// <summary>Co-op client: the host says the team killed <paramref name="z"/> (a puppet); mine = my killing blow.</summary>
+    public void RemoteKill(Zombie z, bool mine)
+    {
+        if (mine) RegisterKill(z);
+        TeamKilled?.Invoke(z);
+    }
 
     public void RegisterKill(Zombie z)
     {
@@ -250,6 +270,17 @@ public class GameManager : MonoBehaviour
         Revived?.Invoke();
     }
 
+    /// <summary>Co-op: the local soldier went down (not the end: teammates can revive; the host ends the run when nobody stands).</summary>
+    public event System.Action LocalDowned;
+
+    public void OnLocalDown()
+    {
+        if (IsGameOver) return;
+        BreakCombo();
+        Shake(0.6f);
+        LocalDowned?.Invoke();
+    }
+
     public void TriggerGameOver()
     {
         if (IsGameOver) return;
@@ -267,6 +298,7 @@ public class GameManager : MonoBehaviour
         r.bestTime = Mathf.Max(r.bestTime, GameTime);
         var rec = SaveSystem.Data.records;
         if (GameMode.IsHard) { rec.hardScore = r.bestScore; rec.hardWave = r.bestWave; rec.hardKills = r.bestKills; rec.hardTime = r.bestTime; }
+        else if (GameMode.IsCoop) r.newScore = false; // team runs don't touch the solo records
         else if (!GameMode.IsCampaign) { rec.bestScore = r.bestScore; rec.bestWave = r.bestWave; rec.bestKills = r.bestKills; rec.bestTime = r.bestTime; }
         else r.newScore = false; // chapters have stars, not score records
         Records = r;

@@ -21,6 +21,8 @@ public class BossProjectile : MonoBehaviour
     public float poolDps = 10f;
     public Color poolColor = new Color(0.45f, 1f, 0.2f, 1f);
     public Renderer markerRenderer;
+    /// <summary>Co-op client copy: flies, marks and splashes, but the host deals the damage.</summary>
+    [System.NonSerialized] public bool visualOnly;
 
     float poolT;
     MaterialPropertyBlock mpb;
@@ -119,19 +121,8 @@ public class BossProjectile : MonoBehaviour
             marker.localScale = new Vector3(s, s, 1f);
         }
         Color(poolColor * (0.55f + 0.45f * fade));
-        var gm = GameManager.I;
-        var pl = gm ? gm.player : null;
-        if (pl && !pl.IsDead)
-        {
-            Vector3 d = pl.transform.position - to; d.y = 0f;
-            if (d.sqrMagnitude < poolRadius * poolRadius)
-            {
-                // Silent burn (no knockback spam): health ticks down, the slow says "get out".
-                pl.Burn(poolDps * Time.deltaTime);
-                AcidDamage += poolDps * Time.deltaTime;
-                pl.Slow(0.75f, 0.15f);
-            }
-        }
+        // Silent burn (no knockback spam) on everyone standing in it: health ticks down, the slow says "get out".
+        if (!visualOnly) AcidDamage += Squad.BurnArea(to, poolRadius, poolDps * Time.deltaTime, 0.75f, 0.15f);
         if (poolT <= 0f) Hide();
     }
 
@@ -147,31 +138,16 @@ public class BossProjectile : MonoBehaviour
             if (mesh) mesh.gameObject.SetActive(false);
             if (Fx.I) { Fx.I.Hit(p + Vector3.up * 0.3f, Vector3.up); Fx.I.Dust(p); }
             GameAudio.Play(SfxId.BombExplode, p, 1.6f, 0.45f);
-            var g = GameManager.I;
-            if (g && g.player && !g.player.IsDead)
-            {
-                Vector3 d = g.player.transform.position - p; d.y = 0f;
-                float m = d.magnitude;
-                if (m < radius) g.player.TakeDamage(damage * (1f - 0.4f * m / radius), m > 0.05f ? d / m : Vector3.forward, 6f);
-            }
+            if (!visualOnly) Squad.HitArea(p, radius, damage, 0.4f, 6f, false, false, Vector3.forward);
             return;
         }
         if (Fx.I) { Fx.I.Explosion(p, radius * 0.7f, false); Fx.I.Dust(p); }
         GameAudio.Play(SfxId.BossSlam, p, 1.35f, 0.8f);
         GameAudio.Play(SfxId.HitMetal, p);
         var gm = GameManager.I;
-        if (gm)
-        {
-            gm.Shake(0.35f);
-            var pl = gm.player;
-            if (pl && !pl.IsDead)
-            {
-                Vector3 d = pl.transform.position - p; d.y = 0f;
-                float m = d.magnitude;
-                if (m < radius)
-                    pl.TakeDamage(damage * (1f - 0.4f * m / radius), m > 0.05f ? d / m : Vector3.forward, 10f);
-            }
-        }
+        if (gm) gm.Shake(0.35f);
+        if (visualOnly) { Hide(); return; }
+        Squad.HitArea(p, radius, damage, 0.4f, 10f, false, false, Vector3.forward);
         foreach (var z in Zombie.Active)
         {
             Vector3 d = z.transform.position - p; d.y = 0f;

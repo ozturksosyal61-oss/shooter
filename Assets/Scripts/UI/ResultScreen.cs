@@ -21,6 +21,12 @@ public class ResultScreen : MonoBehaviour
     public RectTransform deathRestartSlot;
     public Button menuButton, weaponButton;
 
+    [Header("Co-op team (replaces the quest list)")]
+    public GameObject questBox, teamBox;
+    public GameObject[] teamRows;
+    public TMP_Text[] teamNames, teamKills, teamScores;
+    public TMP_Text teamTotal;
+
     [Header("Story (failed / cleared)")]
     public GameObject storyLayout;
     public TMP_Text storyKicker, storyTitle, storyChapter, storyGoal, storyPercent, storyStarsHint, storyTip, storyGold;
@@ -83,6 +89,11 @@ public class ResultScreen : MonoBehaviour
         statCombo.text = "X" + GameManager.MultiplierFor(bestCombo);
         statTime.text = Time2(time);
         if (hardBonus) hardBonus.SetActive(hard);
+        bool coop = GameMode.IsCoop;
+        if (questBox) questBox.SetActive(!coop);
+        if (teamBox) teamBox.SetActive(coop);
+        if (coop) ShowTeam();
+        if (weaponButton) weaponButton.gameObject.SetActive(!coop);
         var qs = Profile.Quests;
         for (int i = 0; i < questRows.Length; i++)
         {
@@ -97,6 +108,33 @@ public class ResultScreen : MonoBehaviour
             questChecks[i].color = done ? UiKit.Success : new Color(0f, 0f, 0f, 0f);
             questChecks[i].transform.GetChild(0).gameObject.SetActive(done);
         }
+    }
+
+    /// <summary>Co-op: every soldier's kills and score, best first, and the team total.</summary>
+    void ShowTeam()
+    {
+        if (teamRows == null) return;
+        var list = new System.Collections.Generic.List<NetPlayer>(NetPlayer.All);
+        var gm = GameManager.I;
+        int Score(NetPlayer p) => p == NetPlayer.Local && gm ? gm.Score : p.State.Value.score;
+        int Kills(NetPlayer p) => p == NetPlayer.Local && gm ? gm.Kills : p.State.Value.kills;
+        list.Sort((a, b) => Score(b).CompareTo(Score(a)));
+        int total = 0;
+        for (int i = 0; i < teamRows.Length; i++)
+        {
+            bool has = i < list.Count;
+            teamRows[i].SetActive(has);
+            if (!has) continue;
+            var p = list[i];
+            bool me = p == NetPlayer.Local;
+            teamNames[i].text = CoopTeam.NameOf(p);
+            teamNames[i].color = me ? UiKit.Hazard : UiKit.Text;
+            teamKills[i].text = Loc.F("coop.kills", Kills(p));
+            teamScores[i].text = Score(p).ToString();
+        }
+        foreach (var p in list) total += Score(p);
+        if (list.Count == 0 && gm) { total = gm.Score; teamRows[0].SetActive(true); teamNames[0].text = Loc.T("coop.you"); teamKills[0].text = Loc.F("coop.kills", gm.Kills); teamScores[0].text = gm.Score.ToString(); }
+        if (teamTotal) teamTotal.text = Loc.F("coop.team_total", total);
     }
 
     /// <summary>Story chapter result: failed (died) or cleared (victory).</summary>

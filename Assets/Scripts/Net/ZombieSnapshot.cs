@@ -11,6 +11,10 @@ public struct ZombieNetState
     public float gait;       // 0 idle · 1 walk · 2 run
     public float hp01;
     public float maxHp;
+    /// <summary>Special-zombie phase (bomb swelling, tongue aim / out / hold…), 0 = nothing special.</summary>
+    public byte act;
+    /// <summary>Tongue: target player slot (255 = none). Boss: <see cref="BossType"/>.</summary>
+    public byte aux;
 }
 
 /// <summary>Wave state riding on every snapshot (clients don't run their own waves).</summary>
@@ -21,18 +25,36 @@ public struct WaveNetState
     public float timeLeft;
 }
 
+/// <summary>The boss's fight state (C2): phase + the numbers its telegraphs are drawn from.</summary>
+public struct BossNetState
+{
+    public ushort id;
+    public byte phase;            // ButcherZombie.Phase
+    public float phaseT;
+    public float chargeYaw, chargeLen, windTime;
+    public Vector3 leapTo, shockPos;
+    public float shockT;
+    public bool enraged;
+
+    public bool Equals(BossNetState o) => id == o.id && phase == o.phase;
+}
+
 /// <summary>
 /// Pure, allocation-free snapshot codec (EditMode-tested). Layout: header (wave u16, flags u8, timeLeft u16 ×0.1 s,
-/// count u16) then per zombie: id u16, kind/flags u8, x f32, z f32, yaw u8, gait u8, hp u8, maxHp u16 = 16 bytes.
-/// 70 zombies ≈ 1.1 KB → sent fragmented-reliable-sequenced at 15 Hz by <see cref="NetZombies"/>.
+/// count u16) then per zombie: id u16, kind/flags u8, x f32, z f32, yaw u8, gait u8, hp u8, maxHp u16, act u8, aux u8
+/// = 18 bytes; then a boss flag u8 + optional boss block (26 bytes).
+/// 70 zombies ≈ 1.3 KB → sent fragmented-reliable-sequenced at 15 Hz by <see cref="NetZombies"/>.
 /// </summary>
 public static class ZombieSnapshot
 {
     public const int HeaderBytes = 7;
-    public const int ZombieBytes = 16;
-    public static int Size(int count) => HeaderBytes + count * ZombieBytes;
+    public const int ZombieBytes = 18;
+    public const int BossBytes = 27; // flag + 26
+    public static int Size(int count) => HeaderBytes + count * ZombieBytes + BossBytes;
 
-    public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int count)
+    public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int count) => Write(buf, w, zs, count, null);
+
+    public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int count, BossNetState? boss)
     {
         int o = 0;
         U16(buf, ref o, (ushort)Mathf.Clamp(w.wave, 0, ushort.MaxValue));
@@ -46,25 +68,45 @@ public static class ZombieSnapshot
             buf[o++] = (byte)(((int)z.kind & 0x0f) | (z.runner ? 0x10 : 0) | (z.rising ? 0x20 : 0));
             F32(buf, ref o, z.pos.x);
             F32(buf, ref o, z.pos.z);
-            buf[o++] = (byte)Mathf.RoundToInt(Mathf.Repeat(z.yaw, 360f) / 360f * 255f);
+            buf[o++] = Yaw(z.yaw);
             buf[o++] = (byte)Mathf.Clamp(Mathf.RoundToInt(z.gait * 100f), 0, 255);
             buf[o++] = (byte)Mathf.Clamp(Mathf.RoundToInt(z.hp01 * 255f), 0, 255);
             U16(buf, ref o, (ushort)Mathf.Clamp(Mathf.RoundToInt(z.maxHp), 0, ushort.MaxValue));
+            buf[o++] = z.act;
+            buf[o++] = z.aux;
+        }
+        buf[o++] = (byte)(boss.HasValue ? 1 : 0);
+        if (boss.HasValue)
+        {
+            var b = boss.Value;
+            U16(buf, ref o, b.id);
+            buf[o++] = b.phase;
+            U16(buf, ref o, (ushort)Mathf.Clamp(Mathf.RoundToInt(b.phaseT * 100f), 0, ushort.MaxValue));
+            buf[o++] = Yaw(b.chargeYaw);
+            buf[o++] = (byte)Mathf.Clamp(Mathf.RoundToInt(b.chargeLen * 5f), 0, 255);
+            buf[o++] = (byte)Mathf.Clamp(Mathf.RoundToInt(b.windTime * 50f), 0, 255);
+            F32(buf, ref o, b.leapTo.x); F32(buf, ref o, b.leapTo.z);
+            F32(buf, ref o, b.shockPos.x); F32(buf, ref o, b.shockPos.z);
+            buf[o++] = (byte)Mathf.Clamp(Mathf.RoundToInt(b.shockT * 50f), 0, 255);
+            buf[o++] = (byte)(b.enraged ? 1 : 0);
         }
         return o;
     }
 
+    public static int Read(byte[] buf, int len, out WaveNetState w, ref ZombieNetState[] zs) => Read(buf, len, out w, ref zs, out _);
+
     /// <summary>Reads into <paramref name="zs"/> (grown if needed); returns the zombie count, -1 on a malformed buffer.</summary>
-    public static int Read(byte[] buf, int len, out WaveNetState w, ref ZombieNetState[] zs)
+    public static int Read(byte[] buf, int len, out WaveNetState w, ref ZombieNetState[] zs, out BossNetState? boss)
     {
         w = default;
+        boss = null;
         if (len < HeaderBytes) return -1;
         int o = 0;
         w.wave = R16(buf, ref o);
         w.inBreak = buf[o++] != 0;
         w.timeLeft = R16(buf, ref o) / 10f;
         int count = R16(buf, ref o);
-        if (len < Size(count)) return -1;
+        if (len < HeaderBytes + count * ZombieBytes + 1) return -1;
         if (zs == null || zs.Length < count) zs = new ZombieNetState[Mathf.Max(count, 16)];
         for (int i = 0; i < count; i++)
         {
@@ -80,10 +122,33 @@ public static class ZombieSnapshot
             z.gait = buf[o++] / 100f;
             z.hp01 = buf[o++] / 255f;
             z.maxHp = R16(buf, ref o);
+            z.act = buf[o++];
+            z.aux = buf[o++];
             zs[i] = z;
+        }
+        bool hasBoss = buf[o++] != 0;
+        if (hasBoss)
+        {
+            if (len < o + BossBytes - 1) return -1;
+            BossNetState b;
+            b.id = R16(buf, ref o);
+            b.phase = buf[o++];
+            b.phaseT = R16(buf, ref o) / 100f;
+            b.chargeYaw = buf[o++] / 255f * 360f;
+            b.chargeLen = buf[o++] / 5f;
+            b.windTime = buf[o++] / 50f;
+            float lx = RF32(buf, ref o), lz = RF32(buf, ref o);
+            float sx = RF32(buf, ref o), sz = RF32(buf, ref o);
+            b.leapTo = new Vector3(lx, 0f, lz);
+            b.shockPos = new Vector3(sx, 0f, sz);
+            b.shockT = buf[o++] / 50f;
+            b.enraged = buf[o++] != 0;
+            boss = b;
         }
         return count;
     }
+
+    static byte Yaw(float deg) => (byte)Mathf.RoundToInt(Mathf.Repeat(deg, 360f) / 360f * 255f);
 
     static void U16(byte[] b, ref int o, ushort v) { b[o++] = (byte)v; b[o++] = (byte)(v >> 8); }
     static ushort R16(byte[] b, ref int o) { ushort v = (ushort)(b[o] | (b[o + 1] << 8)); o += 2; return v; }

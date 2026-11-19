@@ -11,13 +11,14 @@ public class Bullet : MonoBehaviour
     Vector3 vel;
     Vector3 castFrom;
     float life, damage, travelled;
-    bool crit, first;
+    bool crit, first, cosmetic;
     int pierceLeft;
     Pool<Bullet> pool;
 
     public void Launch(Vector3 pos, Vector3 castOrigin, Vector3 dir, float speed, float dmg, bool isCrit, Pool<Bullet> p,
-        float lifetime = 0.6f, int pierce = 0)
+        float lifetime = 0.6f, int pierce = 0, bool cosmeticOnly = false)
     {
+        cosmetic = cosmeticOnly;
         pierceLeft = pierce;
         transform.SetPositionAndRotation(pos, Quaternion.LookRotation(dir));
         // First cast starts from the shooter so zombies hugging the muzzle still get hit.
@@ -44,6 +45,13 @@ public class Bullet : MonoBehaviour
             Physics.SphereCast(from, Radius, seg / dist, out var hit, dist, GameLayers.BulletMask, QueryTriggerInteraction.Ignore))
         {
             Vector3 dir = vel.normalized;
+            if (cosmetic)
+            {
+                // A teammate's tracer: stops where it hits, no damage here.
+                if (!hit.collider.TryGetComponent(out Zombie _) && Fx.I) Fx.I.Spark(hit.point, hit.normal);
+                pool.Release(this);
+                return;
+            }
             if (hit.collider.TryGetComponent(out Zombie z))
             {
                 // Pierce: keep flying past a zombie we actually damaged (a shield stops the bullet).

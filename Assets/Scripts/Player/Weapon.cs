@@ -230,6 +230,13 @@ public class Weapon : MonoBehaviour
         pool.Get().Launch(start, castFrom, dir, speed, dmg, crit, pool, life, pierceCount);
     }
 
+    /// <summary>Co-op: a teammate's shot — tracer only (their game reports the hits).</summary>
+    public void SpawnCosmetic(Vector3 start, Vector3 dir, float speed, float life)
+    {
+        if (pool == null) return;
+        pool.Get().Launch(start, start, dir, speed, 0f, false, pool, life, 0, true);
+    }
+
     Vector3 ScreenToGroundDir(Vector2 screen, Vector3 from)
     {
         if (!cam) cam = Camera.main;

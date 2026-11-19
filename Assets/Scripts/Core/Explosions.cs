@@ -3,8 +3,10 @@ using UnityEngine;
 
 /// <summary>
 /// Area damage shared by bomb zombies, explosive barrels, grenades and the kill-explosion card:
-/// hurts zombies (explosions ignore shields) and the player (falloff + knockback), chains barrels,
-/// and drives the big feedback (particles, sound + music duck + haptic via the sound bank, shake, hitstop).
+/// hurts zombies (explosions ignore shields) and every soldier of the squad (falloff + knockback; co-op teammates get it
+/// over the network), chains barrels, and drives the big feedback (particles, sound + music duck + haptic via the sound
+/// bank, shake, hitstop). Co-op: the host's blasts are replayed on the clients by <see cref="Visual"/> (no damage there);
+/// a client's own blasts (cards) only report their zombie hits to the host.
 /// </summary>
 public static class Explosions
 {
@@ -14,6 +16,21 @@ public static class Explosions
 
     /// <summary>Raised for every explosion (position, radius) — barrels listen to chain.</summary>
     public static event System.Action<Vector3, float> OnExplosion;
+    /// <summary>Host (co-op): a blast happened — sent to the clients to show.</summary>
+    public static event System.Action<Vector3, float, SfxId, float, bool> Broadcast;
+
+    /// <summary>Co-op client: the host's blast — particles, sound, shake only.</summary>
+    public static void Visual(Vector3 pos, float radius, SfxId sfx, float shake, bool big)
+    {
+        pos.y = 0f;
+        if (Fx.I) Fx.I.Explosion(pos, radius, big);
+        GameAudio.Play(sfx, pos);
+        var gm = GameManager.I;
+        if (!gm || !gm.player) return;
+        // Shake by distance: a far blast is a rumble.
+        Vector3 d = gm.player.transform.position - pos; d.y = 0f;
+        gm.Shake(shake * Mathf.Clamp01(1.2f - d.magnitude / 30f));
+    }
 
     public static void Explode(Vector3 pos, float radius, float zombieDamage, float playerDamage, SfxId sfx,
         float shake = 0.8f, Zombie ignore = null, bool big = true)
@@ -54,17 +71,25 @@ public static class Explosions
             depth--;
         }
 
-        var p = gm ? gm.player : null;
-        if (p && !p.IsDead && playerDamage > 0f)
+        if (playerDamage > 0f && !CoopNet.IsClient)
         {
-            Vector3 d = p.transform.position - pos; d.y = 0f;
-            float m = d.magnitude;
-            if (m < radius)
+            if (Squad.Count > 0) Squad.HitArea(pos, radius, playerDamage, 0.6f, 14f, true, false, Vector3.forward);
+            else
             {
-                float k = 1f - 0.6f * Mathf.Clamp01(m / radius);
-                p.TakeDamage(playerDamage * k, m > 0.05f ? d / m : Vector3.forward, 14f * k);
+                var p = gm ? gm.player : null;
+                if (p && !p.IsDead)
+                {
+                    Vector3 d = p.transform.position - pos; d.y = 0f;
+                    float m = d.magnitude;
+                    if (m < radius)
+                    {
+                        float k = 1f - 0.6f * Mathf.Clamp01(m / radius);
+                        p.TakeDamage(playerDamage * k, m > 0.05f ? d / m : Vector3.forward, 14f * k);
+                    }
+                }
             }
         }
+        if (!CoopNet.IsClient) Broadcast?.Invoke(pos, radius, sfx, shake, big);
         OnExplosion?.Invoke(pos, radius);
     }
 }

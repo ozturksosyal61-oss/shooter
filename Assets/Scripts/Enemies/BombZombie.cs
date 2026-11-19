@@ -34,8 +34,25 @@ public class BombZombie : Zombie
 
     protected override float CurrentSpeed => curSpeed;
 
+    // ---- co-op: the clients' puppets swell with the host's bomb (the blast itself comes as an explosion event)
+    public override byte NetAct => (byte)(phase == Phase.Swelling ? 1 : 0);
+
+    protected override void ApplyNetAct(byte act, byte aux)
+    {
+        bool swell = act == 1;
+        if (swell && phase != Phase.Swelling) StartSwell();
+        else if (!swell && phase == Phase.Swelling) { phase = Phase.Approach; model.localScale = modelScale; }
+    }
+
+    protected override bool PuppetKilled(Vector3 dir)
+    {
+        if (Fx.I) Fx.I.Death(transform.position + Vector3.up * 0.9f, Vector3.up);
+        return true;
+    }
+
     protected override void UpdateBehaviour(float dt)
     {
+        var who = PickSoldier(dt);
         Vector3 dir = ToPlayer(out float dist);
         if (phase == Phase.Approach)
         {
@@ -44,12 +61,11 @@ public class BombZombie : Zombie
             gait = run ? 2f : 1f;
             Chase(dt, curSpeed, true);
             Moan(dt, dist);
-            if (dist < triggerDistance && !GameManager.I.player.IsDead) StartSwell();
+            if (dist < triggerDistance && who && !who.IsDead) StartSwell();
             return;
         }
 
         // Swelling: stand still (still pushed by knockback), puff up, blink, then burst.
-        phaseT += dt;
         curSpeed = 0f;
         gait = 0f;
         Move(dt, Vector3.zero, 0f);
@@ -69,6 +85,7 @@ public class BombZombie : Zombie
     {
         base.Animate(dt);
         if (phase != Phase.Swelling) return;
+        phaseT += dt;
         float k = Mathf.Clamp01(phaseT / swellTime);
         float wobble = 1f + 0.06f * Mathf.Sin(phaseT * (14f + 30f * k));
         float s = Mathf.Lerp(1f, 1.4f, k * k) * wobble;

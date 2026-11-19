@@ -87,7 +87,11 @@ public class ZombieSpawner : MonoBehaviour
 
         for (int i = 0; i < burst && Zombie.Active.Count < maxAlive; i++)
         {
-            if (!TryFindSpawnPoint(player.position, out var pos)) break;
+            Vector3 pos;
+            // Co-op: a share of the zombies comes for the teammates (around them, out of their sight).
+            var mate = Squad.Count > 1 ? RandomTeammate() : null;
+            if (mate) { if (!TryFindSpawnAround(mate.Position, out pos)) continue; }
+            else if (!TryFindSpawnPoint(player.position, out pos)) break;
             if (Random.value < wp.specialChance && TrySpawnSpecial(PickSpecial(wp), pos, wp) != null) continue;
             bool runner = Random.value < wp.runnerChance;
             float speed = (runner ? Random.Range(runnerSpeed.x, runnerSpeed.y) : Random.Range(walkerSpeed.x, walkerSpeed.y)) * wp.speedMultiplier;
@@ -100,7 +104,8 @@ public class ZombieSpawner : MonoBehaviour
     public Zombie SpawnPuppet(ZombieNetState s)
     {
         Pool<Zombie> p = s.kind == ZombieKind.Shield ? shieldPool : s.kind == ZombieKind.Bomb ? bombPool
-            : s.kind == ZombieKind.Tongue ? tonguePool : s.kind == ZombieKind.Boss ? bossPool : pool;
+            : s.kind == ZombieKind.Tongue ? tonguePool : pool;
+        if (s.kind == ZombieKind.Boss) p = s.aux < bossPools.Length && bossPools[s.aux] != null ? bossPools[s.aux] : bossPool;
         if (p == null) p = pool;
         var z = p.Get();
         z.SpawnPuppet(s, p);
@@ -173,6 +178,39 @@ public class ZombieSpawner : MonoBehaviour
             if (d.sqrMagnitude > max && Squad.NearestSqr(z.transform.position, d.sqrMagnitude) > max) z.Despawn();
         }
     }
+
+    /// <summary>Co-op: a standing teammate (not the host's soldier) with probability (n−1)/n, otherwise null.</summary>
+    SquadMember RandomTeammate()
+    {
+        int n = Squad.Count;
+        if (Random.value < 1f / n) return null;
+        for (int tries = 0; tries < 4; tries++)
+        {
+            var m = Squad.Members[Random.Range(0, n)];
+            if (!m.IsLocal && !m.IsDead) return m;
+        }
+        return null;
+    }
+
+    /// <summary>Co-op: a free spot on a ring around a teammate (their camera is not ours), away from every soldier.</summary>
+    public bool TryFindSpawnAround(Vector3 center, out Vector3 pos)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            float a = Random.value * Mathf.PI * 2f;
+            Vector3 p = center + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * Random.Range(teammateSpawnRadius.x, teammateSpawnRadius.y);
+            p.y = 0f;
+            if (Physics.CheckSphere(p + Vector3.up * 0.8f, 0.6f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) continue;
+            if (Squad.NearestSqr(p, 999f) < teammateSpawnRadius.x * teammateSpawnRadius.x * 0.8f) continue;
+            pos = p;
+            return true;
+        }
+        pos = default;
+        return false;
+    }
+
+    [Tooltip("Co-op: spawn ring around a teammate (m).")]
+    public Vector2 teammateSpawnRadius = new Vector2(17f, 22f);
 
     /// <summary>Samples points on a rectangle slightly larger than the viewport and projects them to the ground.</summary>
     public bool TryFindSpawnPoint(Vector3 playerPos, out Vector3 best)

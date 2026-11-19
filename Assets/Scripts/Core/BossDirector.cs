@@ -6,6 +6,8 @@ using UnityEngine;
 /// wave banner, the camera swings over for a short intro, ordinary spawning thins out and the wave does not end
 /// while the boss lives. Killing it pays a big bonus + XP, slow motion, and a guaranteed-epic card pick.
 /// Owns the boss state; HUD / music / camera only listen to the events.
+/// Co-op: the host runs it; on clients it is <see cref="Remote"/> — the boss puppet arrives from the snapshot
+/// (<see cref="RemoteSpawned"/>) and every player gets the XP + epic card when the team kills it (score once, host).
 /// </summary>
 public class BossDirector : MonoBehaviour
 {
@@ -35,6 +37,9 @@ public class BossDirector : MonoBehaviour
     public float SpawnIntervalMul => HoldsWave ? BossRules.SpawnIntervalMul : 1f;
     public float AliveMul => HoldsWave ? BossRules.AliveMul : 1f;
 
+    /// <summary>Co-op client: no spawning of its own.</summary>
+    public bool Remote { get; set; }
+
     public event Action<Zombie> BossSpawned;
     public event Action<Zombie> BossDefeated;
 
@@ -50,7 +55,7 @@ public class BossDirector : MonoBehaviour
     {
         if (subscribed || !WaveDirector.I || !GameManager.I) return;
         WaveDirector.I.WaveStarted += OnWaveStarted;
-        GameManager.I.Killed += OnKilled;
+        GameManager.I.TeamKilled += OnKilled;
         subscribed = true;
     }
 
@@ -58,11 +63,12 @@ public class BossDirector : MonoBehaviour
     {
         if (!subscribed) return;
         if (WaveDirector.I) WaveDirector.I.WaveStarted -= OnWaveStarted;
-        if (GameManager.I) GameManager.I.Killed -= OnKilled;
+        if (GameManager.I) GameManager.I.TeamKilled -= OnKilled;
     }
 
     void OnWaveStarted(int wave)
     {
+        if (Remote) return;
         if (!ModeRules.IsBossWave(GameMode.Current, wave) || BossAlive) return;
         pendingWave = wave;
         pendingT = spawnDelay;
@@ -71,7 +77,7 @@ public class BossDirector : MonoBehaviour
     /// <summary>Campaign objective: the boss comes now (after the usual delay), holding the current wave.</summary>
     public void Summon(BossType? type = null)
     {
-        if (BossAlive || pendingWave > 0) return;
+        if (Remote || BossAlive || pendingWave > 0) return;
         pendingType = type;
         pendingWave = Mathf.Max(1, WaveDirector.I ? WaveDirector.I.Wave : 1);
         pendingT = spawnDelay;
@@ -101,7 +107,7 @@ public class BossDirector : MonoBehaviour
         pendingWave = 0;
         pendingType = null;
         var gm = GameManager.I;
-        if (!spawner || !gm) return null;
+        if (!spawner || !gm || Remote) return null;
         Vector3 p = gm.player.transform.position;
         Vector3 pos = at ?? FindSpot(p);
         var wp = Difficulty.ForWave(Mathf.Max(1, wave));
@@ -114,9 +120,22 @@ public class BossDirector : MonoBehaviour
         spawnTime = gm.GameTime;
         if (gm.cameraRig) gm.cameraRig.Focus(Boss.transform, introSeconds);
         if (MusicDirector.I) MusicDirector.I.SetBoss(true);
-        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio." + BossRules.NameKey(CurrentType));
+        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio." + BossRules.NameKey(CurrentType)); // co-op: the radio goes to everyone
         BossSpawned?.Invoke(Boss);
         return Boss;
+    }
+
+    /// <summary>Co-op client: the host's boss appeared (puppet) — intro, music, HUD like a local spawn.</summary>
+    public void RemoteSpawned(Zombie boss, BossType type)
+    {
+        var gm = GameManager.I;
+        Boss = boss;
+        CurrentType = type;
+        BossesSpawned++;
+        spawnTime = gm ? gm.GameTime : 0f;
+        if (gm && gm.cameraRig) gm.cameraRig.Focus(boss.transform, introSeconds);
+        if (MusicDirector.I) MusicDirector.I.SetBoss(true);
+        BossSpawned?.Invoke(boss);
     }
 
     Vector3 FindSpot(Vector3 player)
@@ -140,13 +159,14 @@ public class BossDirector : MonoBehaviour
         BossesDefeated++;
         LastFightTime = gm.GameTime - spawnTime;
         LastBonus = score;
-        gm.AddBonus(score);
+        // Co-op: the bonus counts once for the team score (host); every player gets the XP + card.
+        if (!Remote) gm.AddBonus(score);
         if (Progression.I) Progression.I.AddXp(xp);
         gm.SlowMo(0.25f, 1.4f);
         gm.Shake(1f);
         if (MusicDirector.I) { MusicDirector.I.SetBoss(false); MusicDirector.I.Duck(0.3f, 1.2f); }
         GameAudio.Play(SfxId.ObjectiveBig, gm.player.transform.position);
-        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio.boss_down", BossRules.NameKey(CurrentType));
+        if (ObjectiveDirector.I && !Remote) ObjectiveDirector.I.Say("radio.boss_down", BossRules.NameKey(CurrentType));
         pickT = rewardPickDelay;
         BossDefeated?.Invoke(z);
     }

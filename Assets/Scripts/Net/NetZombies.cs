@@ -4,11 +4,12 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// Co-op zombie + wave replication (Game scene). Host: every 1/15 s packs all active zombies and the wave state
-/// (<see cref="ZombieSnapshot"/>) and sends it to the clients; deaths go out at once on a reliable channel so clients
-/// play the death. Client: its own spawner / waves / objectives / boss are off; zombies are puppets of the host's
-/// (<see cref="Zombie.Puppet"/>), created / moved / removed from the snapshots. A client's bullet hits are forwarded
-/// to the host (<see cref="NetPlayer.SendHit"/>) which owns every zombie's health.
+/// Co-op zombie + wave replication (Game scene). Host: every 1/15 s packs all active zombies (with their special
+/// phase), the wave state and the boss's fight state (<see cref="ZombieSnapshot"/>) and sends it to the clients;
+/// deaths go out at once on a reliable channel with the kill credit (who landed the blow gets the score / combo / XP
+/// on their own game). Client: its own spawner / waves are off, objectives / boss run in remote mode; zombies are
+/// puppets of the host's (<see cref="Zombie.Puppet"/>), created / moved / removed from the snapshots. A client's hits
+/// are forwarded to the host (<see cref="NetPlayer.SendHit"/>) which owns every zombie's health.
 /// </summary>
 public class NetZombies : MonoBehaviour
 {
@@ -25,6 +26,20 @@ public class NetZombies : MonoBehaviour
     public int SnapshotsSent { get; private set; }
     public int SnapshotsReceived { get; private set; }
     public int Puppets => puppets.Count;
+
+    /// <summary>This game's network client id (0 = host, also in single player / tests).</summary>
+    public static ulong LocalClientId
+    {
+        get
+        {
+            var nm = NetworkManager.Singleton;
+            if (I && I.IsClient && I.ForcedLocalId.HasValue) return I.ForcedLocalId.Value;
+            return nm && nm.IsListening ? nm.LocalClientId : 0;
+        }
+    }
+
+    /// <summary>Tests: the client id this in-process "client" pretends to have.</summary>
+    public ulong? ForcedLocalId { get; set; }
 
     ushort nextId = 1;
     float sendT;
@@ -44,11 +59,12 @@ public class NetZombies : MonoBehaviour
         var nm = NetworkManager.Singleton;
         if (!nm || !nm.IsListening) { enabled = false; return; }
         IsHost = nm.IsServer;
+        ModeRules.CoopPlayers = Mathf.Max(1, IsHost ? nm.ConnectedClientsIds.Count : NetPlayer.All.Count);
         if (!IsHost) BecomeClient();
         nm.CustomMessagingManager.RegisterNamedMessageHandler(SnapMsg, OnSnapshot);
         nm.CustomMessagingManager.RegisterNamedMessageHandler(KillMsg, OnKill);
         registered = true;
-        if (IsHost && GameManager.I) GameManager.I.Killed += OnHostKill;
+        if (IsHost && GameManager.I) GameManager.I.TeamKilled += OnHostKill;
     }
 
     void OnDestroy()
@@ -59,7 +75,7 @@ public class NetZombies : MonoBehaviour
             nm.CustomMessagingManager.UnregisterNamedMessageHandler(SnapMsg);
             nm.CustomMessagingManager.UnregisterNamedMessageHandler(KillMsg);
         }
-        if (GameManager.I) GameManager.I.Killed -= OnHostKill;
+        if (GameManager.I) GameManager.I.TeamKilled -= OnHostKill;
         if (I == this) I = null;
     }
 
@@ -69,8 +85,8 @@ public class NetZombies : MonoBehaviour
         IsClient = true;
         if (spawner) spawner.enabled = false;
         if (WaveDirector.I) WaveDirector.I.Remote = true;
-        if (BossDirector.I) BossDirector.I.enabled = false;
-        if (ObjectiveDirector.I) ObjectiveDirector.I.enabled = false;
+        if (BossDirector.I) BossDirector.I.Remote = true;
+        if (ObjectiveDirector.I) ObjectiveDirector.I.Remote = true;
         for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
     }
 
@@ -117,7 +133,10 @@ public class NetZombies : MonoBehaviour
         if (buf.Length < size) buf = new byte[size + 512];
         var wd = WaveDirector.I;
         var w = new WaveNetState { wave = wd ? wd.Wave : 0, inBreak = wd && wd.InBreak, timeLeft = wd ? wd.PhaseTimeLeft : 0f };
-        return ZombieSnapshot.Write(buf, w, states, n);
+        BossNetState? boss = null;
+        var bd = BossDirector.I;
+        if (bd && bd.BossAlive && bd.Boss is ButcherZombie b && b.NetId != 0) boss = b.ToBossNetState();
+        return ZombieSnapshot.Write(buf, w, states, n, boss);
     }
 
     public byte[] Buffer => buf;
@@ -128,20 +147,31 @@ public class NetZombies : MonoBehaviour
         byId.Remove(z.NetId);
         var nm = NetworkManager.Singleton;
         if (!nm || !nm.IsListening || nm.ConnectedClientsIds.Count < 2) return;
-        using (var w = new FastBufferWriter(32, Allocator.Temp))
+        using (var w = new FastBufferWriter(48, Allocator.Temp))
         {
             w.WriteValueSafe(z.NetId);
             w.WriteValueSafe(z.LastHitDir);
+            w.WriteValueSafe(z.LastHitBy);
             nm.CustomMessagingManager.SendNamedMessageToAll(KillMsg, w, NetworkDelivery.ReliableSequenced);
         }
     }
 
-    /// <summary>Host: a client's bullet hit zombie <paramref name="id"/>.</summary>
-    public void ApplyRemoteHit(ushort id, float amount, bool crit, Vector3 dir, Vector3 point)
+    /// <summary>Host: a teammate's bullet / blast / tongue shot hit zombie <paramref name="id"/>; they get the credit.</summary>
+    public void ApplyRemoteHit(ushort id, float amount, bool crit, Vector3 dir, Vector3 point, byte kind, ulong sender)
     {
         if (!byId.TryGetValue(id, out var z) || !z || z.NetId != id || !z.Damageable) return;
-        z.TakeHit(amount, crit, dir, point);
+        if ((kind & NetPlayer.HitTongue) != 0)
+        {
+            if (z is TongueZombie t) t.HitTongue(amount, crit, dir, point);
+            return;
+        }
+        z.PendingHitter = sender;
+        z.TakeHit(amount, crit, dir, point, (kind & NetPlayer.HitExplosive) != 0);
+        z.PendingHitter = null;
     }
+
+    /// <summary>Host zombie by network id (null when gone).</summary>
+    public Zombie HostById(ushort id) => byId.TryGetValue(id, out var z) && z && z.NetId == id ? z : null;
 
     // ---------------------------------------------------------------- client
     void OnSnapshot(ulong sender, FastBufferReader r)
@@ -156,7 +186,7 @@ public class NetZombies : MonoBehaviour
 
     public void ApplySnapshot(byte[] data, int len)
     {
-        int n = ZombieSnapshot.Read(data, len, out var w, ref states);
+        int n = ZombieSnapshot.Read(data, len, out var w, ref states, out var boss);
         if (n < 0) return;
         SnapshotsReceived++;
         if (WaveDirector.I) WaveDirector.I.ApplyRemote(w.wave, w.inBreak, w.timeLeft);
@@ -170,9 +200,12 @@ public class NetZombies : MonoBehaviour
                 z = spawner ? spawner.SpawnPuppet(s) : null;
                 if (!z) continue;
                 puppets[s.id] = z;
+                if (s.kind == ZombieKind.Boss && BossDirector.I) BossDirector.I.RemoteSpawned(z, (BossType)s.aux);
             }
             z.SetNetState(s);
         }
+        if (boss.HasValue && puppets.TryGetValue(boss.Value.id, out var bz) && bz is ButcherZombie bb && bb.Puppet)
+            bb.ApplyBossState(boss.Value);
         gone.Clear();
         foreach (var kv in puppets) if (!seen.Contains(kv.Key)) gone.Add(kv.Key);
         foreach (var id in gone)
@@ -189,19 +222,29 @@ public class NetZombies : MonoBehaviour
         if (IsHost) return;
         r.ReadValueSafe(out ushort id);
         r.ReadValueSafe(out Vector3 dir);
-        ApplyKill(id, dir);
+        r.ReadValueSafe(out ulong killer);
+        ApplyKill(id, dir, killer);
     }
 
-    public void ApplyKill(ushort id, Vector3 dir)
+    public void ApplyKill(ushort id, Vector3 dir) => ApplyKill(id, dir, ulong.MaxValue);
+
+    /// <summary>Client: the host says zombie <paramref name="id"/> died; <paramref name="killer"/> gets the score / XP.</summary>
+    public void ApplyKill(ushort id, Vector3 dir, ulong killer)
     {
         if (!puppets.TryGetValue(id, out var z)) return;
         puppets.Remove(id);
-        if (z && z.Puppet && z.NetId == id) z.PuppetDie(dir);
+        if (!z || !z.Puppet || z.NetId != id) return;
+        var gm = GameManager.I;
+        if (gm) gm.RemoteKill(z, killer == LocalClientId);
+        z.PuppetDie(dir);
     }
 
-    /// <summary>Client: my bullet hit a puppet → tell the host (it owns the damage).</summary>
-    public static void ReportHit(Zombie z, float amount, bool crit, Vector3 dir, Vector3 point)
+    /// <summary>Client puppet by network id (tongue grabs, tests).</summary>
+    public Zombie PuppetById(ushort id) => puppets.TryGetValue(id, out var z) && z && z.NetId == id && z.Puppet ? z : null;
+
+    /// <summary>Client: my bullet / blast hit a puppet → tell the host (it owns the damage).</summary>
+    public static void ReportHit(Zombie z, float amount, bool crit, Vector3 dir, Vector3 point, byte kind = 0)
     {
-        if (NetPlayer.Local) NetPlayer.Local.SendHit(z.NetId, amount, crit, dir, point);
+        if (NetPlayer.Local) NetPlayer.Local.SendHit(z.NetId, amount, crit, dir, point, kind);
     }
 }

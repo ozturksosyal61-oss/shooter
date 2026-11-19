@@ -172,6 +172,9 @@ public static partial class GameSceneBuilder
         hud.reloadRoot = reloadRoot.gameObject; hud.reloadBar = reloadBar.rectTransform; hud.reloadBarImage = reloadBar;
         hud.reloadSweetSpot = sweet.rectTransform; hud.reloadLabel = reloadLabel;
 
+        // Co-op: teammates, down / revive, markers, toasts.
+        BuildCoopHud(root);
+
         // Card picker (legacy layout, above the HUD).
         var picker = BuildCardPicker(legacy, t);
 
@@ -265,6 +268,27 @@ public static partial class GameSceneBuilder
             rs.questStates[i] = KTxt("State", r, F.Bold, 15f, UiKit.Success, TextAlignmentOptions.Right); Margins(rs.questStates[i], 300f, 0f, 0f, 0f);
             rs.questRows[i] = r.gameObject;
         }
+        // Quest list and the co-op team table share the space under the earnings.
+        var qbox = Rect("QuestBox", panel.transform); Fill(qbox);
+        ql.transform.SetParent(qbox, false);
+        foreach (var qr in rs.questRows) qr.transform.SetParent(qbox, false);
+        rs.questBox = qbox.gameObject;
+        var tbox = Rect("TeamBox", panel.transform); Fill(tbox);
+        var tl = KCaps("TeamLabel", tbox, 13f, UiKit.Hazard, "coop.team"); In(tl, 30f, 168f, 200f, 18f);
+        rs.teamTotal = KTxt("Total", tbox, F.Display, 16f, UiKit.Gold, TextAlignmentOptions.Right); Prop(rs.teamTotal, PW, 230f, 534f, 164f, 24f);
+        rs.teamRows = new GameObject[4]; rs.teamNames = new TMP_Text[4]; rs.teamKills = new TMP_Text[4]; rs.teamScores = new TMP_Text[4];
+        for (int i = 0; i < 4; i++)
+        {
+            float y = 196f + i * 46f;
+            var r = Rect("Mate" + i, tbox); Prop(r, PW, 30f, 534f, y, 36f);
+            var bg = KImg("Bg", r, kit.r12, UiKit.Hex(0x141912), true, 8f); Fill(bg);
+            rs.teamNames[i] = KTxt("Name", r, F.Bold, 17f, UiKit.Text); Margins(rs.teamNames[i], 14f, 0f, 300f, 0f);
+            rs.teamKills[i] = KTxt("Kills", r, F.Semi, 15f, UiKit.Secondary, TextAlignmentOptions.Center); Margins(rs.teamKills[i], 170f, 0f, 150f, 0f);
+            rs.teamScores[i] = KTxt("Score", r, F.Display, 17f, UiKit.Text, TextAlignmentOptions.Right); Margins(rs.teamScores[i], 300f, 0f, 14f, 0f);
+            rs.teamRows[i] = r.gameObject;
+        }
+        rs.teamBox = tbox.gameObject;
+        tbox.gameObject.SetActive(false);
 
         var menu = KButton("Menu", body, UiStyle.Dark, "over.menu", 122f, 72f, 19f, null, false, 20); Prop(menu, W, 604f, 726f, 442f, 72f);
         var weapon = KButton("Weapon", body, UiStyle.Dark, "over.weapon", 150f, 72f, 19f, null, false, 20); Prop(weapon, W, 738f, 889f, 442f, 72f);

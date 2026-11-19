@@ -37,14 +37,81 @@ public class TongueZombie : Zombie
     Phase phase;
     float phaseT, cd, breakMeter, curSpeed, tongueLen;
     Vector3 tip, lockDir;
-    PlayerController held;
+    SquadMember held;
+    SquadMember aimAt;
 
     protected override SfxId SpawnSfx => SfxId.TongueSpawn;
     protected override float CurrentSpeed => curSpeed;
     public override Vector3 AimPoint => transform.position + Vector3.up * 1.4f;
 
     Vector3 Mouth => transform.position + Vector3.up * mouthHeight + transform.forward * 0.3f;
-    static Vector3 Chest(PlayerController p) => p.transform.position + Vector3.up * 1.1f;
+    static Vector3 Chest(SquadMember p) => p.Position + Vector3.up * 1.1f;
+    static Vector3 Chest(Transform t) => t.position + Vector3.up * 1.1f;
+
+    // ---- co-op: phase + target slot for the clients' puppets
+    public override byte NetAct => (byte)phase;
+    public override byte NetAux => SlotOf(phase == Phase.Grab ? held : aimAt);
+    byte shownAct = 255;
+    float puppetT;
+
+    protected override void ApplyNetAct(byte act, byte aux)
+    {
+        var ph = (Phase)act;
+        var who = SoldierOfSlot(aux);
+        if (act != shownAct)
+        {
+            shownAct = act;
+            puppetT = 0f;
+            phase = ph;
+            switch (ph)
+            {
+                case Phase.Aim: telegraphLine.enabled = true; tongueLine.enabled = false; animator.CrossFadeInFixedTime(ThrowState, 0.1f, 0); GameAudio.Play(SfxId.TongueWarn, transform.position); break;
+                case Phase.Flying: telegraphLine.enabled = false; tongueLine.enabled = true; tip = Mouth; tongueLen = 0f; GameAudio.Play(SfxId.TongueLash, transform.position); break;
+                case Phase.Grab: tongueLine.enabled = true; if (tongueHitbox) tongueHitbox.enabled = true; animator.CrossFadeInFixedTime(PullState, 0.12f, 0); if (who) GameAudio.Play(SfxId.TongueGrab, Chest(who)); break;
+                case Phase.Retract: telegraphLine.enabled = false; if (tongueHitbox) tongueHitbox.enabled = false; break;
+                case Phase.Stunned: HideTongue(); animator.CrossFadeInFixedTime(HitState, 0.05f, 0); break;
+                default: HideTongue(); animator.CrossFadeInFixedTime(LocoState, 0.2f, 0); break;
+            }
+        }
+        puppetTarget = who;
+    }
+
+    Transform puppetTarget;
+
+    /// <summary>Co-op client: draw the host's tongue from the replicated phase (every frame).</summary>
+    void PuppetVisuals(float dt)
+    {
+        puppetT += dt;
+        var who = puppetTarget;
+        switch (phase)
+        {
+            case Phase.Aim:
+                if (who) DrawTelegraph(Chest(who), puppetT);
+                break;
+            case Phase.Flying:
+                if (!who) break;
+                tongueLen += tongueSpeed * dt;
+                Vector3 to = Chest(who) - Mouth;
+                tip = Mouth + to.normalized * Mathf.Min(tongueLen, to.magnitude);
+                DrawTongue();
+                break;
+            case Phase.Grab:
+                if (who) { tip = Chest(who); DrawTongue(); }
+                break;
+            case Phase.Retract:
+                tongueLen = Mathf.MoveTowards((tip - Mouth).magnitude, 0f, retractSpeed * dt);
+                tip = Mouth + (tip - Mouth).normalized * tongueLen;
+                DrawTongue();
+                if (tongueLen <= 0.01f) HideTongue();
+                break;
+        }
+    }
+
+    protected override void Animate(float dt)
+    {
+        base.Animate(dt);
+        if (Puppet) PuppetVisuals(dt);
+    }
 
     protected override void OnSpawned()
     {
@@ -61,7 +128,9 @@ public class TongueZombie : Zombie
 
     protected override void UpdateBehaviour(float dt)
     {
-        var player = GameManager.I.player;
+        var player = phase == Phase.Grab && held ? held : PickSoldier(dt);
+        if (!player) return;
+        if (phase == Phase.Approach) aimAt = player;
         Vector3 dir = ToPlayer(out float dist);
         phaseT += dt;
         cd -= dt;
@@ -87,7 +156,7 @@ public class TongueZombie : Zombie
             }
             case Phase.Aim:
                 Stand(dt, dir);
-                DrawTelegraph(player);
+                DrawTelegraph(Chest(player), phaseT);
                 if (phaseT >= telegraphTime) Fire(player);
                 break;
             case Phase.Flying:
@@ -124,7 +193,7 @@ public class TongueZombie : Zombie
         Face(face, dt);
     }
 
-    bool HasLineOfSight(PlayerController p) =>
+    bool HasLineOfSight(SquadMember p) =>
         !Physics.Linecast(Mouth, Chest(p), GameLayers.BlockerMask, QueryTriggerInteraction.Ignore);
 
     void StartAim()
@@ -135,20 +204,20 @@ public class TongueZombie : Zombie
         GameAudio.Play(SfxId.TongueWarn, transform.position);
     }
 
-    void DrawTelegraph(PlayerController p)
+    void DrawTelegraph(Vector3 chest, float t)
     {
-        Vector3 a = Mouth, b = Chest(p);
+        Vector3 a = Mouth, b = chest;
         Vector3 d = b - a;
         // Show the full reach so it reads as a lane to step out of.
         b = a + d.normalized * Mathf.Min(maxLength, d.magnitude + 2f);
         telegraphLine.SetPosition(0, a);
         telegraphLine.SetPosition(1, b);
-        float pulse = 0.5f + 0.5f * Mathf.Sin(phaseT * 40f);
-        float w = Mathf.Lerp(0.05f, 0.14f, phaseT / telegraphTime) * (0.8f + 0.2f * pulse);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(t * 40f);
+        float w = Mathf.Lerp(0.05f, 0.14f, t / telegraphTime) * (0.8f + 0.2f * pulse);
         telegraphLine.startWidth = telegraphLine.endWidth = w;
     }
 
-    void Fire(PlayerController p)
+    void Fire(SquadMember p)
     {
         telegraphLine.enabled = false;
         lockDir = Chest(p) - Mouth;
@@ -160,7 +229,7 @@ public class TongueZombie : Zombie
         GameAudio.Play(SfxId.TongueLash, transform.position);
     }
 
-    void FlyTongue(float dt, PlayerController p)
+    void FlyTongue(float dt, SquadMember p)
     {
         Vector3 from = tip;
         tongueLen += tongueSpeed * dt;
@@ -188,7 +257,7 @@ public class TongueZombie : Zombie
         return Vector3.Distance(p, a + ab * t);
     }
 
-    void StartGrab(PlayerController p)
+    void StartGrab(SquadMember p)
     {
         SetPhase(Phase.Grab);
         held = p;
@@ -201,7 +270,7 @@ public class TongueZombie : Zombie
         DrawTongue();
     }
 
-    void HoldPlayer(float dt, PlayerController p, float dist, Vector3 dir)
+    void HoldPlayer(float dt, SquadMember p, float dist, Vector3 dir)
     {
         if (p.IsDead || held == null) { Snap(false); return; }
         tip = Chest(p);
@@ -214,6 +283,14 @@ public class TongueZombie : Zombie
     public void HitTongue(float amount, bool crit, Vector3 dir, Vector3 point)
     {
         if (phase != Phase.Grab) return;
+        if (Puppet)
+        {
+            // Co-op client: feedback here, the host snaps it.
+            if (Fx.I) Fx.I.Hit(point, dir);
+            GameAudio.Play(crit ? SfxId.Crit : SfxId.Hit, point);
+            NetZombies.ReportHit(this, amount, crit, dir, point, NetPlayer.HitTongue);
+            return;
+        }
         if (Fx.I) Fx.I.Hit(point, dir);
         if (DamageNumbers.I && crit) DamageNumbers.I.Show(point + Vector3.up * 0.3f, Mathf.RoundToInt(amount), true);
         GameAudio.Play(crit ? SfxId.Crit : SfxId.Hit, point);
@@ -290,11 +367,19 @@ public class TongueZombie : Zombie
         base.OnRemoved();
         ReleasePlayer();
         HideTongue();
+        shownAct = 255;
+        puppetTarget = null;
+        aimAt = null;
+        // Co-op client: a puppet holding the local soldier lets go when it leaves.
+        var gm = GameManager.I;
+        if (gm && gm.player && gm.player.Grabber == this) gm.player.ReleaseGrab(this);
     }
 
     protected override void OnDisable()
     {
         ReleasePlayer();
+        var gm = GameManager.I;
+        if (gm && gm.player && gm.player.Grabber == this) gm.player.ReleaseGrab(this);
         base.OnDisable();
     }
 }

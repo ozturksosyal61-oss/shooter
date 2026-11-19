@@ -10,13 +10,19 @@ public struct PlayerNetState : INetworkSerializable, IEquatable<PlayerNetState>
     public Vector3 move;      // world move input (0..1 magnitude)
     public float speed;
     public float hp01;
-    public byte flags;        // 1 firing · 2 reloading · 4 dead · 8 vaulting
+    public byte flags;        // 1 firing · 2 reloading · 4 dead (down or out) · 8 vaulting · 16 downed (revivable) · 32 grabbed
     public byte weapon, costume;
+    public int score;
+    public ushort kills;
+    public byte revive;       // 0..255 revive progress while downed
+    public byte bleed;        // 0..255 bleed-out time left while downed
 
     public bool Firing => (flags & 1) != 0;
     public bool Reloading => (flags & 2) != 0;
     public bool Dead => (flags & 4) != 0;
     public bool Vaulting => (flags & 8) != 0;
+    public bool Downed => (flags & 16) != 0;
+    public bool Grabbed => (flags & 32) != 0;
 
     public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
     {
@@ -28,10 +34,15 @@ public struct PlayerNetState : INetworkSerializable, IEquatable<PlayerNetState>
         s.SerializeValue(ref flags);
         s.SerializeValue(ref weapon);
         s.SerializeValue(ref costume);
+        s.SerializeValue(ref score);
+        s.SerializeValue(ref kills);
+        s.SerializeValue(ref revive);
+        s.SerializeValue(ref bleed);
     }
 
     public bool Equals(PlayerNetState o) =>
-        pos == o.pos && yaw == o.yaw && move == o.move && speed == o.speed && hp01 == o.hp01 && flags == o.flags && weapon == o.weapon && costume == o.costume;
+        pos == o.pos && yaw == o.yaw && move == o.move && speed == o.speed && hp01 == o.hp01 && flags == o.flags && weapon == o.weapon
+        && costume == o.costume && score == o.score && kills == o.kills && revive == o.revive && bleed == o.bleed;
 }
 
 /// <summary>
@@ -39,12 +50,23 @@ public struct PlayerNetState : INetworkSerializable, IEquatable<PlayerNetState>
 /// copy mirrors the local <see cref="PlayerController"/> into <see cref="State"/>; everyone else gets an avatar
 /// (the Player prefab with its controller / weapon / input stripped) driven by that state, registered as a
 /// <see cref="SquadMember"/> so the host's zombies chase it. Zombie hits on a teammate travel to their owner
-/// (<see cref="DamageRpc"/>); a client's bullet hits travel to the host (<see cref="HitRpc"/>), which owns all damage.
+/// (<see cref="DamageRpc"/>, also slows / burns / tongue grabs); a client's bullet hits travel to the host
+/// (<see cref="HitRpc"/>), which owns all damage. Teammates' shots show as cosmetic tracers. Score, kills and the
+/// downed / revive state ride on <see cref="State"/> (team score, team screen, revive markers).
 /// </summary>
 public class NetPlayer : NetworkBehaviour
 {
     public static NetPlayer Local { get; private set; }
     public static event Action<NetPlayer> AvatarCreated;
+    /// <summary>A teammate left (their NetPlayer despawned during the run).</summary>
+    public static event Action<NetPlayer> Left;
+    /// <summary>Every spawned network player, ordered by client id (slot 0 = host).</summary>
+    public static readonly System.Collections.Generic.List<NetPlayer> All = new System.Collections.Generic.List<NetPlayer>(4);
+
+    /// <summary>Stable slot (0 = host): name "OYUNCU n", tongue target byte.</summary>
+    public int Slot => All.IndexOf(this);
+
+    public static NetPlayer BySlot(int slot) => slot >= 0 && slot < All.Count ? All[slot] : null;
 
     [Tooltip("Player prefab: instantiated (stripped) as the teammate's avatar.")]
     public GameObject avatarPrefab;
@@ -74,12 +96,23 @@ public class NetPlayer : NetworkBehaviour
     {
         DontDestroyOnLoad(gameObject);
         if (IsOwner) Local = this;
+        if (!All.Contains(this)) All.Add(this);
+        All.Sort((a, b) => a.OwnerClientId.CompareTo(b.OwnerClientId));
     }
 
     public override void OnNetworkDespawn()
     {
+        if (!IsOwner && GameMode.IsCoop && GameManager.I) Left?.Invoke(this); // before the slot goes away (name)
         if (Local == this) Local = null;
+        All.Remove(this);
         if (avatar) Destroy(avatar.gameObject);
+    }
+
+    public override void OnDestroy()
+    {
+        All.Remove(this);
+        if (Local == this) Local = null;
+        base.OnDestroy();
     }
 
     void Update()
@@ -107,6 +140,10 @@ public class NetPlayer : NetworkBehaviour
         if (w && w.IsReloading) f |= 2;
         if (p.IsDead) f |= 4;
         if (p.IsVaulting) f |= 8;
+        if (p.IsGrabbed) f |= 32;
+        var team = CoopTeam.I;
+        if (team && team.Downed) f |= 16;
+        var gm = GameManager.I;
         var s = new PlayerNetState
         {
             pos = p.transform.position,
@@ -117,6 +154,10 @@ public class NetPlayer : NetworkBehaviour
             flags = f,
             weapon = (byte)(loadout ? loadout.Current : 0),
             costume = (byte)(loadout ? loadout.Costume : 0),
+            score = gm ? gm.Score : 0,
+            kills = (ushort)Mathf.Min(gm ? gm.Kills : 0, ushort.MaxValue),
+            revive = (byte)(team ? Mathf.RoundToInt(team.Revive01 * 255f) : 0),
+            bleed = (byte)(team ? Mathf.RoundToInt(team.Bleed01 * 255f) : 0),
         };
         if (!s.Equals(State.Value)) State.Value = s;
     }
@@ -143,13 +184,24 @@ public class NetPlayer : NetworkBehaviour
         if (avatarRig && !s.Dead)
         {
             avatarRig.Tick(dt, s.Vaulting ? Vector3.zero : s.move, s.Vaulting ? 0f : s.speed, s.Firing || s.Reloading, s.Vaulting);
-            if (s.Firing && Time.time >= flashUntil)
+            if (s.Firing && !s.Reloading && Time.time >= flashUntil)
             {
-                // Cosmetic fire: muzzle flash + recoil (C2: tracers).
-                flashUntil = Time.time + 0.1f;
+                // Cosmetic fire at the weapon's rate: muzzle flash, recoil, sound, tracers (damage comes as HitRpc).
+                var def = Economy.Weapon((WeaponId)Mathf.Clamp(s.weapon, 0, Economy.Weapons.Length - 1));
+                flashUntil = Time.time + 1f / Mathf.Max(1f, def.fireRate);
                 avatarRig.Kick();
                 var slot = CurrentSlot();
-                if (slot != null && Fx.I && slot.muzzle) Fx.I.Muzzle(slot.muzzle.position, avatar.forward);
+                Vector3 from = slot != null && slot.muzzle ? slot.muzzle.position : avatar.position + Vector3.up * 1.2f;
+                if (Fx.I) Fx.I.Muzzle(from, avatar.forward);
+                GameAudio.Play(def.sfx, from, 1f, 0.55f);
+                var w = GameManager.I.player ? GameManager.I.player.weapon : null;
+                if (w)
+                    for (int i = 0; i < Mathf.Max(1, def.pellets); i++)
+                    {
+                        float spread = def.pellets > 1 ? def.pelletSpread : def.spread;
+                        Vector3 dir = Quaternion.Euler(0f, UnityEngine.Random.Range(-spread, spread), 0f) * avatar.forward;
+                        w.SpawnCosmetic(from, dir, def.bulletSpeed, def.range);
+                    }
             }
         }
     }
@@ -233,26 +285,61 @@ public class NetPlayer : NetworkBehaviour
     }
 
     // ---------------------------------------------------------------- damage over the network
-    /// <summary>Host side: a zombie hit this teammate → their own game applies it.</summary>
-    public void SendDamage(float amount, Vector3 dir)
+    /// <summary>Host side: a zombie / boss / blast hit this teammate → their own game applies it.</summary>
+    public void SendDamage(float amount, Vector3 dir, float knock = 7f)
     {
         if (avatarFlash) avatarFlash.Flash(0.07f);
-        DamageRpc(amount, dir);
+        DamageRpc(amount, dir, knock);
     }
 
     [Rpc(SendTo.Owner)]
-    void DamageRpc(float amount, Vector3 dir)
+    void DamageRpc(float amount, Vector3 dir, float knock)
     {
         var gm = GameManager.I;
-        if (gm && gm.player) gm.player.TakeDamage(amount, dir);
+        if (gm && gm.player) gm.player.TakeDamage(amount, dir, knock);
     }
 
-    /// <summary>Client side: my bullet hit a zombie (puppet) → the host applies the damage.</summary>
-    public void SendHit(ushort zombieId, float amount, bool crit, Vector3 dir, Vector3 point) => HitRpc(zombieId, amount, crit, dir, point);
+    public void SendSlow(float factor, float seconds) => SlowRpc(factor, seconds);
+
+    [Rpc(SendTo.Owner)]
+    void SlowRpc(float factor, float seconds)
+    {
+        var gm = GameManager.I;
+        if (gm && gm.player) gm.player.Slow(factor, seconds);
+    }
+
+    public void SendBurn(float amount) => BurnRpc(amount);
+
+    [Rpc(SendTo.Owner)]
+    void BurnRpc(float amount)
+    {
+        var gm = GameManager.I;
+        if (gm && gm.player) gm.player.Burn(amount);
+    }
+
+    /// <summary>Host: a Dilci's tongue caught (or let go of) this teammate.</summary>
+    public void SendGrab(TongueZombie by, bool on) { if (by) GrabRpc(by.NetId, on); }
+
+    [Rpc(SendTo.Owner)]
+    void GrabRpc(ushort zombieId, bool on)
+    {
+        var gm = GameManager.I;
+        var p = gm ? gm.player : null;
+        if (!p) return;
+        var t = NetZombies.I ? NetZombies.I.PuppetById(zombieId) as TongueZombie : null;
+        if (on) { if (t) p.Grab(t); }
+        else if (t) p.ReleaseGrab(t);
+        else if (p.Grabber) p.ReleaseGrab(p.Grabber);
+    }
+
+    public const byte HitExplosive = 1, HitTongue = 2;
+
+    /// <summary>Client side: my bullet / blast hit a zombie (puppet) → the host applies the damage, credit to me.</summary>
+    public void SendHit(ushort zombieId, float amount, bool crit, Vector3 dir, Vector3 point, byte kind = 0) => HitRpc(zombieId, amount, crit, dir, point, kind);
 
     [Rpc(SendTo.Server)]
-    void HitRpc(ushort zombieId, float amount, bool crit, Vector3 dir, Vector3 point)
+    void HitRpc(ushort zombieId, float amount, bool crit, Vector3 dir, Vector3 point, byte kind)
     {
-        if (NetZombies.I) NetZombies.I.ApplyRemoteHit(zombieId, amount, crit, dir, point);
+        if (NetZombies.I) NetZombies.I.ApplyRemoteHit(zombieId, amount, crit, dir, point, kind, OwnerClientId);
     }
 }

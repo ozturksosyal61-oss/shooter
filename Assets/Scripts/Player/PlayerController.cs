@@ -228,22 +228,27 @@ public class PlayerController : MonoBehaviour
         if (Health <= 0f) Die();
     }
 
-    /// <summary>Continue after death (rewarded ad / gems): full health, back on its feet.</summary>
-    public void Revive()
+    /// <summary>Continue after death (rewarded ad / gems) or a co-op revive: back on its feet with a share of health.</summary>
+    public void Revive(float healthFraction = 1f)
     {
         if (!IsDead) return;
         IsDead = false;
-        Health = maxHealth;
+        Health = Mathf.Max(1f, maxHealth * Mathf.Clamp01(healthFraction));
         knock = Vector3.zero;
+        invulnUntil = Time.time + 1.5f;
+        if (Grabber) Grabber = null;
         if (rig) rig.Revive();
     }
 
     void Die()
     {
         IsDead = true;
+        Grabber = null;
         if (GameAudio.I) GameAudio.I.SetLowHealth(false, 0f);
         if (rig) rig.Die(lastHitDir);
         GameAudio.Play(SfxId.PlayerDeath, transform.position);
-        GameManager.I.TriggerGameOver();
+        // Co-op: down, not out — the team carries on (CoopTeam: revive / bleed-out / team over).
+        if (GameMode.IsCoop) GameManager.I.OnLocalDown();
+        else GameManager.I.TriggerGameOver();
     }
 }

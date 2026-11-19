@@ -59,6 +59,63 @@ public static class Squad
         return outward > 0f ? move - n * outward : move;
     }
 
+    /// <summary>
+    /// Host-authoritative area hit on every standing soldier (local or teammate avatar): damage falls off by
+    /// <paramref name="falloff"/> toward the edge; knockback likewise when <paramref name="scaleKnock"/>.
+    /// Vaulting soldiers dodge when <paramref name="vaultDodges"/>. Returns how many were hit.
+    /// </summary>
+    public static int HitArea(Vector3 c, float radius, float damage, float falloff, float knock, bool scaleKnock, bool vaultDodges, Vector3 fallbackDir)
+    {
+        int hits = 0;
+        for (int i = Members.Count - 1; i >= 0; i--)
+        {
+            var m = Members[i];
+            if (m.IsDead || (vaultDodges && m.IsVaulting)) continue;
+            Vector3 d = m.Position - c; d.y = 0f;
+            float dist = d.magnitude;
+            if (dist >= radius) continue;
+            float f = 1f - falloff * Mathf.Clamp01(dist / radius);
+            m.TakeDamage(damage * f, dist > 0.05f ? d / dist : fallbackDir, scaleKnock ? knock * f : knock);
+            hits++;
+        }
+        return hits;
+    }
+
+    /// <summary>Damage over time + slow for everyone standing in a circle (acid pools).</summary>
+    public static float BurnArea(Vector3 c, float radius, float amount, float slowMul, float slowSeconds)
+    {
+        float dealt = 0f;
+        for (int i = Members.Count - 1; i >= 0; i--)
+        {
+            var m = Members[i];
+            if (m.IsDead) continue;
+            Vector3 d = m.Position - c; d.y = 0f;
+            if (d.sqrMagnitude >= radius * radius) continue;
+            m.Burn(amount);
+            if (slowMul < 1f) m.Slow(slowMul, slowSeconds);
+            dealt += amount;
+        }
+        return dealt;
+    }
+
+    /// <summary>Slow for everyone in a circle (boss shock ring).</summary>
+    public static void SlowArea(Vector3 c, float radius, float mul, float seconds)
+    {
+        for (int i = Members.Count - 1; i >= 0; i--)
+        {
+            var m = Members[i];
+            if (m.IsDead) continue;
+            Vector3 d = m.Position - c; d.y = 0f;
+            if (d.sqrMagnitude < radius * radius) m.Slow(mul, seconds);
+        }
+    }
+
+    /// <summary>The local soldier's member (null before the player exists).</summary>
+    public static SquadMember Local
+    {
+        get { for (int i = 0; i < Members.Count; i++) if (Members[i].IsLocal) return Members[i]; return null; }
+    }
+
     public static Vector3 LeashAll(SquadMember self, Vector3 move, float leash)
     {
         if (Members.Count < 2 || !self) return move;

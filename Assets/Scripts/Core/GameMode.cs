@@ -70,7 +70,6 @@ public static class ModeRules
         {
             case RunMode.Hard: return wave >= HardFirstBossWave && (wave - HardFirstBossWave) % HardBossEvery == 0;
             case RunMode.Campaign: return false; // chapters summon the boss as an objective
-            case RunMode.Coop: return false;     // C1: no boss over the network yet (C2)
             default: return BossRules.IsBossWave(wave);
         }
     }
@@ -107,11 +106,23 @@ public static class ModeRules
     // ---- Co-op
     /// <summary>Teammates can't get further apart than this (one shared city / chunk window, no floating origin).</summary>
     public const float CoopLeash = 40f;
-    /// <summary>C1: plain walkers / runners only — mutations, bosses and objectives join the network in C2.</summary>
-    public static bool CoopSpecials = false;
+    /// <summary>Mutations in co-op waves (C2: on; tests can switch them off).</summary>
+    public static bool CoopSpecials = true;
+    /// <summary>Soldiers in the run (host sets it at the start): more players, more and tougher zombies.</summary>
+    public static int CoopPlayers = 1;
+    public const float CoopAlivePerPlayer = 0.35f, CoopIntervalPerPlayer = 0.3f, CoopHealthPerPlayer = 0.15f;
+    public const int CoopAliveCap = 90;
+    /// <summary>Playing together pays a little more gold.</summary>
+    public const float CoopGoldMul = 1.2f;
 
-    public static WaveParams ForCoop(WaveParams w)
+    public static WaveParams ForCoop(WaveParams w) => ForCoop(w, CoopPlayers);
+
+    public static WaveParams ForCoop(WaveParams w, int players)
     {
+        int extra = Mathf.Clamp(players, 1, 4) - 1;
+        w.maxAlive = Mathf.Min(Mathf.RoundToInt(w.maxAlive * (1f + CoopAlivePerPlayer * extra)), CoopAliveCap);
+        w.spawnInterval /= 1f + CoopIntervalPerPlayer * extra;
+        w.healthMultiplier *= 1f + CoopHealthPerPlayer * extra;
         if (CoopSpecials) return w;
         w.specialChance = 0f;
         w.specialWave = false;
@@ -119,6 +130,6 @@ public static class ModeRules
         return w;
     }
 
-    public static float GoldMul(RunMode m) => m == RunMode.Hard ? HardGoldMul : 1f;
+    public static float GoldMul(RunMode m) => m == RunMode.Hard ? HardGoldMul : m == RunMode.Coop ? CoopGoldMul : 1f;
     public static float XpMul(RunMode m) => m == RunMode.Hard ? HardXpMul : 1f;
 }

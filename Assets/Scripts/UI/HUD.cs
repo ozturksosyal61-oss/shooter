@@ -228,7 +228,9 @@ public class HUD : MonoBehaviour
 
     void UpdateScore(GameManager gm, float dt)
     {
-        displayScore = Mathf.MoveTowards(displayScore, gm.Score, Mathf.Max(60f, (gm.Score - displayScore) * 8f) * dt);
+        // Co-op: the team's score (everyone's own score added up).
+        int target = GameMode.IsCoop && CoopTeam.I ? CoopTeam.I.TeamScore : gm.Score;
+        displayScore = Mathf.MoveTowards(displayScore, target, Mathf.Max(60f, (target - displayScore) * 8f) * dt);
         int s = Mathf.RoundToInt(displayScore);
         if (s != shownScore) { shownScore = s; scoreText.text = s.ToString(); }
     }
@@ -546,7 +548,7 @@ public class HUD : MonoBehaviour
                 result.ShowDeath(restartButton, wave, kills, BossDirector.I ? BossDirector.I.BossesDefeated : 0, bestCombo, time, rec, prevBestWave);
         }
         ShowStars(-1);
-        SetRestartLabel(GameMode.IsCampaign ? "over.retry" : "over.again");
+        SetRestartLabel(GameMode.IsCampaign ? "over.retry" : GameMode.IsCoop ? "over.menu" : "over.again");
         breakText.gameObject.SetActive(false);
         gameOverTitle.text = Loc.T("over.title");
         gameOverStats.text = Loc.F("over.stats", score, rec.bestScore, Time2(time), wave, kills, bestCombo);

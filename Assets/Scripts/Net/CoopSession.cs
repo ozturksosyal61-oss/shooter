@@ -172,7 +172,7 @@ public static class CoopSession
         Changed?.Invoke();
     }
 
-    static void Reset()
+    static void Reset(bool keepMode = false)
     {
         var nm = NetworkManager.Singleton;
         if (nm)
@@ -183,8 +183,11 @@ public static class CoopSession
         handlersRegistered = false;
         Started = false;
         localCode = null;
+        // A run that just lost its host stays a co-op run until its result screen leaves (team table, no solo records).
+        if (keepMode) return;
         if (GameMode.IsCoop) GameMode.Set(RunMode.Endless);
         ChunkManager.SeedOverride = 0;
+        ModeRules.CoopPlayers = 1;
     }
 
     static void OnDisconnect(ulong clientId)
@@ -194,7 +197,7 @@ public static class CoopSession
         if (nm && !nm.IsServer && (clientId == nm.LocalClientId || !nm.IsConnectedClient))
         {
             Session = null;
-            Reset();
+            Reset(GameManager.I != null);
             Disconnected?.Invoke();
         }
         Changed?.Invoke();
