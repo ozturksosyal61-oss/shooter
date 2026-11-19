@@ -47,3 +47,7 @@ Thumbs.db
 
 # Full Mixamo download set (used clips are copied into Assets/Art/Characters/*/Anim)
 /_mixamo/anim/
+
+# Store art (large PNGs, regenerate with Tools/make_store_art.py)
+StoreAssets/Screenshots/**/*.png
+StoreAssets/VideoStills/

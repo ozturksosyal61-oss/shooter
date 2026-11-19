@@ -1543,6 +1543,201 @@ public class GameSmokeTest
         Debug.Log("CAPTURE: specials " + dir);
     }
 
+    // ------------------------------------------------------------------ store screenshots / video stills
+    /// <summary>Renders the main camera (+ the HUD canvas when given) into a w×h PNG (store art: rendered at 2× and downscaled later).</summary>
+    static void StoreShot(string path, int w, int h, Canvas ui)
+    {
+        var cam = Camera.main;
+        var rt = new RenderTexture(w, h, 24) { antiAliasing = 1 };
+        cam.targetTexture = rt;
+        if (ui) { ui.renderMode = RenderMode.ScreenSpaceCamera; ui.worldCamera = cam; ui.planeDistance = 1.2f; }
+        Canvas.ForceUpdateCanvases();
+        cam.Render();
+        RenderTexture.active = rt;
+        var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+        tex.Apply();
+        File.WriteAllBytes(path, tex.EncodeToPNG());
+        if (ui) ui.renderMode = RenderMode.ScreenSpaceOverlay;
+        cam.targetTexture = null;
+        RenderTexture.active = null;
+        Object.Destroy(rt);
+        Object.Destroy(tex);
+    }
+
+    /// <summary>
+    /// [Explicit] App Store art: gameplay with the HUD (screenshots) and the same moments without any UI (video stills),
+    /// plus the main menu / modes / characters. CAPTURE_DIR, without -nographics. Raw 5112×2358 (2× of 2556×1179);
+    /// Tools/make_store_art.py adds the captions and the sizes.
+    /// </summary>
+    [UnityTest, Explicit, Timeout(600000)]
+    public IEnumerator CaptureStore()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        const int W = 5112, H = 2358;
+        SaveSystem.Store = new MemorySaveStore();
+        SaveSystem.Data.tutorialDone = true;
+        // STORE_LANG=en: English UI for the English store page.
+        SaveSystem.Data.settings.lang = System.Environment.GetEnvironmentVariable("STORE_LANG") == "en" ? "en" : "tr";
+        GameManager.TimeScale = 1f;
+        Settings.Apply();
+
+        // ---- Menu screens.
+        Profile.Grant(12850, 340, "store");
+        SceneManager.LoadScene(LoadingScreen.MenuScene);
+        yield return null;
+        var mm = MainMenu.I;
+        yield return WaitUntil(() => !mm.SplashActive, 6f);
+        yield return Wait(1.2f);
+        if (mm.login) mm.login.root.SetActive(false);
+        var mc = mm.GetComponent<Canvas>();
+        StoreShot(Path.Combine(dir, "raw_menu.png"), W, H, mc);
+        mm.ShowPlay(true); yield return null;
+        StoreShot(Path.Combine(dir, "raw_modes.png"), W, H, mc);
+        mm.modePanel.root.SetActive(false);
+        mm.shopUI.Open(ShopUI.Tab.Characters, 1); yield return Wait(0.6f);
+        StoreShot(Path.Combine(dir, "raw_characters.png"), W, H, mc);
+        mm.shopUI.Close();
+
+        // ---- Gameplay.
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var p = gm.player;
+        var hud = gm.hud;
+        var hc = hud.GetComponent<Canvas>();
+        if (hud.fpsText) hud.fpsText.gameObject.SetActive(false);
+        foreach (var c in new[] { CardId.DoubleShot, CardId.FireRate, CardId.Pierce, CardId.Magnet, CardId.MaxHealth }) Upgrades.I.Take(c);
+        void Both(string name)
+        {
+            // Store look: no idle joystick ring, no hurt vignette.
+            if (TouchControls.I && TouchControls.I.joyGroup) TouchControls.I.joyGroup.alpha = 0f;
+            if (hud.damageVignette) { var vc = hud.damageVignette.color; vc.a = 0f; hud.damageVignette.color = vc; }
+            StoreShot(Path.Combine(dir, "raw_" + name + ".png"), W, H, hc);
+            StoreShot(Path.Combine(dir, "clean_" + name + ".png"), W, H, null);
+        }
+        IEnumerator Fight(float seconds)
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < seconds)
+            {
+                p.Regen(1000f);
+                var z = Zombie.FindNearest(p.transform.position, 22f);
+                if (z && Camera.main) InputSystem.QueueStateEvent(mouse, new MouseState { position = (Vector2)Camera.main.WorldToScreenPoint(z.AimPoint) }.WithButton(MouseButton.Right, true));
+                else InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f) });
+                yield return null;
+            }
+        }
+        IEnumerator WaitFiring()
+        {
+            for (int i = 0; i < 40 && !(p.weapon.IsFiring && p.weapon.muzzleFlash && p.weapon.muzzleFlash.gameObject.activeSelf); i++) yield return Fight(0.01f);
+        }
+
+        // 1) A big wave: crowd, tracers, combo.
+        WaveDirector.I.JumpToBreakBefore(5);
+        GameManager.TimeScale = 1f;
+        yield return Fight(42f);
+        yield return WaitFiring();
+        Both("action");
+        yield return Fight(4f);
+        yield return WaitFiring();
+        Both("action2");
+
+        // 2) Specials up close: shield, bomb, tongue.
+        WaveDirector.I.enabled = false;
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        var spawner = Object.FindAnyObjectByType<ZombieSpawner>();
+        Vector3 home = OpenArea(p);
+        yield return null;
+        var wp = Difficulty.ForWave(6);
+        spawner.TrySpawnSpecial(ZombieKind.Shield, home + new Vector3(-3.5f, 0f, 6f), wp);
+        spawner.TrySpawnSpecial(ZombieKind.Bomb, home + new Vector3(1f, 0f, 7f), wp);
+        var tg = spawner.TrySpawnSpecial(ZombieKind.Tongue, home + new Vector3(4f, 0f, 9f), wp) as TongueZombie;
+        for (int i = 0; i < 6; i++) spawner.SpawnMinion(home + new Vector3(-6f + i * 2.4f, 0f, 11f), wp);
+        yield return Fight(2.5f);
+        float tw = Time.realtimeSinceStartup;
+        while (Time.realtimeSinceStartup - tw < 8f && !(tg && (tg.CurrentPhase == TongueZombie.Phase.Aim || tg.CurrentPhase == TongueZombie.Phase.Grab))) yield return Fight(0.05f);
+        Both("specials");
+
+        // 3) Barrel blast in a crowd.
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        ExplosiveBarrel barrel = null;
+        Vector3 stand = p.transform.position;
+        for (int tries = 0; tries < 8 && barrel == null; tries++)
+        {
+            foreach (var b in ExplosiveBarrel.Active)
+                if (!b.Exploded && b.gameObject.activeInHierarchy && TryClearSpot(b.transform.position, 8f, out stand)) { barrel = b; break; }
+            if (barrel == null) { Teleport(p, p.transform.position + new Vector3(60f, 0f, 0f)); yield return null; yield return null; }
+        }
+        if (barrel)
+        {
+            Teleport(p, stand);
+            yield return null;
+            Vector3 bp = barrel.transform.position;
+            for (int i = 0; i < 7; i++)
+            {
+                float a2 = i / 7f * Mathf.PI * 2f;
+                spawner.SpawnMinion(bp + new Vector3(Mathf.Cos(a2), 0f, Mathf.Sin(a2)) * 1.8f, wp);
+            }
+            spawner.TrySpawnSpecial(ZombieKind.Bomb, bp + new Vector3(0.5f, 0f, 2.2f), wp);
+            yield return Wait(1.4f);
+            barrel.Hit(9999f);
+            for (int i = 0; i < 7; i++) yield return null;
+            Both("barrel");
+            yield return Wait(1f);
+        }
+
+        // 4) Bosses: Kasap's charge telegraph, Sıçrayan in the air, Ezici up close.
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        home = OpenArea(p);
+        yield return null;
+        var kasap = BossDirector.I.Spawn(6, home + new Vector3(3f, 0f, 7.5f)) as ButcherZombie;
+        yield return WaitUntil(() => kasap.IsWalking && kasap.CurrentPhase == ButcherZombie.Phase.Walk, 10f);
+        yield return Fight(2f);
+        kasap.ForceCharge(p.transform.position);
+        yield return Fight(0.45f);
+        Both("boss");
+        kasap.Despawn();
+        yield return Wait(0.5f);
+        var leaper = BossDirector.I.Spawn(11, home + new Vector3(-2f, 0f, 12f), BossType.Leaper) as ButcherZombie;
+        yield return WaitUntil(() => leaper.IsWalking, 10f);
+        yield return Fight(1.5f);
+        leaper.ForceLeap();
+        float lw = Time.realtimeSinceStartup;
+        while (Time.realtimeSinceStartup - lw < 4f && !(leaper.CurrentPhase == ButcherZombie.Phase.Leap && leaper.PhaseTime > 0.35f)) yield return Fight(0.02f);
+        Both("leaper");
+        yield return Fight(2f);
+        leaper.Despawn();
+        var crusher = BossDirector.I.Spawn(21, home + new Vector3(0f, 0f, 10f), BossType.Crusher) as ButcherZombie;
+        yield return WaitUntil(() => crusher.IsWalking, 10f);
+        yield return Fight(2.5f);
+        Vector3 cp = crusher.transform.position;
+        Vector3 from = cp + crusher.transform.forward * 7.5f + Vector3.up * 2.2f + crusher.transform.right * 2.5f;
+        var cam = Camera.main;
+        var cpos = cam.transform.position; var crot = cam.transform.rotation;
+        var rig = cam.GetComponentInParent<CameraRig>();
+        if (rig) rig.enabled = false;
+        cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(cp + Vector3.up * 3f - from));
+        StoreShot(Path.Combine(dir, "clean_crusher_close.png"), W, H, null);
+        crusher.gameObject.SetActive(false);
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) if (Zombie.Active[i] != crusher) Zombie.Active[i].Despawn();
+        Vector3 pp = p.transform.position;
+        Vector3 f2 = pp + p.transform.forward * 3f + Vector3.up * 1.25f - p.transform.right * 1.4f;
+        cam.transform.SetPositionAndRotation(f2, Quaternion.LookRotation(pp + Vector3.up * 1.1f - f2));
+        StoreShot(Path.Combine(dir, "clean_soldier_close.png"), W, H, null);
+        cam.transform.SetPositionAndRotation(cpos, crot);
+        if (rig) rig.enabled = true;
+        crusher.gameObject.SetActive(true);
+        crusher.Despawn();
+
+        // 5) Level-up cards.
+        Progression.I.AddXp(Progression.I.XpToNext);
+        yield return Wait(1.4f);
+        if (TouchControls.I && TouchControls.I.joyGroup) TouchControls.I.joyGroup.alpha = 0f;
+        StoreShot(Path.Combine(dir, "raw_cards.png"), W, H, hc);
+        Debug.Log("CAPTURE: store " + dir);
+    }
+
     /// <summary>[Explicit] Kasap: close-up (feet/eyes), charge telegraph in game view, winded tint. CAPTURE_DIR.</summary>
     [UnityTest, Explicit]
     public IEnumerator CaptureBoss()
