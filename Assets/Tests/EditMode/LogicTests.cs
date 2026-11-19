@@ -958,3 +958,41 @@ public class CoopTests
         }
     }
 }
+
+
+public class MutantBossTests
+{
+    [Test]
+    public void BossesComeInOrderEachTougher()
+    {
+        Assert.AreEqual(BossType.Butcher, BossRules.TypeFor(0));
+        Assert.AreEqual(BossType.Leaper, BossRules.TypeFor(1));
+        Assert.AreEqual(BossType.Hive, BossRules.TypeFor(2));
+        Assert.AreEqual(BossType.Crusher, BossRules.TypeFor(3));
+        Assert.AreEqual(BossType.Butcher, BossRules.TypeFor(4), "cycle restarts");
+        var wp = Difficulty.ForWave(10, false);
+        for (int i = 1; i < BossRules.TypeCount; i++)
+        {
+            Assert.Greater(BossRules.TypeScale[i], BossRules.TypeScale[i - 1], "each mutation is bigger");
+            Assert.Greater(BossRules.Health(70f, wp, 0, (BossType)i), BossRules.Health(70f, wp, 0, (BossType)(i - 1)), "each mutation is tougher");
+        }
+        Assert.Greater(BossRules.Health(70f, wp, 4), BossRules.Health(70f, wp, 0), "second Kasap is stronger than the first");
+        for (int i = 0; i < BossRules.TypeCount; i++)
+        {
+            string k = BossRules.NameKey((BossType)i);
+            Assert.IsTrue(Loc.Has(k) && Loc.Has(k + ".sub") && Loc.Has("radio." + k), k);
+        }
+    }
+
+    [Test]
+    public void CampaignMeetsEveryMutationInOrder()
+    {
+        var seen = new List<BossType>();
+        for (int c = 0; c < Campaign.Count; c++)
+        {
+            var d = Campaign.Get(c);
+            foreach (var s in d.steps) if (s == ObjectiveKind.Boss) seen.Add(d.boss);
+        }
+        CollectionAssert.AreEqual(new[] { BossType.Butcher, BossType.Leaper, BossType.Hive, BossType.Crusher }, seen);
+    }
+}

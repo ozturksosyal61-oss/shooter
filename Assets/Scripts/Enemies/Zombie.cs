@@ -505,6 +505,7 @@ public class Zombie : MonoBehaviour
         }
         if (!explosive && Deflects(dir, point)) return false;
         amount *= DamageTakenMul;
+        if (!explosive) amount *= DirectionalMul(dir, point);
         hp -= amount;
         flash.Flash(0.07f);
         knock = Vector3.ClampMagnitude(knock + dir * (crit ? 4.5f : 3f) * KnockScale, 7f);
@@ -528,6 +529,8 @@ public class Zombie : MonoBehaviour
     /// <summary>Incoming damage multiplier (a winded boss takes double).</summary>
     protected virtual float DamageTakenMul => 1f;
     protected virtual bool Deflects(Vector3 dir, Vector3 point) => false;
+    /// <summary>Hit-direction damage multiplier (Ezici's armoured front).</summary>
+    protected virtual float DirectionalMul(Vector3 dir, Vector3 point) => 1f;
     protected virtual void OnDamaged(float amount, bool explosive) { }
 
     void Die(Vector3 dir, Vector3 point, bool explosive, bool scoring = true)

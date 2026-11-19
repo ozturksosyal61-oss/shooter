@@ -56,7 +56,7 @@ public class BossHUD : MonoBehaviour
         butcher = z as ButcherZombie;
         shown = lag = 1f;
         introT = 0f;
-        string key = "boss.butcher";
+        string key = BossRules.NameKey(BossDirector.I ? BossDirector.I.CurrentType : BossType.Butcher);
         barName.text = Loc.Upper(Loc.T(key));
         introTitle.text = Loc.Upper(Loc.T(key));
         introSub.text = Loc.T(key + ".sub");

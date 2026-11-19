@@ -9,6 +9,7 @@ public struct ChapterDef
     public float surviveSeconds;  // length of a Survive step
     public float parSeconds;      // finish under this → ★★
     public int gold, gems;        // first-clear reward
+    public BossType boss;         // the mutation a Boss step summons
 }
 
 /// <summary>
@@ -25,10 +26,10 @@ public static class Campaign
     {
         new ChapterDef { key = "c1", steps = new[] { F, S, R }, startWave = 1, surviveSeconds = 45f, parSeconds = 300f, gold = 150, gems = 3 },
         new ChapterDef { key = "c2", steps = new[] { T, F, V, R }, startWave = 2, surviveSeconds = 50f, parSeconds = 420f, gold = 250, gems = 3 },
-        new ChapterDef { key = "c3", steps = new[] { S, V, B }, startWave = 3, surviveSeconds = 60f, parSeconds = 420f, gold = 400, gems = 5 },
-        new ChapterDef { key = "c4", steps = new[] { F, T, V, S, R }, startWave = 3, surviveSeconds = 70f, parSeconds = 540f, gold = 500, gems = 5 },
-        new ChapterDef { key = "c5", steps = new[] { T, B, S, R }, startWave = 4, surviveSeconds = 60f, parSeconds = 540f, gold = 650, gems = 8 },
-        new ChapterDef { key = "c6", steps = new[] { S, T, V, B, H }, startWave = 5, surviveSeconds = 80f, parSeconds = 720f, gold = 1000, gems = 15 },
+        new ChapterDef { key = "c3", steps = new[] { S, V, B }, startWave = 3, surviveSeconds = 60f, parSeconds = 420f, gold = 400, gems = 5, boss = BossType.Butcher },
+        new ChapterDef { key = "c4", steps = new[] { F, V, B, R }, startWave = 3, surviveSeconds = 70f, parSeconds = 540f, gold = 500, gems = 5, boss = BossType.Leaper },
+        new ChapterDef { key = "c5", steps = new[] { T, B, S, R }, startWave = 4, surviveSeconds = 60f, parSeconds = 600f, gold = 650, gems = 8, boss = BossType.Hive },
+        new ChapterDef { key = "c6", steps = new[] { S, T, V, B, H }, startWave = 5, surviveSeconds = 80f, parSeconds = 780f, gold = 1000, gems = 15, boss = BossType.Crusher },
     };
 
     public static int Count => Chapters.Length;

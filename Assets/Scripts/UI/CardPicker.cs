@@ -118,7 +118,8 @@ public class CardPicker : MonoBehaviour
         group.gameObject.SetActive(true);
         group.alpha = 0f;
         bool bonus = Progression.I.BonusPicks > 0;
-        header.text = Loc.T(epic ? "cards.boss" : bonus ? "cards.reward" : "cards.levelup");
+        header.text = epic ? Loc.F("cards.boss", Loc.Upper(Loc.T(BossRules.NameKey(BossDirector.I ? BossDirector.I.CurrentType : BossType.Butcher))))
+            : Loc.T(bonus ? "cards.reward" : "cards.levelup");
         subHeader.text = epic ? Loc.T("cards.boss_sub") : bonus ? Loc.T("cards.reward_sub") : Loc.F("cards.header", Progression.I.Level);
         for (int i = 0; i < cards.Length; i++)
         {

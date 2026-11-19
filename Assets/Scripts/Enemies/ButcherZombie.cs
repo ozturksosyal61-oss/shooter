@@ -8,9 +8,46 @@ using UnityEngine;
 ///        → (near) SlamWind 0.8 s: growing ring → shockwave (dodged by vaulting or leaving the ring) → Walk
 /// Below 50 % health it is enraged: faster, shorter pauses between charges.
 /// Unlike ordinary zombies it does not walk around low obstacles during a charge — it smashes through them.
+/// F14: the same controller drives every lab mutation, each prefab switching abilities on (<see cref="bossType"/>):
+///   Sıçrayan — LeapWind (red landing ring on the predicted spot) → Leap (arc over anything) → shockwave → winded;
+///   Kovan Ana — acid spit (pools) + Brood (roar, small runners appear) → exposed (weak);
+///   Ezici — armoured front (frontal hits ×<see cref="frontArmor"/>, sparks), crushes cover while walking, heavier charge.
 /// </summary>
 public class ButcherZombie : Zombie
 {
+    [Header("Mutation (F14)")]
+    public BossType bossType = BossType.Butcher;
+    public bool canCharge = true, canThrow = true;
+    public float speedMul = 1f;
+    public Color ringTint = new Color(1f, 0.12f, 0.08f, 1f);
+    public int throwCount = 1, throwCountRage = 2;
+
+    [Header("Leap (Sıçrayan)")]
+    public bool canLeap;
+    public float leapTelegraph = 0.85f;
+    public float leapAirTime = 0.9f;
+    public float leapMinDistance = 6f, leapMaxDistance = 18f;
+    public float leapRadius = 4.5f;
+    public float leapDamage = 30f;
+    public float leapCooldown = 4.5f;
+    public float leapHeight = 7f;
+    public float leapWinded = 2.2f;
+
+    [Header("Brood (Kovan Ana)")]
+    public bool canBrood;
+    public float broodCooldown = 13f;
+    public int broodCount = 4;
+    public float broodWind = 1.3f;
+    public float broodExposed = 2.5f;
+
+    [Header("Armour / crush (Ezici)")]
+    [Tooltip("Damage multiplier for hits from the front (1 = no armour); weak phases ignore it.")]
+    public float frontArmor = 1f;
+    public float frontArc = 70f;
+    public float backDamageMul = 1f;
+    [Tooltip("Tosses cars / crates / barricades in its way while walking (no steering around them).")]
+    public bool crushWalk;
+
     [Header("Charge")]
     public float chargeTelegraph = 1f;
     public float chargeSpeed = 15f;
@@ -67,10 +104,14 @@ public class ButcherZombie : Zombie
     public Transform[] eyes;
     public Renderer ringRenderer;
 
-    public enum Phase { Walk, ChargeWind, Charge, Stunned, Tired, SlamWind, SlamRecover, Throw, Dead }
+    public enum Phase { Walk, ChargeWind, Charge, Stunned, Tired, SlamWind, SlamRecover, Throw, Dead, LeapWind, Leap, Brood }
 
     Phase phase;
     float phaseT, chargeCd, slamCd, shoveCd, stepT, curSpeed, chargeLen, traveled, windTime, throwCd, shockT;
+    float leapCd, broodCd, crushT, tiredFor, armorFxT;
+    int leapInCombo;
+    Vector3 leapFrom, leapTo;
+    static readonly int ThrowAnim = Animator.StringToHash("Throw");
     int chargeInCombo;
     Vector3 shockPos, lastPlayerPos, playerVel;
     Renderer zoneRenderer;
@@ -96,6 +137,12 @@ public class ButcherZombie : Zombie
     public int ShoveHits { get; private set; }
     public int Charges { get; private set; }
     public int Throws { get; private set; }
+    public int Leaps { get; private set; }
+    public int LeapHits { get; private set; }
+    public int Broods { get; private set; }
+    public int ArmorHits { get; private set; }
+    public int Crushed { get; private set; }
+    public Vector3 LeapTarget => leapTo;
     /// <summary>Charge number inside a rage double charge (1 or 2).</summary>
     public int ChargeInCombo => chargeInCombo;
     public bool ShockActive => shockT > 0f;
@@ -127,6 +174,10 @@ public class ButcherZombie : Zombie
     protected override void OnSpawned()
     {
         Enraged = false;
+        speed *= speedMul;
+        leapCd = 2.5f;
+        broodCd = 5f;
+        tiredFor = tiredTime;
         chargeCd = 2.5f;
         slamCd = 1.5f;
         shoveCd = 0f;
@@ -137,15 +188,14 @@ public class ButcherZombie : Zombie
         animator.speed = 1f;
         SetPhase(Phase.Walk);
         ShowTelegraphs(false, false);
-        Tint(Color.white, ringColor);
+        Tint(Color.white, ringTint);
     }
 
-    static readonly Color ringColor = new Color(1f, 0.12f, 0.08f, 1f);
     static readonly Color weakColor = new Color(1f, 0.9f, 0.25f, 1f);
 
     void OnEnable() => FloatingOrigin.OnShift += Shift;
     protected override void OnDisable() { base.OnDisable(); FloatingOrigin.OnShift -= Shift; }
-    void Shift(Vector3 d) { shockPos += d; lastPlayerPos += d; }
+    void Shift(Vector3 d) { shockPos += d; lastPlayerPos += d; leapFrom += d; leapTo += d; }
 
     void SetPhase(Phase p)
     {
@@ -165,6 +215,8 @@ public class ButcherZombie : Zombie
         slamCd -= dt;
         shoveCd -= dt;
         throwCd -= dt;
+        leapCd -= dt;
+        broodCd -= dt;
         knock *= 0.2f; // explosions barely move it
         Vector3 pp = player.transform.position;
         playerVel = Vector3.Lerp(playerVel, (pp - lastPlayerPos) / Mathf.Max(dt, 0.0001f), 1f - Mathf.Exp(-6f * dt));
@@ -190,8 +242,11 @@ public class ButcherZombie : Zombie
                 break;
             case Phase.Tired:
                 Hold(dt);
-                if (phaseT >= tiredTime) { chargeCd = Cooldown(chargeCooldown) * 0.5f; BackToWalk(); }
+                if (phaseT >= tiredFor) { chargeCd = Cooldown(chargeCooldown) * 0.5f; BackToWalk(); }
                 break;
+            case Phase.LeapWind: UpdateLeapWind(dt, dir); break;
+            case Phase.Leap: UpdateLeap(dt, player); break;
+            case Phase.Brood: UpdateBrood(dt); break;
             case Phase.SlamWind: UpdateSlamWind(dt, player, dir); break;
             case Phase.SlamRecover:
                 Hold(dt);
@@ -224,12 +279,15 @@ public class ButcherZombie : Zombie
         gait = far ? 2f : 1f;
         Chase(dt, curSpeed, dist > body.radius + 0.6f);
         Footsteps(dt, dist);
+        if (crushWalk) CrushAhead(dt);
         if (player.IsDead) return;
 
         if (dist < slamTrigger && slamCd <= 0f) { StartSlam(); return; }
-        if (chargeCd <= 0f && dist > chargeMinDistance && dist < chargeMaxDistance) { chargeInCombo = 1; StartChargeWind(dir, dist); return; }
-        // Kiting from afar does not work: it hurls debris.
-        if (throwCd <= 0f && dist >= throwMinDistance && FreeProjectile() != null) { StartThrow(); return; }
+        if (canLeap && leapCd <= 0f && dist > leapMinDistance * 0.6f && dist < leapMaxDistance + 8f) { leapInCombo = 1; StartLeapWind(); return; }
+        if (canBrood && broodCd <= 0f && dist < 24f) { StartBrood(); return; }
+        if (canCharge && chargeCd <= 0f && dist > chargeMinDistance && dist < chargeMaxDistance) { chargeInCombo = 1; StartChargeWind(dir, dist); return; }
+        // Kiting from afar does not work: it hurls debris (acid for Kovan Ana).
+        if (canThrow && throwCd <= 0f && dist >= throwMinDistance && FreeProjectile() != null) { StartThrow(); return; }
         if (dist < body.radius + 1f && shoveCd <= 0f)
         {
             // Too close for anything else: a heavy shove.
@@ -435,12 +493,239 @@ public class ButcherZombie : Zombie
         SetPhase(Phase.Stunned);
     }
 
-    void EnterTired()
+    void EnterTired(float duration = -1f)
     {
         if (phase != Phase.Stunned)
-            if (DamageNumbers.I) DamageNumbers.I.ShowText(transform.position + Vector3.up * 5.2f, Loc.T("boss.weak"), weakColor);
+            if (DamageNumbers.I) DamageNumbers.I.ShowText(transform.position + Vector3.up * TopY, Loc.T("boss.weak"), weakColor);
+        tiredFor = duration > 0f ? duration : tiredTime;
+        animator.speed = 1f;
         animator.CrossFadeInFixedTime(LocoState, 0.2f, 0);
         SetPhase(Phase.Tired);
+    }
+
+    float TopY => 1.1f * transform.localScale.y + body.height;
+
+    // ------------------------------------------------------------------ crush (Ezici)
+    void CrushAhead(float dt)
+    {
+        crushT -= dt;
+        if (crushT > 0f) return;
+        crushT = 0.12f;
+        Vector3 c = transform.position + transform.forward * (body.radius + 0.9f) + Vector3.up;
+        int n = Physics.OverlapSphereNonAlloc(c, body.radius + 0.5f, Buffer, GameLayers.VaultableMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
+        {
+            var col = Buffer[i];
+            if (!col || !col.enabled) continue;
+            var barrel = col.GetComponentInParent<ExplosiveBarrel>();
+            if (barrel) { barrel.Explode(); continue; }
+            var prop = col.GetComponentInParent<EnvProp>();
+            if (PropTosser.I) PropTosser.I.Toss(prop ? prop.transform : col.transform, transform.forward, Mathf.Max(6f, curSpeed * 2.5f));
+            Crushed++;
+            GameAudio.Play(SfxId.HitMetal, col.transform.position, 0.7f);
+            GameManager.I.Shake(0.25f);
+        }
+    }
+
+    // ------------------------------------------------------------------ armour (Ezici)
+    protected override float DirectionalMul(Vector3 dir, Vector3 point)
+    {
+        if (IsWeak || (frontArmor >= 1f && backDamageMul == 1f) || dir.sqrMagnitude < 0.001f) return 1f;
+        float facing = Vector3.Dot(transform.forward, -dir.normalized);
+        if (facing > Mathf.Cos(frontArc * Mathf.Deg2Rad))
+        {
+            ArmorHits++;
+            if (Time.time >= armorFxT)
+            {
+                armorFxT = Time.time + 0.12f;
+                if (Fx.I) Fx.I.Spark(point, -dir);
+                GameAudio.Play(SfxId.HitMetal, point, 1.1f, 0.6f);
+                if (DamageNumbers.I && Time.time >= armorTextT) { armorTextT = Time.time + 2.5f; DamageNumbers.I.ShowText(transform.position + Vector3.up * TopY, Loc.T("boss.armor"), new Color(0.75f, 0.8f, 0.9f)); }
+            }
+            return frontArmor;
+        }
+        return facing < -0.5f ? backDamageMul : 1f;
+    }
+
+    float armorTextT;
+
+    // ------------------------------------------------------------------ leap (Sıçrayan)
+    /// <summary>Command: leap now (tests, scripted moments).</summary>
+    public void ForceLeap()
+    {
+        if (state != State.Walking || phase == Phase.Dead) return;
+        leapInCombo = 1;
+        StartLeapWind();
+    }
+
+    Vector3 PickLeapTarget()
+    {
+        var player = GameManager.I.player;
+        Vector3 pos = transform.position;
+        Vector3 aim = player.transform.position + Vector3.ClampMagnitude(playerVel, 7f) * 0.45f;
+        Vector3 d = aim - pos; d.y = 0f;
+        float m = d.magnitude;
+        if (m < 0.01f) d = transform.forward; else d /= m;
+        Vector3 t = pos + d * Mathf.Clamp(m, leapMinDistance, leapMaxDistance);
+        // Never land inside a building: slide back toward the start until the spot is free.
+        for (int i = 0; i < 10; i++)
+        {
+            if (!Physics.CheckSphere(t + Vector3.up * 1.5f, body.radius, GameLayers.BlockerMask, QueryTriggerInteraction.Ignore)) break;
+            t = Vector3.MoveTowards(t, pos, 1.5f);
+        }
+        t.y = 0f;
+        return t;
+    }
+
+    void StartLeapWind(float wind = -1f)
+    {
+        windTime = wind > 0f ? wind : leapTelegraph;
+        leapTo = PickLeapTarget();
+        animator.CrossFadeInFixedTime(AttackState, 0.1f, 0);
+        // The clip's impact frame lands with the boss.
+        animator.speed = Mathf.Clamp(slamImpactTime / (windTime + leapAirTime), 0.35f, 3f);
+        GameAudio.Play(SfxId.BossRoar, transform.position, 1.3f, 0.7f);
+        GameManager.I.Shake(0.2f);
+        SetPhase(Phase.LeapWind);
+        if (slamRing) slamRing.gameObject.SetActive(true);
+        if (slamZone && shockT <= 0f) slamZone.gameObject.SetActive(true);
+        PlaceLeapMarker(0f);
+    }
+
+    void PlaceLeapMarker(float k)
+    {
+        float inv = 1f / transform.localScale.x;
+        if (slamZone && shockT <= 0f)
+        {
+            slamZone.position = leapTo + Vector3.up * 0.05f;
+            float z = leapRadius * 2f * inv;
+            slamZone.localScale = new Vector3(z, z, 1f);
+        }
+        if (slamRing)
+        {
+            slamRing.position = leapTo + Vector3.up * 0.07f;
+            float s = Mathf.Lerp(0.3f, 1f, Mathf.Clamp01(k)) * leapRadius * 2f * inv;
+            slamRing.localScale = new Vector3(s, s, 1f);
+        }
+    }
+
+    void UpdateLeapWind(float dt, Vector3 dir)
+    {
+        Hold(dt);
+        // Tracks the soldier for most of the crouch, then commits.
+        if (phaseT < windTime * 0.6f) leapTo = PickLeapTarget();
+        Vector3 to = leapTo - transform.position; to.y = 0f;
+        if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(to), 360f * dt);
+        PlaceLeapMarker(phaseT / (windTime + leapAirTime));
+        if (phaseT >= windTime) StartLeap();
+    }
+
+    void StartLeap()
+    {
+        leapFrom = transform.position;
+        body.enabled = false;
+        GameAudio.Play(SfxId.BossCharge, transform.position, 1.2f);
+        Leaps++;
+        SetPhase(Phase.Leap);
+    }
+
+    void UpdateLeap(float dt, PlayerController player)
+    {
+        gait = 0f;
+        curSpeed = 0f;
+        float k = Mathf.Clamp01(phaseT / leapAirTime);
+        // Over cars, walls and roofs alike: a pure arc, no collisions in the air.
+        Vector3 p = Vector3.Lerp(leapFrom, leapTo, k) + Vector3.up * (leapHeight * 4f * k * (1f - k));
+        transform.position = p;
+        Vector3 to = leapTo - leapFrom; to.y = 0f;
+        if (to.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(to);
+        PlaceLeapMarker((windTime + phaseT) / (windTime + leapAirTime));
+        if (k >= 1f) LandLeap(player);
+    }
+
+    void LandLeap(PlayerController player)
+    {
+        Vector3 pos = leapTo;
+        transform.position = pos;
+        body.enabled = true;
+        GameAudio.Play(SfxId.BossSlam, pos, 0.9f);
+        GameManager.I.Shake(0.85f);
+        if (Fx.I) { Fx.I.Explosion(pos, leapRadius * 0.6f, false); Fx.I.Dust(pos); }
+        if (!player.IsDead)
+        {
+            Vector3 d = player.transform.position - pos; d.y = 0f;
+            float m = d.magnitude;
+            if (m < leapRadius)
+            {
+                float f = 1f - 0.4f * Mathf.Clamp01(m / leapRadius);
+                LeapHits++;
+                player.TakeDamage(leapDamage * f, m > 0.05f ? d / m : transform.forward, 18f * f);
+            }
+        }
+        int n = Physics.OverlapSphereNonAlloc(pos + Vector3.up, leapRadius, Buffer, GameLayers.ZombieMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
+        {
+            var z = Buffer[i].GetComponentInParent<Zombie>();
+            if (!z || z == this || !z.Damageable) continue;
+            Vector3 d = z.transform.position - pos; d.y = 0f;
+            z.Knock(d.normalized * 11f);
+            z.TakeHit(chargeZombieDamage * 0.6f, false, d.normalized, z.AimPoint, true);
+        }
+        ResetMarkers();
+        leapCd = Cooldown(leapCooldown);
+        if (Enraged && leapInCombo == 1 && !player.IsDead)
+        {
+            // Rage: straight into a second leap.
+            leapInCombo = 2;
+            StartLeapWind(0.5f);
+            return;
+        }
+        EnterTired(leapWinded);
+    }
+
+    void ResetMarkers()
+    {
+        if (slamRing) { slamRing.localPosition = new Vector3(0f, 0.07f, 0f); slamRing.gameObject.SetActive(false); }
+        if (slamZone && shockT <= 0f) { slamZone.localPosition = new Vector3(0f, 0.05f, 0f); slamZone.gameObject.SetActive(false); }
+    }
+
+    // ------------------------------------------------------------------ brood (Kovan Ana)
+    /// <summary>Command: brood now (tests).</summary>
+    public void ForceBrood()
+    {
+        if (state != State.Walking || phase == Phase.Dead) return;
+        StartBrood();
+    }
+
+    void StartBrood()
+    {
+        animator.CrossFadeInFixedTime(ScreamState, 0.15f, 0);
+        GameAudio.Play(SfxId.BossRoar, transform.position, 0.8f);
+        GameManager.I.Shake(0.3f);
+        if (DamageNumbers.I) DamageNumbers.I.ShowText(transform.position + Vector3.up * TopY, Loc.T("boss.brood"), new Color(1f, 0.7f, 0.2f));
+        SetPhase(Phase.Brood);
+    }
+
+    void UpdateBrood(float dt)
+    {
+        Hold(dt);
+        if (phaseT < broodWind) return;
+        var sp = BossDirector.I ? BossDirector.I.spawner : null;
+        var wp = WaveDirector.I ? WaveDirector.I.Params : Difficulty.ForWave(1);
+        int count = broodCount + (Enraged ? 2 : 0);
+        Vector3 c = transform.position;
+        for (int i = 0; i < count && sp; i++)
+        {
+            float a = (i + (float)rng.NextDouble() * 0.5f) / count * Mathf.PI * 2f;
+            Vector3 p = c + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (body.radius + 1.6f + (float)rng.NextDouble() * 1.5f);
+            if (Physics.CheckSphere(p + Vector3.up, 0.4f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) p = c + (p - c).normalized * (body.radius + 0.8f);
+            sp.SpawnMinion(p, wp);
+            if (Fx.I) Fx.I.Dust(p);
+        }
+        Broods++;
+        broodCd = Cooldown(broodCooldown);
+        // Spent: exposed for a moment (weak, double damage).
+        EnterTired(broodExposed);
     }
 
     // ------------------------------------------------------------------ slam
@@ -540,7 +825,7 @@ public class ButcherZombie : Zombie
 
     void StartThrow()
     {
-        animator.CrossFadeInFixedTime(ScreamState, 0.15f, 0);
+        animator.CrossFadeInFixedTime(animator.HasState(0, ThrowAnim) ? ThrowAnim : ScreamState, 0.15f, 0);
         GameAudio.Play(SfxId.BossRoar, transform.position, 1.2f, 0.7f);
         SetPhase(Phase.Throw);
     }
@@ -550,15 +835,17 @@ public class ButcherZombie : Zombie
         Hold(dt);
         Face(dir, dt * 2f);
         if (phaseT < throwWind) return;
-        int n = Enraged ? 2 : 1;
+        int n = Enraged ? throwCountRage : throwCount;
+        float side0 = (float)rng.NextDouble() < 0.5 ? -3f : 3f;
         for (int i = 0; i < n; i++)
         {
             var pr = FreeProjectile();
             if (!pr) break;
             Vector3 target = player.transform.position + Vector3.ClampMagnitude(playerVel, 7f) * (throwLead + 0.4f * i);
-            if (i == 1) target += Vector3.Cross(Vector3.up, dir) * ((float)rng.NextDouble() < 0.5 ? -3f : 3f);
+            // Extra ones fan out left / right of the soldier.
+            if (i > 0) target += Vector3.Cross(Vector3.up, dir) * (i % 2 == 1 ? side0 : -side0) * ((i + 1) / 2);
             float flight = 0.9f + dist * 0.025f;
-            pr.Launch(transform.position + Vector3.up * 4f + transform.forward * 1.2f, target, flight);
+            pr.Launch(transform.position + Vector3.up * (TopY * 0.75f) + transform.forward * 1.2f, target, flight);
             Throws++;
         }
         GameAudio.Play(SfxId.GrenadeThrow, transform.position, 0.6f);
@@ -612,9 +899,9 @@ public class ButcherZombie : Zombie
         if (IsWeak)
         {
             float p = 0.5f + 0.5f * Mathf.Sin(phaseT * 10f);
-            Tint(Color.Lerp(Color.white, weakColor * 1.6f, 0.35f + 0.35f * p), Color.Lerp(ringColor, weakColor, 0.6f + 0.4f * p));
+            Tint(Color.Lerp(Color.white, weakColor * 1.6f, 0.35f + 0.35f * p), Color.Lerp(ringTint, weakColor, 0.6f + 0.4f * p));
         }
-        else Tint(Color.white, ringColor);
+        else Tint(Color.white, ringTint);
     }
 
     void LateUpdate()
@@ -637,7 +924,9 @@ public class ButcherZombie : Zombie
         // No throw: it drops where it stands.
         animator.speed = 1f;
         ShowTelegraphs(false, false);
-        Tint(Color.white, ringColor);
+        ResetMarkers();
+        body.enabled = false;
+        Tint(Color.white, ringTint);
         SetPhase(Phase.Dead);
         model.localRotation = Quaternion.identity;
         animator.CrossFadeInFixedTime(DyingState, 0.15f, 0);
@@ -650,6 +939,7 @@ public class ButcherZombie : Zombie
         base.OnRemoved();
         shockT = 0f;
         if (slamZone) slamZone.localPosition = new Vector3(0f, 0.05f, 0f);
+        if (slamRing) slamRing.localPosition = new Vector3(0f, 0.07f, 0f);
         ShowTelegraphs(false, false);
     }
 }

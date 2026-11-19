@@ -56,6 +56,7 @@ public static partial class GameSceneBuilder
         var kit = BuildCityPrefabs(m, cm, env);
         var boss = ImportBoss(m, t);
         BuildBossPrefab(m, boss); // after the env prefabs: its thrown debris reuses their meshes
+        BuildMutantBosses(m, t, anims, boss);
         BuildFlarePrefab(cm);
         BuildSupplyPrefab(cm);
         BuildHelicopterPrefab(cm);

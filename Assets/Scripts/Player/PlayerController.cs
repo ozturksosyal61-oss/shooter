@@ -178,6 +178,16 @@ public class PlayerController : MonoBehaviour
 
     public bool NeedsHealth => !IsDead && Health < maxHealth - 1f;
 
+    /// <summary>Damage over time (acid pools): no knockback, no invulnerability window, breaks the combo once a second.</summary>
+    public void Burn(float amount)
+    {
+        if (IsDead || amount <= 0f) return;
+        if (GameManager.I && GameManager.I.Won) return;
+        Health = Mathf.Max(0f, Health - amount);
+        if (Time.time - lastDamageTime > 1f) { lastDamageTime = Time.time; if (GameManager.I) GameManager.I.OnPlayerHurt(); }
+        if (Health <= 0f) { lastHitDir = Vector3.forward; Die(); }
+    }
+
     /// <summary>Silent healing (life steal, regen cards) — no popup.</summary>
     public void Regen(float amount)
     {

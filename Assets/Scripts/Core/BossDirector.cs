@@ -18,6 +18,11 @@ public class BossDirector : MonoBehaviour
     public float rewardPickDelay = 2.2f;
 
     public Zombie Boss { get; private set; }
+    /// <summary>Which mutation the current / last boss is (HUD name, radio, reward card title).</summary>
+    public BossType CurrentType { get; private set; }
+    BossType? pendingType;
+    /// <summary>Bots / tests: every boss is this mutation (null = the normal order).</summary>
+    public static BossType? TypeOverride;
     public bool BossAlive => Boss && Boss.Damageable && Boss.gameObject.activeInHierarchy;
     public int BossesSpawned { get; private set; }
     public int BossesDefeated { get; private set; }
@@ -64,9 +69,10 @@ public class BossDirector : MonoBehaviour
     }
 
     /// <summary>Campaign objective: the boss comes now (after the usual delay), holding the current wave.</summary>
-    public void Summon()
+    public void Summon(BossType? type = null)
     {
         if (BossAlive || pendingWave > 0) return;
+        pendingType = type;
         pendingWave = Mathf.Max(1, WaveDirector.I ? WaveDirector.I.Wave : 1);
         pendingT = spawnDelay;
     }
@@ -80,7 +86,7 @@ public class BossDirector : MonoBehaviour
         if (pendingWave > 0)
         {
             pendingT -= dt;
-            if (pendingT <= 0f) Spawn(pendingWave);
+            if (pendingT <= 0f) Spawn(pendingWave, null, pendingType);
         }
         if (pickT >= 0f)
         {
@@ -90,23 +96,25 @@ public class BossDirector : MonoBehaviour
     }
 
     /// <summary>Spawns the boss of <paramref name="wave"/> now (tests call this directly).</summary>
-    public Zombie Spawn(int wave, Vector3? at = null)
+    public Zombie Spawn(int wave, Vector3? at = null, BossType? type = null)
     {
         pendingWave = 0;
+        pendingType = null;
         var gm = GameManager.I;
         if (!spawner || !gm) return null;
         Vector3 p = gm.player.transform.position;
         Vector3 pos = at ?? FindSpot(p);
         var wp = Difficulty.ForWave(Mathf.Max(1, wave));
         int index = GameMode.IsCampaign ? BossesSpawned : ModeRules.BossIndex(GameMode.Current, wave);
-        Boss = spawner.SpawnBoss(pos, wp, index);
+        CurrentType = type ?? TypeOverride ?? BossRules.TypeFor(index);
+        Boss = spawner.SpawnBoss(pos, wp, index, CurrentType);
         if (!Boss) return null;
         if (Boss is ButcherZombie b) b.SetSeed(seed + wave);
         BossesSpawned++;
         spawnTime = gm.GameTime;
         if (gm.cameraRig) gm.cameraRig.Focus(Boss.transform, introSeconds);
         if (MusicDirector.I) MusicDirector.I.SetBoss(true);
-        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio.boss");
+        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio." + BossRules.NameKey(CurrentType));
         BossSpawned?.Invoke(Boss);
         return Boss;
     }
@@ -138,7 +146,7 @@ public class BossDirector : MonoBehaviour
         gm.Shake(1f);
         if (MusicDirector.I) { MusicDirector.I.SetBoss(false); MusicDirector.I.Duck(0.3f, 1.2f); }
         GameAudio.Play(SfxId.ObjectiveBig, gm.player.transform.position);
-        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio.boss_down");
+        if (ObjectiveDirector.I) ObjectiveDirector.I.Say("radio.boss_down", BossRules.NameKey(CurrentType));
         pickT = rewardPickDelay;
         BossDefeated?.Invoke(z);
     }

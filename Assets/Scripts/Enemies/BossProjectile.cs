@@ -4,6 +4,8 @@ using UnityEngine;
 /// Debris / car part hurled by the boss at a far-away player: lobbed on an arc to a fixed landing point that is
 /// marked on the ground (shrinking red ring) for the whole flight; area damage + knockback on landing.
 /// Owned by the boss (fixed set, reused); lives as a root object so the floating origin shifts it.
+/// Acid (Kovan Ana): a smaller splash, then a green pool stays on the ground for <see cref="poolTime"/> and burns
+/// whoever stands in it (<see cref="poolDps"/>); the marker becomes the pool.
 /// </summary>
 public class BossProjectile : MonoBehaviour
 {
@@ -12,12 +14,26 @@ public class BossProjectile : MonoBehaviour
     public float radius = 2.8f;
     public float damage = 24f;
     public float arcHeight = 6f;
+    [Header("Acid (Kovan Ana)")]
+    public bool acid;
+    public float poolTime = 4f;
+    public float poolRadius = 2.6f;
+    public float poolDps = 10f;
+    public Color poolColor = new Color(0.45f, 1f, 0.2f, 1f);
+    public Renderer markerRenderer;
+
+    float poolT;
+    MaterialPropertyBlock mpb;
+    static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    /// <summary>Damage dealt by acid pools this run (bots / tests).</summary>
+    public static float AcidDamage { get; private set; }
+    public bool Pooling => poolT > 0f;
 
     Vector3 from, to, axis;
     float t, flight;
     bool flying;
 
-    public bool Flying => flying;
+    public bool Flying => flying || poolT > 0f;
     public Vector3 Target => to;
     public float Radius => radius;
     public static int Landed { get; private set; }
@@ -44,7 +60,10 @@ public class BossProjectile : MonoBehaviour
         to = target; to.y = 0f;
         flight = Mathf.Max(0.3f, seconds);
         t = 0f;
+        poolT = 0f;
         flying = true;
+        if (mesh) mesh.gameObject.SetActive(true);
+        Color(new Color(1f, 0.15f, 0.05f, 1f));
         axis = Random.onUnitSphere;
         transform.position = from;
         gameObject.SetActive(true);
@@ -58,12 +77,23 @@ public class BossProjectile : MonoBehaviour
     public void Hide()
     {
         flying = false;
+        poolT = 0f;
         gameObject.SetActive(false);
         if (marker) marker.gameObject.SetActive(false);
     }
 
+    void Color(Color c)
+    {
+        if (!markerRenderer) return;
+        if (mpb == null) mpb = new MaterialPropertyBlock();
+        markerRenderer.GetPropertyBlock(mpb);
+        mpb.SetColor(BaseColorId, c);
+        markerRenderer.SetPropertyBlock(mpb);
+    }
+
     void Update()
     {
+        if (poolT > 0f) { UpdatePool(); return; }
         if (!flying) return;
         t += Time.deltaTime;
         float k = Mathf.Clamp01(t / flight);
@@ -79,10 +109,53 @@ public class BossProjectile : MonoBehaviour
         if (k >= 1f) Impact();
     }
 
+    void UpdatePool()
+    {
+        poolT -= Time.deltaTime;
+        float fade = Mathf.Clamp01(poolT / 0.8f);
+        if (marker)
+        {
+            float s = poolRadius * 2f * (1f + 0.03f * Mathf.Sin(Time.time * 6f));
+            marker.localScale = new Vector3(s, s, 1f);
+        }
+        Color(poolColor * (0.55f + 0.45f * fade));
+        var gm = GameManager.I;
+        var pl = gm ? gm.player : null;
+        if (pl && !pl.IsDead)
+        {
+            Vector3 d = pl.transform.position - to; d.y = 0f;
+            if (d.sqrMagnitude < poolRadius * poolRadius)
+            {
+                // Silent burn (no knockback spam): health ticks down, the slow says "get out".
+                pl.Burn(poolDps * Time.deltaTime);
+                AcidDamage += poolDps * Time.deltaTime;
+                pl.Slow(0.75f, 0.15f);
+            }
+        }
+        if (poolT <= 0f) Hide();
+    }
+
     void Impact()
     {
         Vector3 p = to;
         Landed++;
+        if (acid)
+        {
+            // Splash + pool.
+            flying = false;
+            poolT = poolTime;
+            if (mesh) mesh.gameObject.SetActive(false);
+            if (Fx.I) { Fx.I.Hit(p + Vector3.up * 0.3f, Vector3.up); Fx.I.Dust(p); }
+            GameAudio.Play(SfxId.BombExplode, p, 1.6f, 0.45f);
+            var g = GameManager.I;
+            if (g && g.player && !g.player.IsDead)
+            {
+                Vector3 d = g.player.transform.position - p; d.y = 0f;
+                float m = d.magnitude;
+                if (m < radius) g.player.TakeDamage(damage * (1f - 0.4f * m / radius), m > 0.05f ? d / m : Vector3.forward, 6f);
+            }
+            return;
+        }
         if (Fx.I) { Fx.I.Explosion(p, radius * 0.7f, false); Fx.I.Dust(p); }
         GameAudio.Play(SfxId.BossSlam, p, 1.35f, 0.8f);
         GameAudio.Play(SfxId.HitMetal, p);

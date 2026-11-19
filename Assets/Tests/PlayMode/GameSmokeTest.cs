@@ -691,7 +691,7 @@ public class GameSmokeTest
             yield return WaitUntil(() => CardPicker.I.IsOpen, 8f);
             Assert.IsTrue(CardPicker.I.IsOpen, "boss reward card pick");
             Assert.AreEqual(Rarity.Epic, Upgrades.Get(CardPicker.I.OfferAt(0)).rarity, "guaranteed epic");
-            Assert.AreEqual(Loc.T("cards.boss"), CardPicker.I.header.text);
+            Assert.AreEqual(Loc.F("cards.boss", Loc.Upper(Loc.T("boss.butcher"))), CardPicker.I.header.text);
             Debug.Log($"SMOKE: boss phases {string.Join(",", phases)} sfx boss={heard.FindAll(x => x >= SfxId.BossRoar).Count}");
         }
         finally
@@ -988,6 +988,91 @@ public class GameSmokeTest
             if (Unity.Netcode.NetworkManager.Singleton) Object.Destroy(Unity.Netcode.NetworkManager.Singleton.gameObject);
             GameMode.Set(RunMode.Endless);
         }
+    }
+
+    [UnityTest, Timeout(300000)]
+    public IEnumerator MutantBosses()
+    {
+        GameManager.TimeScale = 2f;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        WaveDirector.I.enabled = false;
+        var p = gm.player;
+        var bd = BossDirector.I;
+        Vector3 home = OpenArea(p);
+        yield return null;
+
+        // ---- Sıçrayan: bigger than Kasap, leaps (body off in the air) and lands on the marked spot.
+        var leaper = bd.Spawn(11, ClearSpot(home, 13f), BossType.Leaper) as ButcherZombie;
+        Assert.NotNull(leaper, "Sıçrayan spawned");
+        Assert.AreEqual(BossType.Leaper, leaper.bossType);
+        Assert.AreEqual(BossType.Leaper, bd.CurrentType);
+        Assert.IsTrue(leaper.canLeap && !leaper.canCharge);
+        Assert.GreaterOrEqual(leaper.eyes.Length, 3, "eyes + body glows");
+        yield return WaitUntil(() => leaper.IsWalking, 10f);
+        p.Heal(1000f);
+        leaper.ForceLeap();
+        Assert.AreEqual(ButcherZombie.Phase.LeapWind, leaper.CurrentPhase);
+        Assert.IsTrue(leaper.slamRing.gameObject.activeSelf, "landing ring telegraph");
+        yield return WaitUntil(() => leaper.CurrentPhase == ButcherZombie.Phase.Leap, 3f);
+        Assert.IsFalse(leaper.body.enabled, "no collisions in the air");
+        Vector3 target = leaper.LeapTarget;
+        Teleport(p, target + Vector3.right * 1f); // stand in the ring
+        yield return WaitUntil(() => leaper.CurrentPhase != ButcherZombie.Phase.Leap, 3f);
+        Assert.AreEqual(1, leaper.Leaps);
+        Assert.AreEqual(1, leaper.LeapHits, "landing shockwave hits a soldier in the ring");
+        Assert.IsTrue(leaper.IsWeak, "winded after landing");
+        Vector3 d = leaper.transform.position - target; d.y = 0f;
+        Assert.Less(d.magnitude, 0.5f, "lands where marked");
+        leaper.Despawn(); // no kill: the boss reward card would slow the test down
+        yield return null;
+
+        // ---- Kovan Ana: brood of small runners, exposed afterwards; acid spit leaves a burning pool.
+        var hive = bd.Spawn(16, ClearSpot(home, 13f), BossType.Hive) as ButcherZombie;
+        Assert.NotNull(hive);
+        Assert.Greater(hive.MaxHealth, leaper.MaxHealth, "Kovan Ana is tougher than Sıçrayan");
+        yield return WaitUntil(() => hive.IsWalking, 10f);
+        int before = Zombie.Active.Count;
+        hive.ForceBrood();
+        yield return WaitUntil(() => hive.Broods > 0, 4f);
+        Assert.AreEqual(1, hive.Broods);
+        Assert.GreaterOrEqual(Zombie.Active.Count - before, 4, "brood spawned");
+        Assert.IsTrue(hive.IsWeak, "exposed after the brood");
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) if (Zombie.Active[i] != hive) Zombie.Active[i].Despawn();
+        yield return WaitUntil(() => !hive.IsWeak, 5f);
+        Teleport(p, ClearSpot(hive.transform.position, 10f));
+        p.Heal(1000f);
+        float acid0 = BossProjectile.AcidDamage;
+        hive.ForceThrow();
+        bool pooled = false;
+        float t0 = Time.realtimeSinceStartup;
+        while (Time.realtimeSinceStartup - t0 < 6f && !pooled)
+        {
+            foreach (var pr in hive.projectiles) if (pr && pr.Pooling) { pooled = true; Teleport(p, pr.Target); }
+            yield return null;
+        }
+        Assert.IsTrue(pooled, "acid glob leaves a pool");
+        yield return Wait(0.8f);
+        Assert.Greater(BossProjectile.AcidDamage, acid0, "the pool burns");
+        hive.Despawn(); // no kill: the boss reward card would slow the test down
+        yield return null;
+
+        // ---- Ezici: largest; frontal hits are armoured, the back takes extra.
+        var crusher = bd.Spawn(21, ClearSpot(home, 14f), BossType.Crusher) as ButcherZombie;
+        Assert.NotNull(crusher);
+        Assert.Greater(crusher.MaxHealth, hive.MaxHealth, "every mutation is tougher");
+        Assert.IsTrue(crusher.crushWalk && crusher.frontArmor < 1f);
+        yield return WaitUntil(() => crusher.IsWalking, 10f);
+        Vector3 f = crusher.transform.forward;
+        float h0 = crusher.Health;
+        crusher.TakeHit(100f, false, -f, crusher.AimPoint); // bullet flying at its face
+        float front = h0 - crusher.Health;
+        h0 = crusher.Health;
+        crusher.TakeHit(100f, false, f, crusher.AimPoint);  // from behind
+        float back = h0 - crusher.Health;
+        Assert.Less(front, 50f, "armoured front");
+        Assert.Greater(back, 100f, "soft back");
+        Assert.Greater(crusher.ArmorHits, 0);
     }
 
     [UnityTest, Timeout(600000)]
@@ -1337,6 +1422,40 @@ public class GameSmokeTest
         Debug.Log("CAPTURE: weak " + St());
         Shot(Path.Combine(dir, "boss_weak.png"));
         Debug.Log("CAPTURE: boss " + dir);
+    }
+
+    /// <summary>All four mutations side by side (close-up) + the leap telegraph. CAPTURE_DIR, without -nographics.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureMutants()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        yield return LoadGame();
+        var gm = GameManager.I;
+        WaveDirector.I.enabled = false;
+        Vector3 home = OpenArea(gm.player);
+        yield return null;
+        var sp = Object.FindAnyObjectByType<ZombieSpawner>();
+        var wp = Difficulty.ForWave(6);
+        var bosses = new System.Collections.Generic.List<Zombie>();
+        for (int i = 0; i < BossRules.TypeCount; i++)
+        {
+            var z = sp.SpawnBoss(home + new Vector3(-13.5f + i * 9f, 0f, 10f), wp, 0, (BossType)i);
+            bosses.Add(z);
+        }
+        yield return WaitUntil(() => bosses.TrueForAll(b => b.IsWalking), 12f);
+        WaveDirector.I.enabled = false;
+        foreach (var b in bosses) { b.transform.rotation = Quaternion.LookRotation(Vector3.back); b.enabled = false; }
+        yield return null;
+        ShotFrom(Path.Combine(dir, "mutants_lineup.png"), home + new Vector3(0f, 6.5f, -15f), home + new Vector3(0f, 2.8f, 10f));
+        foreach (var b in bosses) { b.enabled = true; if (((ButcherZombie)b).bossType != BossType.Leaper) b.Despawn(); }
+        yield return null;
+        var leaper = bosses[1] as ButcherZombie;
+        gm.player.Heal(1000f);
+        leaper.ForceLeap();
+        yield return Wait(0.5f);
+        Shot(Path.Combine(dir, "mutants_leap.png"));
+        Debug.Log("CAPTURE: mutants " + dir);
     }
 
     /// <summary>Renders gameplay frames to PNG. Run with -testFilter GameSmokeTest.CaptureScreens and CAPTURE_DIR set.</summary>

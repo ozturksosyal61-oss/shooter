@@ -95,6 +95,8 @@ public class ObjectiveDirector : MonoBehaviour
         if (HasActive && Step.kind == ObjectiveKind.Boss) Complete();
     }
 
+    BossType? ChapterBoss => Plan is CampaignPlan cp ? cp.Def.boss : (BossType?)null;
+
     /// <summary>Campaign chapter progress (0 when not in a chapter).</summary>
     public int ChapterIndex => Plan is CampaignPlan cp ? cp.Index : 0;
     public int ChapterTotal => Plan is CampaignPlan cp ? cp.Total : 0;
@@ -127,7 +129,7 @@ public class ObjectiveDirector : MonoBehaviour
                 if (Held >= Hold) Complete();
             }
             else if (Step.kind == ObjectiveKind.Boss && BossDirector.I && !BossDirector.I.HoldsWave && gm.GameTime - IssuedAt > 8f)
-                BossDirector.I.Summon(); // safety: the boss got recycled / never came
+                BossDirector.I.Summon(ChapterBoss); // safety: the boss got recycled / never came
             return;
         }
 
@@ -174,7 +176,7 @@ public class ObjectiveDirector : MonoBehaviour
             Begin(step, pg);
             Radio?.Invoke(new RadioMsg { key = step.briefKey, num = Mathf.RoundToInt(step.hold * holdScale) });
             Issued?.Invoke(step);
-            if (step.kind == ObjectiveKind.Boss && BossDirector.I) BossDirector.I.Summon();
+            if (step.kind == ObjectiveKind.Boss && BossDirector.I) BossDirector.I.Summon(ChapterBoss);
             return;
         }
         var from = new Vector2Int(Mathf.FloorToInt(pg.x / CityLayout.Size), Mathf.FloorToInt(pg.z / CityLayout.Size));
@@ -263,4 +265,7 @@ public class ObjectiveDirector : MonoBehaviour
 
     /// <summary>Radio line from HQ (also used by the boss director).</summary>
     public void Say(string key) => Radio?.Invoke(new RadioMsg { key = key });
+
+    /// <summary>Radio line with a word ({0} = Loc.T(argKey)).</summary>
+    public void Say(string key, string argKey) => Radio?.Invoke(new RadioMsg { key = key, argKey = argKey });
 }

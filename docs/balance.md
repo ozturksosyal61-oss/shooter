@@ -133,3 +133,16 @@ F4'te beceri fark etmiyordu (71–95 sn). F5'te sabit duran ~100 sn'de ölüyor,
 
 - Sonsuz modda human ~190–400 sn, kite 507–600 sn → zor modda süre ~1/3. Mermi artık "sürekli hareket et, kutuları topla" baskısı yaratıyor ama kesin ölüm sebebi değil.
 - Turret botu yerinde durduğu için kutu toplayamıyor; zor mod bilerek hareketi ödüllendiriyor.
+
+## F14 — Yeni boss'lar (2026-11-19)
+Aynı koşul: `PLAYTEST_BOSS=1` (dalga 6, seviye 8), `PLAYTEST_BOSS_TYPE=<tip>`, seed 7, timescale 8. Normal oyunda Sıçrayan dalga 11, Kovan Ana 16, Ezici 21'de (zor modda 9 / 13 / 17) gelir — oralarda dalga zorluğu ve boss büyüme çarpanı da eklenir.
+
+| Boss | boy | can (Kasap=1) | human | kite |
+|---|---|---|---|---|
+| Kasap | 4.9 m | 1.00 | yendi 73 sn (12 isabet) | yendi 37 sn |
+| Sıçrayan | 5.4 m | 1.15 | yendi 76 sn (3 iniş isabeti) | yendi 57 sn |
+| Kovan Ana | 5.8 m | 1.35 | öldü, boss %52 (3 yavru dalgası) | yendi 114 sn (9 yavru) |
+| Ezici | 6.1 m | 1.65 | öldü, boss %41 (129 zırh isabeti) | öldü, boss %12 (23 engel ezdi) |
+
+- Sıralama tuttu: her mutasyon bir öncekinden uzun sürüyor / daha ölümcül. Ezici'de botlar önden ateş ediyor (zırh) → oyuncu arkasına geçmeyi öğrenmeli; telsiz + "ZIRH!" yazısı bunu söylüyor.
+- Yüksek dalgaya atlayan senaryo (`PLAYTEST_BOSS_WAVE=11/16`) temsilî değil: botlar boss'tan değil dalga 16'nın normal / bombalı zombilerinden ölüyor (4 isabette 100 can).

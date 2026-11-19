@@ -49,6 +49,7 @@ public class PlaytestBot
     {
         GameManager.TimeScale = 1f;
         GameMode.Set(RunMode.Endless);
+        BossDirector.TypeOverride = null;
         Time.maximumDeltaTime = 0.3333333f;
         Time.captureDeltaTime = 0f;
         ChunkManager.SeedOverride = 0;
@@ -185,7 +186,10 @@ public class PlaytestBot
         {
             int lvl = (int)EnvF("PLAYTEST_BOSS_LEVEL", 8f);
             while (Progression.I.Level < lvl) Progression.I.AddXp(Progression.I.XpToNext - Progression.I.Xp);
-            WaveDirector.I.JumpToBreakBefore(BossRules.FirstBossWave);
+            // PLAYTEST_BOSS_WAVE: 6 Kasap, 11 Sıçrayan, 16 Kovan Ana, 21 Ezici (endless order).
+            WaveDirector.I.JumpToBreakBefore((int)EnvF("PLAYTEST_BOSS_WAVE", BossRules.FirstBossWave));
+            // PLAYTEST_BOSS_TYPE=Leaper|Hive|Crusher: that mutation at the boss wave (same-wave difficulty comparison).
+            BossDirector.TypeOverride = System.Enum.TryParse(Env("PLAYTEST_BOSS_TYPE", ""), out BossType bt) ? bt : (BossType?)null;
         }
         float bossSeen = -1f, bossDown = -1f, bossHurtStart = 0f;
         int bossHurts = 0, chargeDodges = 0, chargeHits = 0;
@@ -354,6 +358,12 @@ public class PlaytestBot
                     }
                     else if (ph == ButcherZombie.Phase.SlamWind && boss.PhaseTime > react * 0.6f && to.magnitude < boss.slamRadius + 1.5f)
                         move = to.normalized;
+                    else if ((ph == ButcherZombie.Phase.LeapWind && boss.PhaseTime > react) || ph == ButcherZombie.Phase.Leap)
+                    {
+                        // Get out of the landing ring.
+                        Vector3 fromLand = p - boss.LeapTarget; fromLand.y = 0f;
+                        if (fromLand.magnitude < boss.leapRadius + 1.5f) move = fromLand.sqrMagnitude > 0.04f ? fromLand.normalized : Vector3.right;
+                    }
                     else if (!boss.IsWeak && to.magnitude < 7f && !(od && od.HasActive))
                         move = (to.normalized + move * 0.4f).normalized;
                     if (ph != ButcherZombie.Phase.ChargeWind && ph != ButcherZombie.Phase.Charge)
@@ -471,7 +481,7 @@ public class PlaytestBot
             $"bossHpLeft={(bossDir && bossDir.Boss && bossDir.BossAlive ? 100f * bossDir.Boss.Health / bossDir.Boss.MaxHealth : 0):0}% " +
             $"bossHurts={(bossSeen >= 0f ? hurts - bossHurtStart : 0):0} " +
             (gm.player.weapon.limitedAmmo ? $"reserve={gm.player.weapon.Reserve} ammoBoxes={ammoBoxes} dryTime={dryTime:0}s " : "") +
-            (bossDir && bossDir.Boss is ButcherZombie bb ? $"charges={bb.Charges} throws={bb.Throws} chargeHits={bb.ChargeHits} slamHits={bb.SlamHits} shoves={bb.ShoveHits}" : "");
+            (bossDir && bossDir.Boss is ButcherZombie bb ? $"type={bb.bossType} charges={bb.Charges} throws={bb.Throws} chargeHits={bb.ChargeHits} slamHits={bb.SlamHits} shoves={bb.ShoveHits} leaps={bb.Leaps} leapHits={bb.LeapHits} broods={bb.Broods} armor={bb.ArmorHits} crushed={bb.Crushed} acid={BossProjectile.AcidDamage:0}" : "");
         log.AppendLine(summary);
         log.AppendLine("cards: " + cardLog);
         log.AppendLine("objectives: " + objLog);

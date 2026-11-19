@@ -125,7 +125,7 @@ public static partial class GameSceneBuilder
         var model = k.model;
         var head = k.animator.GetBoneTransform(HumanBodyBones.Head);
         var smr = model.GetComponentInChildren<SkinnedMeshRenderer>();
-        var eyes = FindEyes(smr, head, go.transform, out int found);
+        var eyes = FindEyes(smr, head, go.transform, BossHeight, BaseColor(BossDir), out int found);
         var list = new List<Transform>();
         foreach (var e in eyes)
         {
@@ -143,7 +143,7 @@ public static partial class GameSceneBuilder
     }
 
     /// <summary>World positions of the two eyes: red texels in the head region of the bind-pose mesh (fallback: estimate).</summary>
-    static Vector3[] FindEyes(SkinnedMeshRenderer smr, Transform head, Transform root, out int found)
+    static Vector3[] FindEyes(SkinnedMeshRenderer smr, Transform head, Transform root, float BossHeight, string texPath, out int found)
     {
         found = 0;
         Vector3 hp = head ? head.position : root.position + Vector3.up * BossHeight * 0.9f;
@@ -153,7 +153,7 @@ public static partial class GameSceneBuilder
             hp + Vector3.up * BossHeight * 0.045f + fwd * BossHeight * 0.06f - right * BossHeight * 0.022f,
             hp + Vector3.up * BossHeight * 0.045f + fwd * BossHeight * 0.06f + right * BossHeight * 0.022f,
         };
-        if (!smr || !head) return Estimate();
+        if (!smr || !head || texPath == null) return Estimate();
 
         // The model is still in its import (bind) pose here: mesh space → world through the renderer's full matrix.
         var mesh = smr.sharedMesh;
@@ -166,7 +166,7 @@ public static partial class GameSceneBuilder
         float kScale = maxY - minY;
 
         var tex = new Texture2D(2, 2);
-        tex.LoadImage(System.IO.File.ReadAllBytes(BaseColor(BossDir)));
+        tex.LoadImage(System.IO.File.ReadAllBytes(texPath));
         Vector3 l = Vector3.zero, r = Vector3.zero;
         int nl = 0, nr = 0, region = 0;
         float topY = float.MinValue;
@@ -191,6 +191,9 @@ public static partial class GameSceneBuilder
     static void BuildBossSystems(ZombieSpawner spawner)
     {
         spawner.bossPrefab = Load<Zombie>("Kasap");
+        spawner.leaperPrefab = Load<Zombie>("Sicrayan");
+        spawner.hivePrefab = Load<Zombie>("KovanAna");
+        spawner.crusherPrefab = Load<Zombie>("Ezici");
         var bd = new GameObject("BossDirector").AddComponent<BossDirector>();
         bd.spawner = spawner;
         new GameObject("PropTosser").AddComponent<PropTosser>();

@@ -15,6 +15,8 @@ public class ZombieSpawner : MonoBehaviour
     public Zombie tonguePrefab;
     [Header("Boss")]
     public Zombie bossPrefab;
+    [Tooltip("Later mutations (BossType order: Leaper, Hive, Crusher); missing ones fall back to Kasap.")]
+    public Zombie leaperPrefab, hivePrefab, crusherPrefab;
     public float bossSpeed = 2.3f;
     public float bossDamageMul = 1.6f;
     public int specialPrewarm = 3;
@@ -31,6 +33,7 @@ public class ZombieSpawner : MonoBehaviour
     public Vector2 runnerSpeed = new Vector2(3.6f, 4.4f);
 
     Pool<Zombie> pool, shieldPool, bombPool, tonguePool, bossPool;
+    readonly Pool<Zombie>[] bossPools = new Pool<Zombie>[BossRules.TypeCount];
     float timer = 1f;
     Camera cam;
     Vector3 lastPlayerPos, heading;
@@ -46,6 +49,10 @@ public class ZombieSpawner : MonoBehaviour
         if (bombPrefab) bombPool = new Pool<Zombie>(bombPrefab, transform, specialPrewarm);
         if (tonguePrefab) tonguePool = new Pool<Zombie>(tonguePrefab, transform, specialPrewarm);
         if (bossPrefab) bossPool = new Pool<Zombie>(bossPrefab, transform, 1);
+        bossPools[(int)BossType.Butcher] = bossPool;
+        if (leaperPrefab) bossPools[(int)BossType.Leaper] = new Pool<Zombie>(leaperPrefab, transform, 1);
+        if (hivePrefab) bossPools[(int)BossType.Hive] = new Pool<Zombie>(hivePrefab, transform, 1);
+        if (crusherPrefab) bossPools[(int)BossType.Crusher] = new Pool<Zombie>(crusherPrefab, transform, 1);
     }
 
     void Update()
@@ -131,11 +138,23 @@ public class ZombieSpawner : MonoBehaviour
     }
 
     /// <summary>Spawns the boss (one at a time) with wave-scaled health (<see cref="BossRules.Health"/>).</summary>
-    public Zombie SpawnBoss(Vector3 pos, WaveParams wp, int bossIndex)
+    public Zombie SpawnBoss(Vector3 pos, WaveParams wp, int bossIndex) => SpawnBoss(pos, wp, bossIndex, BossRules.TypeFor(bossIndex));
+
+    public Zombie SpawnBoss(Vector3 pos, WaveParams wp, int bossIndex, BossType type)
     {
-        if (bossPool == null) return null;
-        var z = bossPool.Get();
-        z.Spawn(pos, BossRules.Health(baseHealth, wp, bossIndex), bossSpeed, wp.contactDamage * bossDamageMul, false, bossPool);
+        var p = bossPools[(int)type] ?? bossPool;
+        if (p == null) return null;
+        var z = p.Get();
+        z.Spawn(pos, BossRules.Health(baseHealth, wp, bossIndex, type), bossSpeed, wp.contactDamage * bossDamageMul, false, p);
+        return z;
+    }
+
+    /// <summary>Kovan Ana's brood: small, fast, fragile runners.</summary>
+    public Zombie SpawnMinion(Vector3 pos, WaveParams wp)
+    {
+        var z = pool.Get();
+        z.Spawn(pos, baseHealth * wp.healthMultiplier * 0.35f, runnerSpeed.y * wp.speedMultiplier * 1.15f, wp.contactDamage * 0.6f, true, pool);
+        z.transform.localScale = Vector3.one * 0.68f;
         return z;
     }
 
