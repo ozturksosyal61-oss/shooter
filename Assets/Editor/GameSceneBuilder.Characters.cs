@@ -547,6 +547,7 @@ public static partial class GameSceneBuilder
         pc.weapon = weapon;
         pc.flash = flash;
         weapon.owner = pc;
+        go.AddComponent<SquadMember>().local = pc; // zombies chase squad members (co-op teammates too)
         SetLayer(go, GameLayers.Player);
         SavePrefab(go, $"{PrefabDir}/Player.prefab");
     }

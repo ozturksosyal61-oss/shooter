@@ -24,7 +24,8 @@ public class FloatingOrigin : MonoBehaviour
 
     void LateUpdate()
     {
-        if (!target) return;
+        // Co-op: every game must share one coordinate frame (teammates are leashed instead).
+        if (!target || GameMode.IsCoop) return;
         Vector3 p = target.position;
         if (Mathf.Abs(p.x) < threshold && Mathf.Abs(p.z) < threshold) return;
         var delta = new Vector3(-Mathf.Round(p.x / snap) * snap, 0f, -Mathf.Round(p.z / snap) * snap);

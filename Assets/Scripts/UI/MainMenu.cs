@@ -11,7 +11,8 @@ public class MainMenu : MonoBehaviour
     public static MainMenu I { get; private set; }
 
     public GameObject mainButtons, playButtons;
-    public Button play, shop, settings, campaign, endless, hard, back;
+    public Button play, shop, settings, campaign, endless, hard, coop, back;
+    public CoopPanel coopPanel;
     public Text storySub, hardSub;
     public CampaignPanel campaignPanel;
     public Text gold, gems;
@@ -42,6 +43,7 @@ public class MainMenu : MonoBehaviour
         back.onClick.AddListener(() => { Click(); ShowPlay(false); });
         endless.onClick.AddListener(() => { Click(); StartMode(RunMode.Endless); });
         if (hard) hard.onClick.AddListener(() => { Click(); StartMode(RunMode.Hard); });
+        if (coop) coop.onClick.AddListener(() => { Click(); if (coopPanel) coopPanel.Open(); });
         campaign.onClick.AddListener(() => { Click(); if (campaignPanel) campaignPanel.Open(); else Toast(Loc.T("menu.soon")); });
         Loc.Changed += RefreshModes;
         shop.onClick.AddListener(() => { Click(); if (shopUI) shopUI.Open(ShopUI.Tab.Weapons); else Toast(Loc.T("menu.soon")); });

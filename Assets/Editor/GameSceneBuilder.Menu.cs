@@ -314,7 +314,8 @@ public static partial class GameSceneBuilder
         mm.hardSub = ModeButton(ref mm.hard, "Hard", "menu.hard", new Color(0.55f, 0.13f, 0.1f), UiCream, 470f, null);
         var skull = Img("Skull", mm.hard.transform, ui.skull, UiCream);
         Anchor(skull.rectTransform, new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(-34f, -34f), new Vector2(54f, 54f));
-        mm.back = MakeButton("Back", play, "menu.back", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(0f, -320f), new Vector2(320f, 100f), 44);
+        mm.back = MakeButton("Back", play, "menu.back", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(-250f, -320f), new Vector2(320f, 100f), 44);
+        mm.coop = MakeButton("Coop", play, "menu.coop", UiKhakiDark, new Vector2(0.5f, 0.5f), new Vector2(250f, -320f), new Vector2(420f, 100f), 46, UiToxic);
         mm.mainButtons = main.gameObject; mm.playButtons = play.gameObject;
 
         // Toast.
@@ -326,6 +327,7 @@ public static partial class GameSceneBuilder
 
         mm.settingsPanel = BuildSettingsPanel(root);
         BuildEconomyMenu(root, mm, m);
+        mm.coopPanel = BuildCoopPanel(root);
 
         // OZT Digital splash (once per session, after Unity's).
         var spl = Img("Splash", root, ui.flat, new Color(0.03f, 0.03f, 0.03f, 1f));

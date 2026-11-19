@@ -82,6 +82,14 @@ public class GameManager : MonoBehaviour
     void Restart()
     {
         GameAudio.Play(SfxId.UiClick, Vector3.zero);
+        if (GameMode.IsCoop)
+        {
+            // Co-op (C1): no solo restart — back to the menu (C3: revive / team retry).
+            Time.timeScale = TimeScale;
+            _ = CoopSession.Leave();
+            LoadingScreen.Load(LoadingScreen.MenuScene);
+            return;
+        }
         // Chapter cleared: the big button goes on to the next chapter.
         if (Won && GameMode.IsCampaign && GameMode.Chapter + 1 < Campaign.Count) GameMode.Chapter++;
         Time.timeScale = TimeScale;
@@ -156,6 +164,7 @@ public class GameManager : MonoBehaviour
     /// <summary>Global slow-motion factor (level-up card pick); 1 = normal.</summary>
     public void SetSlow(float factor)
     {
+        if (GameMode.IsCoop) factor = 1f; // a shared world can't slow down for one player's card pick
         slow = Mathf.Clamp(factor, 0.01f, 1f);
         if (!IsGameOver && !hitStopActive && !Paused) Time.timeScale = TimeScale * slow;
     }
@@ -168,9 +177,10 @@ public class GameManager : MonoBehaviour
     {
         if (p == Paused || (p && IsGameOver)) return;
         Paused = p;
-        Time.timeScale = p ? 0f : TimeScale * slow;
+        // Co-op: the menu opens but the shared world keeps running.
+        if (!GameMode.IsCoop) Time.timeScale = p ? 0f : TimeScale * slow;
         if (!p) hitStopActive = false;
-        AudioListener.pause = p;
+        if (!GameMode.IsCoop) AudioListener.pause = p;
         if (TouchControls.I) TouchControls.I.Paused = p;
         PausedChanged?.Invoke(p);
     }
@@ -188,7 +198,7 @@ public class GameManager : MonoBehaviour
 
     void HitStop(float duration, float scale)
     {
-        if (IsGameOver || slow < 1f || Paused) return;
+        if (IsGameOver || slow < 1f || Paused || GameMode.IsCoop) return;
         float until = Time.unscaledTime + duration;
         // The longer-lasting request sets the scale (a kill hit-stop inside the boss slow-mo keeps the slow-mo).
         if (!hitStopActive || until >= hitStopUntil) hitStopScale = scale;

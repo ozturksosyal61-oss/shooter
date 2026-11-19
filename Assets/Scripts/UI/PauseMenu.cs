@@ -44,6 +44,7 @@ public class PauseMenu : MonoBehaviour
     public void ToMenu()
     {
         if (GameManager.I) GameManager.I.SetPaused(false);
+        if (GameMode.IsCoop) _ = CoopSession.Leave();
         LoadingScreen.Load(LoadingScreen.MenuScene);
     }
 

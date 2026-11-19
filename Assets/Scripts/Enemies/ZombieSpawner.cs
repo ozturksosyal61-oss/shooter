@@ -51,7 +51,8 @@ public class ZombieSpawner : MonoBehaviour
     void Update()
     {
         var gm = GameManager.I;
-        if (gm.IsGameOver) return;
+        // Co-op host: the run goes on while a teammate is still standing.
+        if (gm.IsGameOver && !(GameMode.IsCoop && Squad.AnyAlive)) return;
         if (!cam) cam = Camera.main;
         var player = gm.player.transform;
 
@@ -86,6 +87,17 @@ public class ZombieSpawner : MonoBehaviour
             float hp = baseHealth * wp.healthMultiplier * (runner ? 0.6f : 1f);
             pool.Get().Spawn(pos, hp, speed, wp.contactDamage, runner, pool);
         }
+    }
+
+    /// <summary>Co-op client: a puppet copy of a host zombie, from the pool of its kind.</summary>
+    public Zombie SpawnPuppet(ZombieNetState s)
+    {
+        Pool<Zombie> p = s.kind == ZombieKind.Shield ? shieldPool : s.kind == ZombieKind.Bomb ? bombPool
+            : s.kind == ZombieKind.Tongue ? tonguePool : s.kind == ZombieKind.Boss ? bossPool : pool;
+        if (p == null) p = pool;
+        var z = p.Get();
+        z.SpawnPuppet(s, p);
+        return z;
     }
 
     /// <summary>Weighted pick among the special kinds still under their per-wave limit (Walker = none).</summary>
@@ -138,7 +150,8 @@ public class ZombieSpawner : MonoBehaviour
             var z = Zombie.Active[i];
             if (z.kind == ZombieKind.Boss) continue; // the boss catches up instead
             Vector3 d = z.transform.position - playerPos; d.y = 0f;
-            if (d.sqrMagnitude > max) z.Despawn();
+            // Co-op: only when it is far from every soldier.
+            if (d.sqrMagnitude > max && Squad.NearestSqr(z.transform.position, d.sqrMagnitude) > max) z.Despawn();
         }
     }
 

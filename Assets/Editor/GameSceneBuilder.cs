@@ -62,6 +62,7 @@ public static partial class GameSceneBuilder
         AssetDatabase.SaveAssets();
         BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
         AssetDatabase.SaveAssets();
+        BuildNetPrefabs();
         BuildScene(scene, m, t, env, cm, kit, boss);
         AssetDatabase.SaveAssets();
         BuildMenuScene(env, cm, kit, m);
@@ -819,6 +820,7 @@ public static partial class GameSceneBuilder
         spawner.tonguePrefab = Load<Zombie>("TongueZombie");
         spawner.despawnDistance = 40f; // the wider 17.5 m view reaches ~25 m to the corners
         BuildBossSystems(spawner);
+        BuildNetZombies(spawner);
         BuildAudio(player.transform);
         new GameObject("Progression").AddComponent<Progression>();
         var upgrades = new GameObject("Upgrades").AddComponent<Upgrades>();

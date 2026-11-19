@@ -78,7 +78,7 @@ public static class Difficulty
     public static float DamagePerWave = 1.5f;
 
     /// <summary>Wave tuning for the current mode (hard mode hardens it).</summary>
-    public static WaveParams ForWave(int n) => ForWave(n, GameMode.IsHard);
+    public static WaveParams ForWave(int n) => GameMode.IsCoop ? ModeRules.ForCoop(ForWave(n, false)) : ForWave(n, GameMode.IsHard);
 
     public static WaveParams ForWave(int n, bool hard)
     {

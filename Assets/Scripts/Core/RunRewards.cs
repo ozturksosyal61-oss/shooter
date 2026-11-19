@@ -72,7 +72,7 @@ public class RunRewards : MonoBehaviour
     {
         var gm = GameManager.I;
         bool vip = Profile.Vip;
-        bool canContinue = gm.Continues == 0 && !gm.Won;
+        bool canContinue = gm.Continues == 0 && !gm.Won && !GameMode.IsCoop;
         if (doubleButton) doubleButton.gameObject.SetActive(!Doubled && LastGold > 0 && Ads.Available);
         if (continueAdButton) continueAdButton.gameObject.SetActive(canContinue && Ads.Available);
         if (continueGemButton) continueGemButton.gameObject.SetActive(canContinue);

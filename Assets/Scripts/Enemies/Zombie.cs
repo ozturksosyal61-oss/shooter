@@ -98,6 +98,13 @@ public class Zombie : MonoBehaviour
     public bool IsSpecial => kind >= ZombieKind.Shield;
     public ZombieKind Kind => runner ? ZombieKind.Runner : kind;
     public float Health => hp;
+
+    // ---- Co-op (see NetZombies): host zombies get a network id; on clients zombies are puppets of the host's.
+    public ushort NetId { get; private set; }
+    public bool Puppet { get; private set; }
+    public Vector3 LastHitDir { get; private set; }
+    Vector3 netPos;
+    float netYaw;
     /// <summary>The killing blow was an explosion (kill-blast cards don't chain off these).</summary>
     public bool KilledByExplosion { get; private set; }
     public float MaxHealth => maxHp;
@@ -108,6 +115,9 @@ public class Zombie : MonoBehaviour
     public void Spawn(Vector3 pos, float health, float moveSpeed, float contactDamage, bool isRunner, Pool<Zombie> owner)
     {
         pool = owner;
+        Puppet = false;
+        NetId = NetZombies.I && NetZombies.I.IsHost ? NetZombies.I.Register(this) : (ushort)0;
+        target = null;
         hp = maxHp = health;
         speed = moveSpeed;
         damage = contactDamage;
@@ -121,8 +131,8 @@ public class Zombie : MonoBehaviour
         avoidSide = 0;
         state = State.Rising;
         stateT = 0f;
-        var p = GameManager.I.player;
-        Vector3 look = p ? p.transform.position - pos : Vector3.forward; look.y = 0f;
+        var tm = Squad.Nearest(pos);
+        Vector3 look = tm ? tm.Position - pos : GameManager.I.player ? GameManager.I.player.transform.position - pos : Vector3.forward; look.y = 0f;
         transform.SetPositionAndRotation(pos, look.sqrMagnitude > 0.01f ? Quaternion.LookRotation(look) : Quaternion.identity);
         transform.localScale = Vector3.one * (IsSpecial ? 1f : runner ? 0.92f : Random.Range(0.97f, 1.06f));
         model.localPosition = modelPos + Vector3.down * riseDepth;
@@ -144,6 +154,59 @@ public class Zombie : MonoBehaviour
     }
 
     protected virtual void OnSpawned() { }
+
+    /// <summary>Co-op client: a visual copy of host zombie <paramref name="s"/> (no AI, no health of its own).</summary>
+    public void SpawnPuppet(ZombieNetState s, Pool<Zombie> owner)
+    {
+        Spawn(s.pos, Mathf.Max(1f, s.maxHp), 0f, 0f, s.runner, owner);
+        Puppet = true;
+        NetId = s.id;
+        netPos = s.pos;
+        netYaw = s.yaw;
+        transform.rotation = Quaternion.Euler(0f, s.yaw, 0f);
+        if (!s.rising)
+        {
+            // Joined mid-walk: skip the rise.
+            state = State.Walking;
+            stateT = 0f;
+            model.localPosition = modelPos;
+            animator.Play(LocoState, 0, Random.value);
+        }
+        hp = s.hp01 * maxHp;
+    }
+
+    public void SetNetState(ZombieNetState s)
+    {
+        netPos = s.pos;
+        netYaw = s.yaw;
+        gait = s.gait;
+        hp = s.hp01 * maxHp;
+    }
+
+    public ZombieNetState ToNetState() => new ZombieNetState
+    {
+        id = NetId, kind = kind, runner = runner, rising = state == State.Rising,
+        pos = transform.position, yaw = transform.eulerAngles.y, gait = gait,
+        hp01 = maxHp > 0f ? Mathf.Clamp01(hp / maxHp) : 0f, maxHp = maxHp,
+    };
+
+    void UpdatePuppet(float dt)
+    {
+        Vector3 p = transform.position;
+        if ((netPos - p).sqrMagnitude > 36f) p = netPos;
+        else p = Vector3.Lerp(p, netPos, 1f - Mathf.Exp(-10f * dt));
+        p.y = 0f;
+        transform.position = p;
+        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(0f, netYaw, 0f), 1f - Mathf.Exp(-12f * dt));
+        knock = Vector3.MoveTowards(knock, Vector3.zero, dt * 20f);
+    }
+
+    /// <summary>Co-op client: the host says this zombie died.</summary>
+    public void PuppetDie(Vector3 dir)
+    {
+        if (state == State.Dying) return;
+        Die(dir, transform.position + Vector3.up, false, false);
+    }
 
     public static Zombie FindNearest(Vector3 p, float range)
     {
@@ -205,7 +268,10 @@ public class Zombie : MonoBehaviour
         switch (state)
         {
             case State.Rising: UpdateRising(); break;
-            case State.Walking: UpdateBehaviour(dt); Animate(dt); break;
+            case State.Walking:
+                if (Puppet) UpdatePuppet(dt); else UpdateBehaviour(dt);
+                Animate(dt);
+                break;
             case State.Dying: UpdateDying(dt); break;
         }
     }
@@ -244,7 +310,10 @@ public class Zombie : MonoBehaviour
     float retargetT;
     const float TurretAggroRange = 7f;
 
-    protected Vector3 ChaseTargetPos => turretTarget ? turretTarget.transform.position : GameManager.I.player.transform.position;
+    /// <summary>The soldier this zombie is after: nearest squad member (re-picked a few times a second).</summary>
+    protected SquadMember target;
+    protected Vector3 PlayerPos => target ? target.Position : GameManager.I.player.transform.position;
+    protected Vector3 ChaseTargetPos => turretTarget ? turretTarget.transform.position : PlayerPos;
 
     void PickTarget(float dt)
     {
@@ -252,15 +321,16 @@ public class Zombie : MonoBehaviour
         retargetT -= dt;
         if (retargetT > 0f) return;
         retargetT = 0.4f + Random.value * 0.2f;
+        if (Squad.Count > 1 || !target) target = Squad.Nearest(transform.position);
         var t = Turret.Nearest(transform.position, TurretAggroRange, out float dt2);
         if (!t) { turretTarget = null; return; }
-        Vector3 toP = GameManager.I.player.transform.position - transform.position; toP.y = 0f;
+        Vector3 toP = PlayerPos - transform.position; toP.y = 0f;
         turretTarget = dt2 < toP.magnitude * 0.8f ? t : null;
     }
 
     protected Vector3 ToPlayer(out float dist)
     {
-        Vector3 to = GameManager.I.player.transform.position - transform.position; to.y = 0f;
+        Vector3 to = PlayerPos - transform.position; to.y = 0f;
         dist = to.magnitude;
         return dist > 0.01f ? to / dist : transform.forward;
     }
@@ -337,13 +407,15 @@ public class Zombie : MonoBehaviour
     {
         var player = GameManager.I.player;
         attackCd -= dt;
-        if (dist < contactRange && attackCd <= 0f && (turretTarget || !player.IsDead))
+        bool targetDown = target ? target.IsDead : player.IsDead;
+        if (dist < contactRange && attackCd <= 0f && (turretTarget || !targetDown))
         {
             attackCd = contactCooldown;
             // The attack animation starts at the moment of contact; damage lands now.
             animator.CrossFadeInFixedTime(Random.value < 0.5f ? AttackState : PunchState, 0.08f, 0);
             GameAudio.Play(SfxId.ZombieAttack, transform.position);
             if (turretTarget) turretTarget.TakeDamage(damage);
+            else if (target) target.Damage(damage, dist > 0.01f ? to / dist : transform.forward);
             else player.TakeDamage(damage, dist > 0.01f ? to / dist : transform.forward);
         }
     }
@@ -420,6 +492,17 @@ public class Zombie : MonoBehaviour
     {
         if (state == State.Dying) return true;
         dir.y = 0f;
+        LastHitDir = dir;
+        if (Puppet)
+        {
+            // Co-op client: feedback now, damage on the host.
+            flash.Flash(0.07f);
+            punch = 1f;
+            if (Fx.I) Fx.I.Hit(point, dir);
+            GameAudio.Play(crit ? SfxId.Crit : SfxId.Hit, point);
+            if (!explosive) NetZombies.ReportHit(this, amount, crit, dir, point);
+            return true;
+        }
         if (!explosive && Deflects(dir, point)) return false;
         amount *= DamageTakenMul;
         hp -= amount;
@@ -447,7 +530,7 @@ public class Zombie : MonoBehaviour
     protected virtual bool Deflects(Vector3 dir, Vector3 point) => false;
     protected virtual void OnDamaged(float amount, bool explosive) { }
 
-    void Die(Vector3 dir, Vector3 point, bool explosive)
+    void Die(Vector3 dir, Vector3 point, bool explosive, bool scoring = true)
     {
         state = State.Dying;
         stateT = 0f;
@@ -459,8 +542,11 @@ public class Zombie : MonoBehaviour
         dir.Normalize();
 
         var gm = GameManager.I;
-        gm.RegisterKill(this);
-        if (Pickups.I) Pickups.I.MaybeDrop(transform.position, IsSpecial);
+        if (scoring)
+        {
+            gm.RegisterKill(this);
+            if (Pickups.I) Pickups.I.MaybeDrop(transform.position, IsSpecial);
+        }
         gm.HitStop(0.06f);
         gm.Shake(IsSpecial ? 0.45f : 0.3f);
         GameAudio.Play(SfxId.Hit, point);
@@ -470,7 +556,7 @@ public class Zombie : MonoBehaviour
         deathSpin = 0f;
         landed = true;
         landedT = 0f;
-        if (OnKilled(dir, explosive)) return;
+        if (scoring && OnKilled(dir, explosive)) return;
 
         // Face the shooter so the throw and the dying animation both fall away from the shot.
         transform.rotation = Quaternion.LookRotation(-dir);

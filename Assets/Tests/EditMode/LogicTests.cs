@@ -898,3 +898,63 @@ public class ModeTests
         Assert.AreEqual(ObjectiveKind.Helicopter, Campaign.Get(Campaign.Count - 1).steps[Campaign.Get(Campaign.Count - 1).steps.Length - 1], "finale: the chopper");
     }
 }
+
+
+public class CoopTests
+{
+    [Test]
+    public void SnapshotRoundTrip()
+    {
+        var zs = new ZombieNetState[3];
+        for (int i = 0; i < 3; i++)
+            zs[i] = new ZombieNetState { id = (ushort)(100 + i), kind = (ZombieKind)i, runner = i == 1, rising = i == 2, pos = new Vector3(1234.5f + i, 0f, -987.25f), yaw = 90f * i, gait = i * 0.9f, hp01 = 0.5f, maxHp = 140f };
+        var buf = new byte[ZombieSnapshot.Size(3)];
+        int len = ZombieSnapshot.Write(buf, new WaveNetState { wave = 7, inBreak = true, timeLeft = 4.3f }, zs, 3);
+        Assert.AreEqual(ZombieSnapshot.Size(3), len);
+        ZombieNetState[] read = null;
+        int n = ZombieSnapshot.Read(buf, len, out var w, ref read);
+        Assert.AreEqual(3, n);
+        Assert.AreEqual(7, w.wave); Assert.IsTrue(w.inBreak); Assert.AreEqual(4.3f, w.timeLeft, 0.05f);
+        for (int i = 0; i < 3; i++)
+        {
+            Assert.AreEqual(zs[i].id, read[i].id);
+            Assert.AreEqual(zs[i].kind, read[i].kind);
+            Assert.AreEqual(zs[i].runner, read[i].runner);
+            Assert.AreEqual(zs[i].rising, read[i].rising);
+            Assert.AreEqual(zs[i].pos.x, read[i].pos.x, 1e-3f);
+            Assert.AreEqual(zs[i].pos.z, read[i].pos.z, 1e-3f);
+            Assert.AreEqual(0f, Mathf.DeltaAngle(zs[i].yaw, read[i].yaw), 1.5f);
+            Assert.AreEqual(zs[i].gait, read[i].gait, 0.01f);
+            Assert.AreEqual(0.5f, read[i].hp01, 0.01f);
+            Assert.AreEqual(140f, read[i].maxHp);
+        }
+        Assert.AreEqual(-1, ZombieSnapshot.Read(buf, 5, out _, ref read), "truncated buffer rejected");
+        Assert.Less(ZombieSnapshot.Size(70), 1300, "70 zombies stay small");
+    }
+
+    [Test]
+    public void LeashKeepsTeammatesTogether()
+    {
+        var mate = Vector3.zero;
+        var at = new Vector3(ModeRules.CoopLeash - 0.1f, 0f, 0f);
+        Vector3 outward = Squad.Leash(at, new Vector3(1f, 0f, 0f), mate, ModeRules.CoopLeash);
+        Assert.AreEqual(0f, outward.x, 1e-4f, "can't walk further away");
+        Vector3 side = Squad.Leash(at, new Vector3(1f, 0f, 1f), mate, ModeRules.CoopLeash);
+        Assert.Greater(side.z, 0.9f, "sliding along the leash is fine");
+        Vector3 back = Squad.Leash(at, new Vector3(-1f, 0f, 0f), mate, ModeRules.CoopLeash);
+        Assert.AreEqual(-1f, back.x, 1e-4f, "walking back always allowed");
+        Vector3 free = Squad.Leash(new Vector3(5f, 0f, 0f), new Vector3(1f, 0f, 0f), mate, ModeRules.CoopLeash);
+        Assert.AreEqual(1f, free.x, 1e-4f);
+    }
+
+    [Test]
+    public void CoopWavesAreC1Safe()
+    {
+        for (int n = 1; n <= 20; n++)
+        {
+            var w = ModeRules.ForCoop(Difficulty.ForWave(n, false));
+            Assert.AreEqual(0f, w.specialChance, "no mutations over the network yet (C2)");
+            Assert.IsFalse(ModeRules.IsBossWave(RunMode.Coop, n));
+        }
+    }
+}

@@ -17,6 +17,9 @@ public class WaveDirector : MonoBehaviour
     public float PhaseTimeLeft { get; private set; }
     public WaveParams Params { get; private set; }
 
+    /// <summary>Co-op client: the host runs the waves; <see cref="ApplyRemote"/> mirrors them.</summary>
+    public bool Remote { get; set; }
+
     public event Action<int> WaveStarted;
     public event Action<int> WaveCleared;
 
@@ -38,10 +41,25 @@ public class WaveDirector : MonoBehaviour
         PhaseTimeLeft = breakDuration;
     }
 
+    /// <summary>Co-op client: wave state from the host snapshot (events fire on changes so HUD / music react).</summary>
+    public void ApplyRemote(int wave, bool inBreak, float timeLeft)
+    {
+        PhaseTimeLeft = timeLeft;
+        if (wave == Wave && inBreak == InBreak) return;
+        bool started = wave != Wave || (InBreak && !inBreak);
+        int prev = Wave;
+        Wave = wave;
+        Params = Difficulty.ForWave(Mathf.Max(1, wave));
+        InBreak = inBreak;
+        if (!inBreak && started) WaveStarted?.Invoke(Wave);
+        else if (inBreak && prev == wave) WaveCleared?.Invoke(Wave);
+    }
+
     void Update()
     {
+        if (Remote) return;
         var gm = GameManager.I;
-        if (gm && gm.IsGameOver) return;
+        if (gm && gm.IsGameOver && !(GameMode.IsCoop && Squad.AnyAlive)) return;
         PhaseTimeLeft -= Time.deltaTime;
         if (PhaseTimeLeft > 0f) return;
 

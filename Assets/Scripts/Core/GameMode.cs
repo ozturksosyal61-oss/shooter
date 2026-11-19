@@ -1,6 +1,7 @@
 using UnityEngine;
 
-public enum RunMode { Endless, Campaign, Hard }
+/// <summary>Coop: endless together (2–4 players, host-authoritative; see Assets/Scripts/Net).</summary>
+public enum RunMode { Endless, Campaign, Hard, Coop }
 
 /// <summary>
 /// Which mode the next Game scene runs (set by the menu before loading; static so it survives the scene change).
@@ -14,6 +15,7 @@ public static class GameMode
 
     public static bool IsHard => Current == RunMode.Hard;
     public static bool IsCampaign => Current == RunMode.Campaign;
+    public static bool IsCoop => Current == RunMode.Coop;
 
     public static void Set(RunMode m, int chapter = 0)
     {
@@ -68,6 +70,7 @@ public static class ModeRules
         {
             case RunMode.Hard: return wave >= HardFirstBossWave && (wave - HardFirstBossWave) % HardBossEvery == 0;
             case RunMode.Campaign: return false; // chapters summon the boss as an objective
+            case RunMode.Coop: return false;     // C1: no boss over the network yet (C2)
             default: return BossRules.IsBossWave(wave);
         }
     }
@@ -100,6 +103,21 @@ public static class ModeRules
         special ? 1f : reserve < magazine ? AmmoDropChanceLow : AmmoDropChance;
 
     public static int ReserveCap(int magazine) => magazine * MaxReserveMags;
+
+    // ---- Co-op
+    /// <summary>Teammates can't get further apart than this (one shared city / chunk window, no floating origin).</summary>
+    public const float CoopLeash = 40f;
+    /// <summary>C1: plain walkers / runners only — mutations, bosses and objectives join the network in C2.</summary>
+    public static bool CoopSpecials = false;
+
+    public static WaveParams ForCoop(WaveParams w)
+    {
+        if (CoopSpecials) return w;
+        w.specialChance = 0f;
+        w.specialWave = false;
+        w.maxShield = w.maxBomb = w.maxTongue = 0;
+        return w;
+    }
 
     public static float GoldMul(RunMode m) => m == RunMode.Hard ? HardGoldMul : 1f;
     public static float XpMul(RunMode m) => m == RunMode.Hard ? HardXpMul : 1f;

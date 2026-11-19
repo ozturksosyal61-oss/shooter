@@ -914,6 +914,82 @@ public class GameSmokeTest
         Assert.AreEqual(hurt, p.Health, 0.01f, "hard: no breather regeneration");
     }
 
+    [UnityTest, Timeout(300000)]
+    public IEnumerator CoopLocalHostAndPuppets()
+    {
+        // ---- Host (direct local transport, no Relay): room -> start -> Game through the network scene manager.
+        GameManager.TimeScale = 1f;
+        SceneManager.LoadScene(LoadingScreen.MenuScene);
+        yield return null; yield return null;
+        try
+        {
+            Assert.IsTrue(CoopSession.StartLocalHost(7788), "local host");
+            Assert.IsTrue(CoopSession.InRoom && CoopSession.IsHost);
+            yield return WaitUntil(() => NetPlayer.Local != null, 5f);
+            Assert.NotNull(NetPlayer.Local, "host's NetPlayer spawned");
+            CoopSession.StartGame();
+            Assert.IsTrue(GameMode.IsCoop && CoopSession.Started);
+            yield return WaitUntil(() => GameManager.I != null && SceneManager.GetActiveScene().name == LoadingScreen.GameScene, 15f);
+            yield return null; yield return null;
+            var gm = GameManager.I;
+            Assert.NotNull(gm, "Game scene loaded through Netcode");
+            Assert.NotNull(NetPlayer.Local, "NetPlayer survives the scene load");
+            Assert.AreEqual(1, Squad.Count, "only the local soldier in the squad");
+            var nz = NetZombies.I;
+            Assert.NotNull(nz); Assert.IsTrue(nz.IsHost && !nz.IsClient);
+            yield return WaitUntil(() => Zombie.Active.Count > 0, 12f);
+            Assert.Greater(Zombie.Active.Count, 0);
+            foreach (var z in Zombie.Active) Assert.Greater(z.NetId, 0, "host zombies get network ids");
+            Assert.AreEqual(0f, WaveDirector.I.Params.specialChance, "C1: no mutations in co-op");
+            yield return Wait(0.5f);
+            Assert.AreEqual(gm.player.transform.position.x, NetPlayer.Local.State.Value.pos.x, 0.5f, "owner writes its state");
+            // A real snapshot of the host's zombies: the "network" input of the client below.
+            int len = nz.BuildSnapshot();
+            var snap = new byte[len];
+            System.Array.Copy(nz.Buffer, snap, len);
+            int hostZombies = Zombie.Active.Count;
+            ushort firstId = Zombie.Active[0].NetId;
+            Vector3 firstPos = Zombie.Active[0].transform.position;
+            gm.player.Warp(new Vector3(150f, 0f, 0f));
+            yield return null; yield return null;
+            Assert.AreEqual(Vector3.zero, FloatingOrigin.Offset, "no origin shift in co-op");
+            var leave = CoopSession.Leave();
+            while (!leave.IsCompleted) yield return null;
+            yield return null;
+            Assert.IsFalse(CoopSession.InRoom); Assert.IsFalse(GameMode.IsCoop, "back to single player");
+
+            // ---- Client side in-process: same snapshot -> puppets appear, move, die / vanish.
+            GameMode.Set(RunMode.Coop);
+            yield return LoadGame();
+            nz = NetZombies.I;
+            nz.BecomeClient();
+            Assert.AreEqual(0, Zombie.Active.Count, "client: no zombies of its own");
+            nz.ApplySnapshot(snap, len);
+            Assert.AreEqual(hostZombies, nz.Puppets, "one puppet per host zombie");
+            Zombie pz = null;
+            foreach (var z in Zombie.Active) if (z.NetId == firstId) pz = z;
+            Assert.NotNull(pz); Assert.IsTrue(pz.Puppet);
+            Assert.AreEqual(firstPos.x, pz.transform.position.x, 0.01f);
+            float hp = pz.Health;
+            pz.TakeHit(1000f, false, Vector3.forward, pz.transform.position);
+            Assert.AreEqual(hp, pz.Health, "client bullets don't kill: the host owns health");
+            Assert.IsTrue(pz.Damageable);
+            nz.ApplyKill(firstId, Vector3.forward);
+            Assert.IsFalse(pz.Damageable, "host kill -> puppet dies");
+            var empty = new byte[ZombieSnapshot.Size(0)];
+            int elen = ZombieSnapshot.Write(empty, new WaveNetState { wave = 3 }, new ZombieNetState[0], 0);
+            nz.ApplySnapshot(empty, elen);
+            Assert.AreEqual(0, nz.Puppets, "missing from the snapshot -> gone");
+            Assert.AreEqual(3, WaveDirector.I.Wave, "wave mirrored from the host");
+        }
+        finally
+        {
+            if (CoopSession.InRoom) _ = CoopSession.Leave();
+            if (Unity.Netcode.NetworkManager.Singleton) Object.Destroy(Unity.Netcode.NetworkManager.Singleton.gameObject);
+            GameMode.Set(RunMode.Endless);
+        }
+    }
+
     [UnityTest, Timeout(600000)]
     public IEnumerator CityAndObjectives()
     {
@@ -1345,6 +1421,10 @@ public class GameSmokeTest
         yield return null;
         ShotCanvas(Path.Combine(dir, "menu_campaign.png"), mm.GetComponent<Canvas>());
         mm.campaignPanel.root.SetActive(false);
+        mm.coopPanel.Open();
+        yield return null;
+        ShotCanvas(Path.Combine(dir, "menu_coop.png"), mm.GetComponent<Canvas>());
+        mm.coopPanel.root.SetActive(false);
         mm.PlayEndless();
         yield return WaitUntil(() => GameManager.I && !LoadingScreen.IsLoading, 20f);
         yield return Wait(2f);

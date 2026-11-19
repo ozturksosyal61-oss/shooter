@@ -34,6 +34,9 @@ public class PlayerController : MonoBehaviour
     public float grabbedMoveFactor = 0.4f;
 
     public float Health { get; private set; }
+    /// <summary>Stick input this frame on the ground plane (0..1) — co-op replication reads it.</summary>
+    public Vector3 MoveInput { get; private set; }
+    SquadMember member;
     public bool IsDead { get; private set; }
     public bool IsVaulting => vaulting;
     float slowFactor = 1f, slowUntil;
@@ -68,6 +71,15 @@ public class PlayerController : MonoBehaviour
         Health = maxHealth;
     }
 
+    /// <summary>Teleports the soldier (co-op spawn spread, tests).</summary>
+    public void Warp(Vector3 pos)
+    {
+        if (cc) cc.enabled = false;
+        transform.position = pos;
+        if (cc) cc.enabled = true;
+        Physics.SyncTransforms();
+    }
+
     // WeaponLoadout (Awake) changes maxHealth (start-health bonus, hard mode): start full on that.
     void Start() => Health = maxHealth;
 
@@ -79,6 +91,13 @@ public class PlayerController : MonoBehaviour
         var input = TouchControls.I;
         Vector2 mv = input ? input.Move : Vector2.zero;
         Vector3 move = new Vector3(mv.x, 0f, mv.y);
+        // Co-op: teammates stay within the leash (one shared city window).
+        if (GameMode.IsCoop && Squad.Count > 1)
+        {
+            if (!member) member = GetComponent<SquadMember>();
+            move = Squad.LeashAll(member, move * moveSpeed * dt, ModeRules.CoopLeash) / Mathf.Max(0.0001f, moveSpeed * dt);
+        }
+        MoveInput = Vector3.ClampMagnitude(move, 1f);
         float mag = Mathf.Clamp01(move.magnitude);
         Vector3 moveDir = mag > 0.01f ? move / mag : Vector3.zero;
 

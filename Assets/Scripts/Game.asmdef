@@ -14,7 +14,8 @@
         "Unity.Services.Multiplayer",
         "Unity.Netcode.Runtime",
         "Unity.Networking.Transport",
-        "Unity.Services.Core.Environments"
+        "Unity.Services.Core.Environments",
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
