@@ -12,7 +12,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 ## Yayın ayarları
 - `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **5** (Android versionCode 5; her TestFlight yüklemesinde artır), minimum iOS **15.0**, yalnız yatay (sol/sağ).
 - **İkon:** `Assets/Art/Icon/AppIcon.png` (1024², opak RGB, kare; kaynak masaüstü `ikon.png`) → varsayılan + iOS tüm boyutlar + App Store marketing 1024; Android adaptive (`AppIcon_Foreground.png` şeffaf, %66 güvenli alan + `AppIcon_Background.png` düz #23261F); Unity 6.6'da round/legacy tipleri kaldırıldı → eski launcher'lar varsayılan ikonu kullanır.
-- `IosPostBuild` (her iOS build'de Info.plist): `CADisableMinimumFrameDurationOnPhone` (ProMotion), `CFBundleDisplayName` Holdout, `ITSAppUsesNonExemptEncryption` false.
+- `IosPostBuild` (her iOS build'de, Unity Cloud Build dahil; `[PostProcessBuild(1000)]`, LevelPlay'inkinden sonra): `CADisableMinimumFrameDurationOnPhone` (ProMotion), `CFBundleDisplayName` Holdout, `ITSAppUsesNonExemptEncryption` false, `NSUserTrackingUsageDescription` (temel EN "Used to show you more relevant ads.", `tr.lproj/InfoPlist.strings` TR "Sana daha uygun reklamlar göstermek için kullanılır."; `en.lproj` + `CFBundleLocalizations` en/tr; .lproj klasör referansı olarak eklenir), `SKAdNetworkItems` (LevelPlay'in önerdiği ironSource + Unity Ads listeleri, 82 kimlik koda gömülü, var olanlarla birleştirilir). ATT izni LevelPlay.Init'ten önce istenir (`LevelPlayAdBackend.Init`, Unity iOS Support).
 - iOS build: `Unity.exe -batchmode -nographics -projectPath . -buildTarget iOS -executeMethod ProjectSetup.BuildIos -quit -logFile <log>` → `Builds/iOS` (Xcode projesi), zip `Builds/Holdout_iOS_<sürüm>.zip`. `Builds/` git'e girmez.
 - Uzak depo: `https://github.com/ozturksosyal61-oss/shooter.git`, dal `main`.
 
@@ -175,6 +175,14 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
 - **F13 — Ekonomi + mağaza:** ✔ (2026-11-16).
 - **F12 — Hikâye + Sonsuz + Zor:** ✔ (2026-11-19) 6 bölüm, yıldızlar, zor mod (sınırlı mermi).
 - **Sonra:** meta ilerleme (silah açma, görevler), mağaza, kampanya.
+
+## Faz 15 — iOS mağaza hazırlığı (kontrol listesi)
+- [x] ATT izni LevelPlay init'ten önce; Info.plist: `NSUserTrackingUsageDescription` (TR/EN), `ITSAppUsesNonExemptEncryption` false, `SKAdNetworkItems`
+- [x] IAP ürünleri App Store Connect'te (`StoreAssets/IAP`), mağaza ekran görüntüleri (`StoreAssets/Screenshots`)
+- [ ] App Privacy formu (reklam / izleme verisi), destek / gizlilik / koşullar sayfaları yayında
+- [ ] TestFlight: sandbox satın alma + geri yükleme, ödüllü reklam, ATT penceresi TR/EN
+- [ ] **LevelPlay test modunu kapat** (`AdConfig.TestMode = false`, `Assets/Scripts/Core/AdService.cs`) — mağaza build'inden önce
+- [ ] Build numarasını artır (`ProjectSetup.IosBuildNumber`, Android versionCode)
 
 ## İlerleme
 - [x] Proje kurulumu: URP, glTFast, Input System, Player Settings (landscape, bundle id), klasörler, Game sahnesi, git
