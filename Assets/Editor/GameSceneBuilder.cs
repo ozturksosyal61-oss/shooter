@@ -32,6 +32,8 @@ public static partial class GameSceneBuilder
         SetupLayers();
         var t = GenerateTextures();
         ui = GenerateUiSprites();
+        UiFonts.Ensure();
+        kit = MakeKit();
         ConfigureUiFont();
         ConfigurePlayer();
         MenuIcons();
@@ -53,7 +55,7 @@ public static partial class GameSceneBuilder
         BuildSpecialZombiePrefabs(m, anims);
         var env = BuildEnvironmentPrefabs(m);
         var cm = CreateCityMaterials(m, t);
-        var kit = BuildCityPrefabs(m, cm, env);
+        var cityKit = BuildCityPrefabs(m, cm, env);
         var boss = ImportBoss(m, t);
         BuildBossPrefab(m, boss); // after the env prefabs: its thrown debris reuses their meshes
         BuildMutantBosses(m, t, anims, boss);
@@ -64,9 +66,9 @@ public static partial class GameSceneBuilder
         BuildPlayerPrefab(m, Load<Bullet>("Bullet"), anims);
         AssetDatabase.SaveAssets();
         BuildNetPrefabs();
-        BuildScene(scene, m, t, env, cm, kit, boss);
+        BuildScene(scene, m, t, env, cm, cityKit, boss);
         AssetDatabase.SaveAssets();
-        BuildMenuScene(env, cm, kit, m);
+        BuildMenuScene(env, cm, cityKit, m);
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScenePath, true), new EditorBuildSettingsScene(ScenePath, true) };
         AssetDatabase.SaveAssets();
         Debug.Log("BUILD: done");
@@ -834,14 +836,13 @@ public static partial class GameSceneBuilder
         BuildObjectiveHud(hud, t);
         BuildBossHud(hud);
         BuildPauseUi(hud, controls);
-        BuildRewardsUi(hud, controls);
 
         var warm = new GameObject("Warmup").AddComponent<Warmup>();
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })
             .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g))).ToArray();
         warm.skinnedSample = LoadGo(ZombieRigged);
         warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash, m.shieldZombie, m.bombZombie, m.tongueZombie, boss.body };
-        warm.font = UIFont;
+        warm.fonts = new[] { UiFonts.Display, UiFonts.Bold, UiFonts.Semi };
 
         var gm = new GameObject("GameManager").AddComponent<GameManager>();
         gm.player = player;
@@ -957,26 +958,20 @@ public static partial class GameSceneBuilder
         return img;
     }
 
-    static Text Txt(string name, Transform parent, int size, TextAnchor align, Color color)
+    static UiText Txt(string name, Transform parent, int size, TextAnchor align, Color color)
     {
         var r = Rect(name, parent);
-        var t = r.gameObject.AddComponent<Text>();
-        t.font = UIFont;
+        var t = r.gameObject.AddComponent<UiText>();
+        // Redesign fonts: Bungee for big titles, Barlow Condensed 800 for everything else.
+        t.font = size >= 80 ? UiFonts.Display : UiFonts.Bold;
+        if (size >= 80 && UiFonts.DisplayShadow) t.fontSharedMaterial = UiFonts.DisplayShadow;
         t.fontSize = size;
-        t.fontStyle = FontStyle.Normal; // the font itself is ExtraBold
         t.alignment = align;
         t.color = color;
         t.raycastTarget = false;
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
-        t.verticalOverflow = VerticalWrapMode.Overflow;
-        t.supportRichText = true;
-        // Theme: thick dark contour + soft drop shadow.
-        var o = r.gameObject.AddComponent<Outline>();
-        o.effectColor = new Color(UiInk.r, UiInk.g, UiInk.b, 0.95f);
-        o.effectDistance = new Vector2(Mathf.Clamp(size * 0.06f, 2f, 5f), -Mathf.Clamp(size * 0.06f, 2f, 5f));
-        var sh = r.gameObject.AddComponent<Shadow>();
-        sh.effectColor = new Color(0f, 0f, 0f, 0.4f);
-        sh.effectDistance = new Vector2(0f, -Mathf.Clamp(size * 0.1f, 3f, 9f));
+        t.overflowMode = TMPro.TextOverflowModes.Overflow;
+        t.richText = true;
         return t;
     }
 }

@@ -1,46 +1,81 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Shop: tabs Weapons / Costumes / Bonuses / Gems; item grid (owned / equipped / locked / price), details with a turning
-/// 3D preview, permanent weapon upgrades (damage / magazine / reload, 5 levels), purchase confirmation.
-/// Every change goes through <see cref="Profile"/> (gold / gems) or <see cref="Store"/> (real money) / <see cref="Ads"/>.
+/// Shop (redesign, docs/ui-ref 04–07): sidebar tabs Weapons / Characters / Bonuses / Gems + MENÜ.
+/// Weapons: list + detail (3D preview, stats, permanent upgrades). Characters: cards (selected one shows the live
+/// 3D preview). Bonuses: rows with level pips. Gems: free daily gems (rewarded ad), store packs, gold offers.
+/// Every change goes through <see cref="Profile"/> (gold / gems), <see cref="Store"/> (real money) or <see cref="Ads"/>.
 /// </summary>
 public class ShopUI : MonoBehaviour
 {
-    public enum Tab { Weapons, Costumes, Bonuses, Gems }
+    public enum Tab { Weapons, Characters, Bonuses, Gems }
     enum Kind { Weapon, Costume, Bonus, Product, GoldOffer, FreeGems }
 
     struct Item { public Kind kind; public int index; public string product; }
 
+    [Serializable]
+    public class Card
+    {
+        public Button button;
+        public Image frame, selected;
+        public TMP_Text title, sub, tag;
+        public Image tagBg, icon;
+        public RawImage preview;
+        public Button action;
+    }
+
     public GameObject root;
-    public Button[] tabButtons;
     public Button close;
-    public Text gold, gems;
-    public RectTransform grid;
-    public Button cardTemplate;
+    public TMP_Text gold, gems;
+    public Button goldPlus, gemPlus;
+    public Button[] tabButtons;
+    public GameObject freeChip;
+    public GameObject[] panes;          // by Tab
     public PreviewStage preview;
-    public RawImage previewImage;
-    public Text title, description, stats, actionLabel, message;
-    public Button action;
-    public GameObject upgradeRoot;
-    public Text[] upgradeLabels;
+    public RawImage previewImage;       // weapon detail preview (the character cards get the same texture)
+
+    [Header("Weapons")]
+    public Card[] weaponRows;
+    public TMP_Text title, typeTag, description;
+    public TMP_Text[] statValues;       // damage, shots/s, magazine, reload
+    public Image[] upgradePips;         // 3 × 5
+    public TMP_Text[] upgradeLevels;
     public Button[] upgradeButtons;
-    public Text[] upgradeCosts;
+    public Button action;               // buy / equip (weapon detail)
+    public GameObject equippedMark;
+
+    [Header("Characters")]
+    public RectTransform characterContent;
+    public Card characterTemplate;
+
+    [Header("Bonuses")]
+    public Card[] bonusRows;
+    public Image[] bonusPips;           // 3 × 3
+    public TMP_Text[] bonusNext, bonusMissing;
+
+    [Header("Gems")]
+    public Button freeButton;
+    public TMP_Text freeDesc;
+    public RectTransform productContent;
+    public Card productTemplate;
+
+    [Header("Confirm + message")]
     public GameObject confirm;
-    public Text confirmText;
+    public TMP_Text confirmText, message;
     public Button confirmYes, confirmNo;
-    public Color tabOn = new Color(1f, 0.55f, 0.1f), tabOff = new Color(0.17f, 0.2f, 0.11f);
-    public Color cardBase = new Color(0.34f, 0.4f, 0.22f), cardSelected = new Color(1f, 0.55f, 0.1f);
 
     public bool IsOpen => root && root.activeSelf;
     public Tab Current { get; private set; }
     public event Action Closed;
 
     readonly List<Item> items = new List<Item>();
-    readonly List<Button> cards = new List<Button>();
+    readonly List<Card> characterCards = new List<Card>();
+    readonly List<Card> productCards = new List<Card>();
+    readonly List<Item> productItems = new List<Item>();
     int selected;
     Action pendingConfirm;
     float messageT;
@@ -49,17 +84,65 @@ public class ShopUI : MonoBehaviour
     {
         for (int i = 0; i < tabButtons.Length; i++) { var t = (Tab)i; tabButtons[i].onClick.AddListener(() => { Click(); Open(t); }); }
         close.onClick.AddListener(() => { Click(); Close(); });
+        if (goldPlus) goldPlus.onClick.AddListener(() => { Click(); Open(Tab.Gems, 1 + Economy.Products.Length); });
+        if (gemPlus) gemPlus.onClick.AddListener(() => { Click(); Open(Tab.Gems, 1); });
         action.onClick.AddListener(() => { Click(); DoAction(); });
         for (int i = 0; i < upgradeButtons.Length; i++) { var s = (WeaponStat)i; upgradeButtons[i].onClick.AddListener(() => { Click(); AskUpgrade(s); }); }
+        for (int i = 0; i < weaponRows.Length; i++) { int w = i; weaponRows[i].button.onClick.AddListener(() => { Click(); Select(w); }); }
+        for (int i = 0; i < bonusRows.Length; i++) { int b = i; bonusRows[i].action.onClick.AddListener(() => { Click(); Select(b); DoAction(); }); }
+        freeButton.onClick.AddListener(() => { Click(); Select(0); DoAction(); });
         confirmYes.onClick.AddListener(() => { Click(); var a = pendingConfirm; pendingConfirm = null; confirm.SetActive(false); a?.Invoke(); });
         confirmNo.onClick.AddListener(() => { Click(); pendingConfirm = null; confirm.SetActive(false); });
-        cardTemplate.gameObject.SetActive(false);
+
+        // Character cards: one per costume / character.
+        characterTemplate.button.gameObject.SetActive(false);
+        for (int i = 0; i < Economy.Costumes.Length; i++)
+        {
+            var c = Clone(characterTemplate, characterContent);
+            int idx = i;
+            c.button.onClick.AddListener(() => { Click(); Select(idx); });
+            c.action.onClick.AddListener(() => { Click(); Select(idx); DoAction(); });
+            characterCards.Add(c);
+        }
+        // Store packs + gold offers.
+        productTemplate.button.gameObject.SetActive(false);
+        foreach (var p in Economy.Products) productItems.Add(new Item { kind = Kind.Product, product = p.id });
+        for (int i = 0; i < Economy.GoldOffers.Length; i++) productItems.Add(new Item { kind = Kind.GoldOffer, index = i });
+        for (int i = 0; i < productItems.Count; i++)
+        {
+            var c = Clone(productTemplate, productContent);
+            int idx = i + 1; // item 0 = free gems
+            c.action.onClick.AddListener(() => { Click(); Select(idx); DoAction(); });
+            c.button.onClick.AddListener(() => { Click(); Select(idx); });
+            productCards.Add(c);
+        }
         root.SetActive(false);
         confirm.SetActive(false);
         Profile.Changed += Refresh;
+        Loc.Changed += Refresh;
     }
 
-    void OnDestroy() => Profile.Changed -= Refresh;
+    void OnDestroy() { Profile.Changed -= Refresh; Loc.Changed -= Refresh; }
+
+    static Card Clone(Card t, Transform parent)
+    {
+        var go = Instantiate(t.button.gameObject, parent);
+        go.SetActive(true);
+        var c = new Card { button = go.GetComponent<Button>() };
+        Transform F(Component x) => x ? go.transform.Find(Path(t.button.transform, x.transform)) : null;
+        c.frame = F(t.frame)?.GetComponent<Image>();
+        c.selected = F(t.selected)?.GetComponent<Image>();
+        c.title = F(t.title)?.GetComponent<TMP_Text>();
+        c.sub = F(t.sub)?.GetComponent<TMP_Text>();
+        c.tag = F(t.tag)?.GetComponent<TMP_Text>();
+        c.tagBg = F(t.tagBg)?.GetComponent<Image>();
+        c.icon = F(t.icon)?.GetComponent<Image>();
+        c.preview = F(t.preview)?.GetComponent<RawImage>();
+        c.action = F(t.action)?.GetComponent<Button>();
+        return c;
+    }
+
+    static string Path(Transform root, Transform t) => t == root || t.parent == null ? "" : (t.parent == root ? t.name : Path(root, t.parent) + "/" + t.name);
 
     static void Click() { if (GameAudio.I) GameAudio.Play(SfxId.UiClick, Vector3.zero); }
 
@@ -68,20 +151,20 @@ public class ShopUI : MonoBehaviour
         root.SetActive(true);
         confirm.SetActive(false);
         Current = tab;
-        for (int i = 0; i < tabButtons.Length; i++) tabButtons[i].image.color = i == (int)tab ? tabOn : tabOff;
+        for (int i = 0; i < tabButtons.Length; i++) Style(tabButtons[i], i == (int)tab ? UiStyle.Yellow : UiStyle.Ghost);
+        for (int i = 0; i < panes.Length; i++) panes[i].SetActive(i == (int)tab);
         items.Clear();
         switch (tab)
         {
             case Tab.Weapons: for (int i = 0; i < Economy.Weapons.Length; i++) items.Add(new Item { kind = Kind.Weapon, index = i }); break;
-            case Tab.Costumes: for (int i = 0; i < Economy.Costumes.Length; i++) items.Add(new Item { kind = Kind.Costume, index = i }); break;
+            case Tab.Characters: for (int i = 0; i < Economy.Costumes.Length; i++) items.Add(new Item { kind = Kind.Costume, index = i }); break;
             case Tab.Bonuses: for (int i = 0; i < Economy.Bonuses.Length; i++) items.Add(new Item { kind = Kind.Bonus, index = i }); break;
             case Tab.Gems:
                 items.Add(new Item { kind = Kind.FreeGems });
-                foreach (var p in Economy.Products) items.Add(new Item { kind = Kind.Product, product = p.id });
-                for (int i = 0; i < Economy.GoldOffers.Length; i++) items.Add(new Item { kind = Kind.GoldOffer, index = i });
+                items.AddRange(productItems);
                 break;
         }
-        BuildCards();
+        if (tab != Tab.Weapons && tab != Tab.Characters && preview) preview.ShowNone();
         Select(Mathf.Clamp(select, 0, items.Count - 1));
     }
 
@@ -92,23 +175,31 @@ public class ShopUI : MonoBehaviour
         Closed?.Invoke();
     }
 
-    void BuildCards()
-    {
-        while (cards.Count < items.Count)
-        {
-            var c = Instantiate(cardTemplate, grid);
-            int idx = cards.Count;
-            c.onClick.AddListener(() => { Click(); Select(idx); });
-            cards.Add(c);
-        }
-        for (int i = 0; i < cards.Count; i++) cards[i].gameObject.SetActive(i < items.Count);
-    }
-
     public void Select(int i)
     {
         selected = i;
         Refresh();
     }
+
+    static void Style(Button b, UiStyle s) { var pb = b ? b.GetComponent<PressButton>() : null; if (pb) pb.SetStyle(s); }
+    static void SetLabel(Button b, string text) { var pb = b ? b.GetComponent<PressButton>() : null; if (pb) pb.SetLabel(text); }
+
+    static void SetButton(Button b, UiStyle s, string text, bool interactable = true, Sprite icon = null)
+    {
+        if (!b) return;
+        b.interactable = interactable;
+        var pb = b.GetComponent<PressButton>();
+        if (!pb) return;
+        pb.SetStyle(s);
+        pb.SetLabel(text);
+        if (pb.icon)
+        {
+            pb.icon.gameObject.SetActive(icon != null);
+            if (icon) pb.icon.sprite = icon;
+        }
+    }
+
+    public Sprite coinIcon, gemIcon, checkIcon, lockIcon, userIcon, heartIcon, cardIcon, goldIcon;
 
     // ------------------------------------------------------------------ texts
     string Name(Item it)
@@ -124,130 +215,155 @@ public class ShopUI : MonoBehaviour
         }
     }
 
-    string Badge(Item it)
-    {
-        switch (it.kind)
-        {
-            case Kind.Weapon:
-                var w = (WeaponId)it.index;
-                if (!Profile.Owns(w)) return Loc.F("shop.gold", Economy.Weapon(w).price);
-                return Profile.SelectedWeapon == w ? Loc.T("shop.equipped") : Loc.T("shop.owned");
-            case Kind.Costume:
-                var c = (CostumeId)it.index; var cd = Economy.Costume(c);
-                if (!Profile.Owns(c)) return cd.packOnly ? Loc.T("shop.pack_only") : cd.gems > 0 ? Loc.F("shop.gems", cd.gems) : Loc.F("shop.gold", cd.gold);
-                return Profile.SelectedCostume == c ? Loc.T("shop.equipped") : Loc.T("shop.owned");
-            case Kind.Bonus:
-                var b = (BonusId)it.index; int cost = Profile.BonusCost(b);
-                return cost < 0 ? Loc.T("shop.max") : Loc.F("shop.gold", cost);
-            case Kind.Product:
-                var p = Economy.Product(it.product).Value;
-                if (p.kind == ProductKind.NonConsumable && (p.vip ? Profile.Vip : Profile.StarterPackOwned)) return Loc.T("shop.owned");
-                return Store.Price(p.id);
-            case Kind.GoldOffer: return Loc.F("shop.gems", Economy.GoldOffers[it.index].gems);
-            default: return Profile.FreeGemAvailable ? Loc.T("shop.watch_ad") : Loc.T("shop.tomorrow");
-        }
-    }
-
     void Refresh()
     {
         if (!IsOpen) return;
         gold.text = Profile.Gold.ToString();
         gems.text = Profile.Gems.ToString();
-        for (int i = 0; i < items.Count; i++)
-        {
-            var t = cards[i].GetComponentsInChildren<Text>(true);
-            t[0].text = Name(items[i]);
-            t[1].text = Badge(items[i]);
-            cards[i].image.color = i == selected ? cardSelected : cardBase;
-        }
+        if (freeChip) freeChip.SetActive(Profile.FreeGemAvailable);
         if (selected < 0 || selected >= items.Count) return;
-        var it = items[selected];
-        title.text = Name(it);
-        upgradeRoot.SetActive(false);
-        stats.text = "";
-        action.gameObject.SetActive(true);
-        action.interactable = true;
-        switch (it.kind)
+        switch (Current)
         {
-            case Kind.Weapon: DetailWeapon((WeaponId)it.index); break;
-            case Kind.Costume: DetailCostume((CostumeId)it.index); break;
-            case Kind.Bonus: DetailBonus((BonusId)it.index); break;
-            default: DetailGems(it); break;
+            case Tab.Weapons: RefreshWeapons(); break;
+            case Tab.Characters: RefreshCharacters(); break;
+            case Tab.Bonuses: RefreshBonuses(); break;
+            default: RefreshGems(); break;
         }
-        if (previewImage) previewImage.enabled = it.kind == Kind.Weapon || it.kind == Kind.Costume;
     }
 
-    void DetailWeapon(WeaponId w)
+    // ------------------------------------------------------------------ weapons
+    void RefreshWeapons()
     {
-        var d = Economy.Weapon(w);
-        preview.ShowWeapon(w);
+        for (int i = 0; i < weaponRows.Length; i++)
+        {
+            var w = (WeaponId)i; var r = weaponRows[i];
+            r.title.text = Loc.T(Economy.Weapon(w).Key);
+            bool owned = Profile.Owns(w), eq = Profile.SelectedWeapon == w;
+            r.sub.text = eq ? Loc.T("shop.equipped") : owned ? Loc.T("shop.owned") : Economy.Weapon(w).price.ToString();
+            r.sub.color = eq ? UiKit.Hazard : owned ? UiKit.Success : UiKit.Text;
+            r.sub.margin = new Vector4(owned ? 0f : 20f, 0f, 0f, 0f);
+            if (r.icon) r.icon.gameObject.SetActive(!owned);
+            if (r.selected) r.selected.gameObject.SetActive(i == selected);
+            if (r.frame) r.frame.color = i == selected ? UiKit.Hex(0x2A2210) : UiKit.Card;
+        }
+        var wid = (WeaponId)selected;
+        var d = Economy.Weapon(wid);
+        preview.ShowWeapon(wid);
+        previewImage.enabled = true;
+        title.text = Loc.T(d.Key);
+        typeTag.text = Loc.T(d.Key + ".type");
         description.text = Loc.T(d.Key + ".desc");
-        int ld = Profile.Level(w, WeaponStat.Damage), lm = Profile.Level(w, WeaponStat.Magazine), lr = Profile.Level(w, WeaponStat.Reload);
-        stats.text = Loc.F("shop.stats", Mathf.RoundToInt(d.damage * Economy.DamageMul(ld)) + (d.pellets > 1 ? " x" + d.pellets : ""),
-            d.fireRate.ToString("0.#"), Economy.Magazine(d, lm), (d.reloadTime * Economy.ReloadMul(lr)).ToString("0.0"));
-        bool owned = Profile.Owns(w);
-        if (!owned) actionLabel.text = Loc.F("shop.buy_gold", d.price);
-        else if (Profile.SelectedWeapon == w) { actionLabel.text = Loc.T("shop.equipped"); action.interactable = false; }
-        else actionLabel.text = Loc.T("shop.equip");
-        upgradeRoot.SetActive(owned);
-        if (!owned) return;
+        int ld = Profile.Level(wid, WeaponStat.Damage), lm = Profile.Level(wid, WeaponStat.Magazine), lr = Profile.Level(wid, WeaponStat.Reload);
+        statValues[0].text = Mathf.RoundToInt(d.damage * Economy.DamageMul(ld)) + (d.pellets > 1 ? "×" + d.pellets : "");
+        statValues[1].text = d.fireRate.ToString("0.#");
+        statValues[2].text = Economy.Magazine(d, lm).ToString();
+        statValues[3].text = Loc.F("unit.seconds", (d.reloadTime * Economy.ReloadMul(lr)).ToString("0.0"));
+        bool owned2 = Profile.Owns(wid);
+        bool equipped = owned2 && Profile.SelectedWeapon == wid;
+        if (equippedMark) equippedMark.SetActive(equipped);
+        action.gameObject.SetActive(!equipped);
+        if (!owned2) SetButton(action, UiStyle.Yellow, d.price.ToString(), true, coinIcon);
+        else SetButton(action, UiStyle.Dark, Loc.T("shop.equip"));
         for (int i = 0; i < 3; i++)
         {
             var s = (WeaponStat)i;
-            int l = Profile.Level(w, s);
-            int cost = Economy.UpgradeCost(w, s, l);
-            upgradeLabels[i].text = Loc.F("shop.up." + s, l, Economy.MaxUpgrade);
-            upgradeCosts[i].text = cost < 0 ? Loc.T("shop.max") : Loc.F("shop.gold", cost);
-            upgradeButtons[i].interactable = cost >= 0;
+            int l = Profile.Level(wid, s);
+            int cost = Economy.UpgradeCost(wid, s, l);
+            upgradeLevels[i].text = Loc.F("shop.lv", l, Economy.MaxUpgrade);
+            for (int p = 0; p < Economy.MaxUpgrade; p++) upgradePips[i * Economy.MaxUpgrade + p].color = p < l ? UiKit.Hazard : UiKit.Hex(0x2A3324);
+            if (!owned2) SetButton(upgradeButtons[i], UiStyle.Disabled, cost < 0 ? Loc.T("shop.max") : cost.ToString(), false, coinIcon);
+            else if (cost < 0) SetButton(upgradeButtons[i], UiStyle.Disabled, Loc.T("shop.max"), false);
+            else SetButton(upgradeButtons[i], Profile.CanAfford(cost, 0) ? UiStyle.Yellow : UiStyle.Disabled, cost.ToString(), true, coinIcon);
         }
     }
 
-    void DetailCostume(CostumeId c)
+    // ------------------------------------------------------------------ characters
+    static bool IsModel(CostumeId c) => c == CostumeId.SpecOps || c == CostumeId.Firefighter;
+
+    void RefreshCharacters()
     {
-        var d = Economy.Costume(c);
-        preview.ShowCostume(c);
-        description.text = Loc.T(d.Key + ".desc");
-        if (!Profile.Owns(c))
+        for (int i = 0; i < characterCards.Count; i++)
         {
-            if (d.packOnly) { actionLabel.text = Loc.T("shop.pack_only"); action.interactable = false; }
-            else actionLabel.text = d.gems > 0 ? Loc.F("shop.buy_gems", d.gems) : Loc.F("shop.buy_gold", d.gold);
+            var c = (CostumeId)i; var d = Economy.Costume(c); var card = characterCards[i];
+            bool owned = Profile.Owns(c), eq = Profile.SelectedCostume == c, sel = i == selected;
+            card.title.text = Loc.T(d.Key);
+            card.sub.text = Loc.T(d.Key + ".desc");
+            string tagKey; Color tagBg, tagFg;
+            if (eq) { tagKey = "shop.equipped"; tagBg = UiKit.Hazard; tagFg = UiKit.Ink; }
+            else if (d.packOnly) { tagKey = "rarity.legendary"; tagBg = UiKit.Hex(0x3A2A08); tagFg = UiKit.Gold; }
+            else if (d.gems > 0 || IsModel(c)) { tagKey = "rarity.epic"; tagBg = UiKit.Hex(0x2C1B45); tagFg = UiKit.Hex(0xC9A2FF); }
+            else if (d.gold > 0) { tagKey = "rarity.rare"; tagBg = UiKit.Hex(0x14304A); tagFg = UiKit.Gem; }
+            else { tagKey = "rarity.standard"; tagBg = UiKit.Hex(0x2A3324); tagFg = UiKit.Secondary; }
+            card.tag.text = Loc.T(tagKey); card.tagBg.color = tagBg; card.tag.color = tagFg;
+            card.preview.gameObject.SetActive(sel);
+            if (sel) card.preview.texture = previewImage.texture;
+            card.icon.gameObject.SetActive(!sel);
+            card.icon.sprite = owned ? userIcon : lockIcon;
+            if (card.selected) card.selected.gameObject.SetActive(sel || eq);
+            if (card.selected) card.selected.color = eq ? UiKit.Hazard : UiKit.Line2;
+            if (eq) SetButton(card.action, UiStyle.Disabled, Loc.T("shop.equipped"), false, checkIcon);
+            else if (owned) SetButton(card.action, UiStyle.Dark, Loc.T("shop.equip"));
+            else if (d.packOnly) SetButton(card.action, UiStyle.Yellow, Store.Price(Economy.ProductPrefix + "starter_pack"), !Profile.StarterPackOwned);
+            else if (d.gems > 0) SetButton(card.action, UiStyle.Dark, d.gems.ToString(), true, gemIcon);
+            else SetButton(card.action, UiStyle.Dark, d.gold.ToString(), true, coinIcon);
         }
-        else if (Profile.SelectedCostume == c) { actionLabel.text = Loc.T("shop.equipped"); action.interactable = false; }
-        else actionLabel.text = Loc.T("shop.equip");
+        preview.ShowCostume((CostumeId)selected);
+        previewImage.enabled = true;
     }
 
-    void DetailBonus(BonusId b)
+    // ------------------------------------------------------------------ bonuses
+    void RefreshBonuses()
     {
-        preview.ShowNone();
-        description.text = Loc.T(Economy.Bonus(b).Key + ".desc");
-        stats.text = b == BonusId.StartCard ? Loc.F("shop.charges", Profile.BonusLevel(b)) : Loc.F("shop.level", Profile.BonusLevel(b), Economy.Bonus(b).maxLevel);
-        int cost = Profile.BonusCost(b);
-        if (cost < 0) { actionLabel.text = Loc.T("shop.max"); action.interactable = false; }
-        else actionLabel.text = Loc.F("shop.buy_gold", cost);
+        for (int i = 0; i < bonusRows.Length && i < Economy.Bonuses.Length; i++)
+        {
+            var b = (BonusId)i; var def = Economy.Bonus(b); var r = bonusRows[i];
+            int lvl = Profile.BonusLevel(b), cost = Profile.BonusCost(b);
+            r.title.text = Loc.T(def.Key);
+            r.sub.text = Loc.T(def.Key + ".desc");
+            int maxL = Mathf.Max(1, def.maxLevel);
+            for (int p = 0; p < 3; p++)
+            {
+                var pip = bonusPips[i * 3 + p];
+                pip.gameObject.SetActive(p < maxL);
+                pip.color = p < lvl ? UiKit.Hazard : UiKit.Hex(0x2A3324);
+            }
+            r.tag.text = b == BonusId.StartCard ? Loc.F("shop.charges", lvl) : Loc.F("shop.lv", lvl, def.maxLevel);
+            bonusNext[i].text = cost < 0 ? "" : Loc.T(def.Key + ".next");
+            bool afford = cost >= 0 && Profile.CanAfford(cost, 0);
+            if (cost < 0) SetButton(r.action, UiStyle.Disabled, Loc.T("shop.max"), false);
+            else SetButton(r.action, afford ? UiStyle.Yellow : UiStyle.Disabled, cost.ToString(), true, coinIcon);
+            bonusMissing[i].text = cost >= 0 && !afford ? Loc.F("shop.missing_gold", cost - Profile.Gold) : "";
+        }
     }
 
-    void DetailGems(Item it)
+    // ------------------------------------------------------------------ gems
+    void RefreshGems()
     {
-        preview.ShowNone();
-        if (it.kind == Kind.FreeGems)
+        freeDesc.text = Loc.F("shop.free_gems.desc", Economy.FreeGemAd);
+        bool free = Profile.FreeGemAvailable;
+        SetButton(freeButton, free ? UiStyle.Green : UiStyle.Disabled, Loc.T(free ? "shop.watch_ad" : "shop.tomorrow"), free && Ads.Available);
+        for (int i = 0; i < productCards.Count; i++)
         {
-            description.text = Loc.F("shop.free_gems.desc", Economy.FreeGemAd);
-            actionLabel.text = Badge(it);
-            action.interactable = Profile.FreeGemAvailable && Ads.Available;
-        }
-        else if (it.kind == Kind.GoldOffer)
-        {
-            var o = Economy.GoldOffers[it.index];
-            description.text = Loc.F("shop.gold_offer.desc", o.gems, o.gold);
-            actionLabel.text = Loc.F("shop.buy_gems", o.gems);
-        }
-        else
-        {
-            var p = Economy.Product(it.product).Value;
-            description.text = Loc.T(p.Key + ".desc");
-            bool owned = p.kind == ProductKind.NonConsumable && (p.vip ? Profile.Vip : Profile.StarterPackOwned);
-            actionLabel.text = owned ? Loc.T("shop.owned") : Store.Price(p.id);
-            action.interactable = !owned && Store.Ready;
+            var it = productItems[i]; var c = productCards[i];
+            c.title.text = Name(it);
+            if (c.selected) c.selected.gameObject.SetActive(i + 1 == selected);
+            if (it.kind == Kind.Product)
+            {
+                var p = Economy.Product(it.product).Value;
+                bool owned = p.kind == ProductKind.NonConsumable && (p.vip ? Profile.Vip : Profile.StarterPackOwned);
+                c.sub.text = Loc.T(p.Key + ".desc");
+                c.icon.sprite = gemIcon;
+                SetButton(c.action, owned ? UiStyle.Disabled : UiStyle.Yellow, owned ? Loc.T("shop.owned") : Store.Price(p.id), !owned && Store.Ready);
+                if (c.tagBg) c.tagBg.gameObject.SetActive(p.id.EndsWith("gems_medium"));
+            }
+            else
+            {
+                var o = Economy.GoldOffers[it.index];
+                c.sub.text = Loc.F("shop.gold_offer.desc", o.gems, o.gold);
+                c.icon.sprite = goldIcon ? goldIcon : coinIcon;
+                SetButton(c.action, Profile.CanAfford(0, o.gems) ? UiStyle.Gem : UiStyle.Disabled, o.gems.ToString(), true, gemIcon);
+                if (c.tagBg) c.tagBg.gameObject.SetActive(false);
+            }
         }
     }
 
@@ -291,6 +407,12 @@ public class ShopUI : MonoBehaviour
             {
                 var c = (CostumeId)it.index; var d = Economy.Costume(c);
                 if (Profile.Owns(c)) { Profile.SelectCostume(c); Refresh(); return; }
+                if (d.packOnly)
+                {
+                    string id = Economy.ProductPrefix + "starter_pack";
+                    Ask(Loc.F("shop.confirm_iap", Loc.T(Economy.Product(id).Value.Key), Store.Price(id)), () => { Message(Loc.T("shop.wait")); Store.Buy(id, Result); });
+                    return;
+                }
                 if (!Profile.CanAfford(d.gold, d.gems)) { Message(Loc.T(d.gems > 0 ? "shop.no_gems" : "shop.no_gold")); return; }
                 Ask(d.gems > 0 ? Loc.F("shop.confirm_gems", Name(it), d.gems) : Loc.F("shop.confirm_gold", Name(it), d.gold), () => Result(Profile.BuyCostume(c)));
                 return;
@@ -321,7 +443,9 @@ public class ShopUI : MonoBehaviour
 
     void AskUpgrade(WeaponStat s)
     {
+        if (Current != Tab.Weapons) return;
         var w = (WeaponId)items[selected].index;
+        if (!Profile.Owns(w)) return;
         int cost = Economy.UpgradeCost(w, s, Profile.Level(w, s));
         if (cost < 0) return;
         if (!Profile.CanAfford(cost, 0)) { Message(Loc.T("shop.no_gold")); return; }

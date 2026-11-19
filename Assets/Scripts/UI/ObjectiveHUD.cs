@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,15 +12,15 @@ public class ObjectiveHUD : MonoBehaviour
     [Header("Radio")]
     public CanvasGroup radioGroup;
     public RectTransform radioRoot;
-    public Text radioText;
+    public TMP_Text radioText;
     public Image radioIcon;
     public float charsPerSecond = 55f;
     public float holdSeconds = 4.5f;
 
     [Header("Tracker")]
     public CanvasGroup trackerGroup;
-    public Text trackerTitle;
-    public Text trackerInfo;
+    public TMP_Text trackerTitle;
+    public TMP_Text trackerInfo;
     public Image trackerIcon;
     public RectTransform progressFill;
     public GameObject progressRoot;
@@ -28,7 +29,7 @@ public class ObjectiveHUD : MonoBehaviour
     public RectTransform marker;
     public Image markerArrow;
     public Image markerIcon;
-    public Text markerDistance;
+    public TMP_Text markerDistance;
     public float edgeMargin = 90f;
     public float topMargin = 230f;
 

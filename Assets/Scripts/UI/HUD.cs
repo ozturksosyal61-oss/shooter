@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,59 +9,64 @@ using UnityEngine.UI;
 public class HUD : MonoBehaviour
 {
     [Header("Score / combo")]
-    public Text scoreText;
-    public Text multiplierText;
-    public Text comboText;
+    public TMP_Text scoreText;
+    public TMP_Text multiplierText;
+    public TMP_Text comboText;
     public RectTransform comboRoot;
     public RectTransform comboBar;
-    public Text comboBrokenText;
+    public TMP_Text comboBrokenText;
 
     [Header("Health")]
     public RectTransform healthFill;
     public Image healthFillImage;
     [Tooltip("White bar that lags behind the fill after damage.")]
     public RectTransform healthLag;
-    public Text healthText;
+    public TMP_Text healthText;
     public RectTransform healthHeart;
     public Image damageVignette;
 
     [Header("Waves")]
-    public Text waveLabel;
-    public Text waveBanner;
-    public Text waveSubBanner;
+    public TMP_Text waveLabel;
+    public TMP_Text waveBanner;
+    public TMP_Text waveSubBanner;
     public CanvasGroup waveBannerGroup;
-    public Text breakText;
+    public TMP_Text breakText;
 
     [Header("Weapon")]
-    public Text ammoText;
+    public TMP_Text ammoText;
     public GameObject reloadRoot;
     public RectTransform reloadBar;
     public Image reloadBarImage;
     public RectTransform reloadSweetSpot;
-    public Text reloadLabel;
+    public TMP_Text reloadLabel;
     public RectTransform reloadButton;
     public Image reloadButtonFill;
     public GameObject ammoPlate;
 
     [Header("Progression")]
     public RectTransform xpFill;
-    public Text levelText;
-    public Text levelNumber;
+    public TMP_Text levelText;
+    public TMP_Text levelNumber;
     public RectTransform levelBadge;
     public Image xpGlow;
     public RectTransform cardRow;
-    [Tooltip("Badge template: children Icon (Image), LevelBg/Level (Text), Flash (Image).")]
+    [Tooltip("Badge template: children Icon (Image), LevelBg/Level (TMP_Text), Flash (Image).")]
     public Image cardIconTemplate;
 
     [Header("Misc")]
-    public Text fpsText;
+    public TMP_Text fpsText;
     public CanvasGroup tutorialGroup;
+
+    [Header("Redesign HUD")]
+    public TMP_Text killsText, runGoldText, waveNumber, waveLeft, weaponName;
+    public RectTransform waveProgress;
+    public ResultScreen result;
 
     [Header("Game over")]
     public GameObject gameOverPanel;
-    public Text gameOverTitle;
-    public Text gameOverStats;
-    public Text recordText;
+    public TMP_Text gameOverTitle;
+    public TMP_Text gameOverStats;
+    public TMP_Text recordText;
     public RectTransform restartButton;
     [Tooltip("Victory screen: three star images (campaign chapter result).")]
     public Image[] victoryStars;
@@ -79,11 +85,21 @@ public class HUD : MonoBehaviour
     int lastLevel = -1;
     float xpShown, levelPunch, healthLagShown = 1f, lagHold, heartPunch, lastHealth = -1f;
     int shownHp = -1;
-    struct Badge { public Image frame, icon, flash; public Text level; public float flashT; }
+    struct Badge { public Image frame, icon, flash; public TMP_Text level; public float flashT; }
     readonly System.Collections.Generic.List<Badge> cardIcons = new System.Collections.Generic.List<Badge>(16);
+
+    int prevBestWave, shownKills = -1, shownGold = -1;
+    float goldT;
+    System.Action pendingResult;
 
     void Start()
     {
+        prevBestWave = GameMode.IsHard ? SaveSystem.Data.records.hardWave : SaveSystem.Data.records.bestWave;
+        if (weaponName && GameManager.I && GameManager.I.player)
+        {
+            var lo = GameManager.I.player.GetComponent<WeaponLoadout>();
+            weaponName.text = lo ? Loc.T(Economy.Weapon(lo.Current).Key) : "";
+        }
         if (gameOverPanel) gameOverPanel.SetActive(false);
         if (comboBrokenText) { comboBrokenText.gameObject.SetActive(false); brokenStart = comboBrokenText.rectTransform.anchoredPosition; }
         if (waveBannerGroup) waveBannerGroup.alpha = 0f;
@@ -123,7 +139,7 @@ public class HUD : MonoBehaviour
                 frame = img,
                 icon = t.Find("Icon").GetComponent<Image>(),
                 flash = t.Find("Flash").GetComponent<Image>(),
-                level = t.Find("LevelBg/Level").GetComponent<Text>(),
+                level = t.Find("LevelBg/Level").GetComponent<TMP_Text>(),
                 flashT = 1f,
             });
         }
@@ -132,7 +148,7 @@ public class HUD : MonoBehaviour
             var d = Upgrades.Get(owned[i]);
             var b = cardIcons[i];
             var rt = b.frame.rectTransform;
-            rt.anchoredPosition = new Vector2(34f + i * 76f, -34f);
+            rt.anchoredPosition = new Vector2(16f + i * 36f, -16f);
             Color rc = Upgrades.RarityColors[(int)d.rarity];
             b.frame.color = Color.Lerp(new Color(0.17f, 0.2f, 0.11f), rc, 0.35f);
             b.icon.sprite = Upgrades.I.IconOf(owned[i]);
@@ -186,6 +202,7 @@ public class HUD : MonoBehaviour
         UpdateTutorial(dt);
         UpdateProgression(dt);
         UpdateFps(dt);
+        UpdateRun(gm, dt);
         if (recordActive)
         {
             recordT += dt;
@@ -193,6 +210,20 @@ public class HUD : MonoBehaviour
             recordText.transform.localRotation = Quaternion.Euler(0f, 0f, 4f * Mathf.Sin(recordT * 5f));
             recordText.color = Color.Lerp(Gold, Color.white, 0.5f + 0.5f * Mathf.Sin(recordT * 12f));
         }
+    }
+
+    /// <summary>Kills + gold earned so far (same formula the run pays at the end).</summary>
+    void UpdateRun(GameManager gm, float dt)
+    {
+        if (killsText && gm.Kills != shownKills) { shownKills = gm.Kills; killsText.text = gm.Kills.ToString(); }
+        goldT -= dt;
+        if (!runGoldText || goldT > 0f) return;
+        goldT = 0.5f;
+        int wave = WaveDirector.I ? WaveDirector.I.Wave : 0;
+        int objectives = ObjectiveDirector.I ? ObjectiveDirector.I.CompletedCount : 0;
+        int bosses = BossDirector.I ? BossDirector.I.BossesDefeated : 0;
+        int g = Economy.RunGold(gm.Score, wave, gm.Kills, objectives, bosses, Profile.GoldMultiplier * ModeRules.GoldMul(GameMode.Current));
+        if (g != shownGold) { shownGold = g; runGoldText.text = "+" + g; }
     }
 
     void UpdateScore(GameManager gm, float dt)
@@ -216,7 +247,7 @@ public class HUD : MonoBehaviour
         {
             if (mult > lastMult) comboPunch = 1.6f;
             lastMult = mult;
-            multiplierText.text = "x" + mult;
+            multiplierText.text = "X" + mult;
         }
         if (combo > 0)
         {
@@ -255,7 +286,7 @@ public class HUD : MonoBehaviour
         if (healthText && p)
         {
             int hp = Mathf.CeilToInt(p.Health);
-            if (hp != shownHp) { shownHp = hp; healthText.text = hp.ToString(); }
+            if (hp != shownHp) { shownHp = hp; healthText.text = hp + " / " + Mathf.CeilToInt(p.maxHealth); }
         }
         heartPunch = Mathf.MoveTowards(heartPunch, 0f, dt * 4f);
         if (healthHeart)
@@ -265,7 +296,7 @@ public class HUD : MonoBehaviour
         }
         var waves = WaveDirector.I;
         bool regen = waves && waves.InBreak && h < 1f && !gm.IsGameOver;
-        Color baseCol = Color.Lerp(new Color(0.9f, 0.2f, 0.15f), new Color(0.3f, 0.9f, 0.3f), healthShown);
+        Color baseCol = UiKit.Danger;
         healthFillImage.color = regen ? Color.Lerp(baseCol, Color.white, 0.35f + 0.35f * Mathf.Sin(Time.unscaledTime * 8f)) : baseCol;
         vignette = Mathf.MoveTowards(vignette, 0f, dt * 1.6f);
         var vc = damageVignette.color; vc.a = vignette; damageVignette.color = vc;
@@ -275,7 +306,25 @@ public class HUD : MonoBehaviour
     {
         var waves = WaveDirector.I;
         if (!waves) return;
-        if (waves.Wave != lastWave && waves.Wave > 0) { lastWave = waves.Wave; waveLabel.text = Loc.F("hud.wave", waves.Wave); }
+        if (waves.Wave != lastWave && waves.Wave > 0)
+        {
+            lastWave = waves.Wave;
+            if (waveLabel) waveLabel.text = Loc.F("hud.wave", waves.Wave);
+            if (waveNumber) waveNumber.text = waves.Wave.ToString();
+        }
+        if (waveProgress)
+        {
+            float dur = waves.InBreak ? 9f : Mathf.Max(1f, waves.Params.duration);
+            bool boss = BossDirector.I && BossDirector.I.HoldsWave;
+            float k = waves.InBreak ? 1f - waves.PhaseTimeLeft / dur : boss ? 1f : 1f - waves.PhaseTimeLeft / dur;
+            waveProgress.anchorMax = new Vector2(Mathf.Clamp01(k), 1f);
+            int sec = Mathf.CeilToInt(Mathf.Max(0f, waves.PhaseTimeLeft));
+            if (waveLeft && sec != lastLeft)
+            {
+                lastLeft = sec;
+                waveLeft.text = boss && !waves.InBreak ? Loc.T("hud.boss_wave") : Loc.F(waves.InBreak ? "hud.breather_left" : "hud.wave_left", sec);
+            }
+        }
 
         // Intro banner: pop in, hold, fade.
         bannerT += dt;
@@ -302,6 +351,8 @@ public class HUD : MonoBehaviour
         }
     }
 
+    int lastLeft = -1;
+
     void UpdateWeapon(GameManager gm, float dt)
     {
         var w = gm.player ? gm.player.weapon : null;
@@ -325,7 +376,7 @@ public class HUD : MonoBehaviour
             {
                 if (w.Ammo > lastAmmo || w.Reserve > lastReserve) ammoPunch = 1f;
                 lastAmmo = w.Ammo; lastReserve = w.Reserve;
-                ammoText.text = w.Ammo + "<size=28> / " + w.Reserve + "</size>";
+                ammoText.text = w.Ammo + "<size=55%><color=#B8BDA9>/" + w.Reserve + "</color></size>";
             }
         }
         else if (w.Ammo != lastAmmo)
@@ -335,12 +386,12 @@ public class HUD : MonoBehaviour
             if (ammoStrings == null || ammoStrings.Length != w.magazineSize + 1)
             {
                 ammoStrings = new string[w.magazineSize + 1];
-                for (int i = 0; i <= w.magazineSize; i++) ammoStrings[i] = i + "<size=28> / " + w.magazineSize + "</size>";
+                for (int i = 0; i <= w.magazineSize; i++) ammoStrings[i] = i + "<size=55%><color=#B8BDA9>/" + w.magazineSize + "</color></size>";
             }
             ammoText.text = ammoStrings[Mathf.Clamp(w.Ammo, 0, w.magazineSize)];
         }
         bool low = w.Ammo <= w.magazineSize / 5 || (w.ReserveLow && Mathf.Repeat(Time.unscaledTime * 2f, 1f) < 0.5f);
-        ammoText.color = w.BonusShots > 0 ? Gold : low ? new Color(1f, 0.35f, 0.3f) : Color.white;
+        ammoText.color = w.BonusShots > 0 ? Gold : low ? UiKit.DangerAlt : UiKit.Text;
         ammoPunch = Mathf.MoveTowards(ammoPunch, 0f, dt * 4f);
         ammoText.transform.localScale = Vector3.one * (1f + 0.25f * ammoPunch);
 
@@ -353,9 +404,10 @@ public class HUD : MonoBehaviour
             reloadLabel.text = Loc.T(r == 0 ? "hud.jam" : "hud.reload_hint");
             reloadLabel.color = r == 0 ? new Color(1f, 0.35f, 0.3f) : Gold;
         }
-        // Reload button: fills as the magazine empties, pulses when low.
-        reloadButtonFill.fillAmount = 1f - (float)w.Ammo / w.magazineSize;
-        float pulse = low && !w.IsReloading ? 1f + 0.08f * Mathf.Sin(Time.unscaledTime * 10f) : 1f;
+        // Ammo ring (the panel is the reload button): magazine left, or reload progress while reloading.
+        reloadButtonFill.fillAmount = w.IsReloading ? w.ReloadProgress : (float)w.Ammo / w.magazineSize;
+        reloadButtonFill.color = w.IsReloading ? UiKit.Text : low ? UiKit.DangerAlt : UiKit.Hazard;
+        float pulse = low && !w.IsReloading ? 1f + 0.04f * Mathf.Sin(Time.unscaledTime * 10f) : 1f;
         reloadButton.localScale = Vector3.one * pulse;
     }
 
@@ -429,7 +481,21 @@ public class HUD : MonoBehaviour
 
     static string Time2(float t) => $"{(int)(t / 60f)}:{(int)(t % 60f):00}";
 
-    public void HideGameOver() => gameOverPanel.SetActive(false);
+    public void HideGameOver() { gameOverPanel.SetActive(false); pendingResult = null; }
+
+    /// <summary>The revive offer is closed (declined / timed out): show the result screen that was waiting.</summary>
+    public void RevealGameOver()
+    {
+        var a = pendingResult;
+        pendingResult = null;
+        a?.Invoke();
+    }
+
+    bool Defer(System.Action show)
+    {
+        if (RunRewards.I && RunRewards.I.ReviveOpen) { pendingResult = show; return true; }
+        return false;
+    }
 
     void SetRestartLabel(string key)
     {
@@ -452,6 +518,11 @@ public class HUD : MonoBehaviour
     public void ShowVictory(int chapter, int stars, int score, float time, int kills, int wave, int gold, int gems)
     {
         gameOverPanel.SetActive(true);
+        if (result)
+        {
+            int total = ObjectiveDirector.I ? ObjectiveDirector.I.ChapterTotal : 0;
+            result.ShowStory(restartButton, chapter, true, stars, time, total, total, gold);
+        }
         breakText.gameObject.SetActive(false);
         var def = Campaign.Get(chapter);
         gameOverTitle.text = Loc.T("victory.title");
@@ -465,9 +536,17 @@ public class HUD : MonoBehaviour
 
     public void ShowGameOver(int score, float time, int kills, int bestCombo, int wave, GameManager.RunRecords rec)
     {
+        if (Defer(() => ShowGameOver(score, time, kills, bestCombo, wave, rec))) return;
         gameOverPanel.SetActive(true);
+        if (result)
+        {
+            if (GameMode.IsCampaign && ObjectiveDirector.I)
+                result.ShowStory(restartButton, GameMode.Chapter, false, 0, time, ObjectiveDirector.I.ChapterIndex, ObjectiveDirector.I.ChapterTotal, RunRewards.I ? RunRewards.I.TotalGold : 0);
+            else
+                result.ShowDeath(restartButton, wave, kills, BossDirector.I ? BossDirector.I.BossesDefeated : 0, bestCombo, time, rec, prevBestWave);
+        }
         ShowStars(-1);
-        SetRestartLabel("over.again");
+        SetRestartLabel(GameMode.IsCampaign ? "over.retry" : "over.again");
         breakText.gameObject.SetActive(false);
         gameOverTitle.text = Loc.T("over.title");
         gameOverStats.text = Loc.F("over.stats", score, rec.bestScore, Time2(time), wave, kills, bestCombo);

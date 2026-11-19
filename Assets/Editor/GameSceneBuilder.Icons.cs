@@ -14,11 +14,12 @@ public static partial class GameSceneBuilder
     const string UiArt = "Assets/Art/UI";
 
     /// <summary>Theme: cartoon / military — khaki green with orange accents, cream text, near-black contours.</summary>
-    static readonly Color UiKhaki = new Color(0.34f, 0.40f, 0.22f);
-    static readonly Color UiKhakiDark = new Color(0.17f, 0.20f, 0.11f);
-    static readonly Color UiOrange = new Color(1f, 0.56f, 0.12f);
-    static readonly Color UiCream = new Color(1f, 0.96f, 0.86f);
-    static readonly Color UiInk = new Color(0.06f, 0.06f, 0.05f);
+    // Redesign palette (docs/ui-ref StyleGuide) under the old names, so older layouts follow the new look.
+    static readonly Color UiKhaki = new Color(0.11f, 0.14f, 0.098f);
+    static readonly Color UiKhakiDark = new Color(0.067f, 0.082f, 0.059f);
+    static readonly Color UiOrange = new Color(1f, 0.698f, 0.118f);
+    static readonly Color UiCream = new Color(0.949f, 0.929f, 0.882f);
+    static readonly Color UiInk = new Color(0.043f, 0.051f, 0.035f);
 
     class UiSprites
     {

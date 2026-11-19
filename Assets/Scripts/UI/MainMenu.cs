@@ -1,37 +1,56 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Main menu: HOLDOUT logo over a live city with a slowly orbiting camera; Play (Story chapters / Endless / Hard),
-/// Shop, Settings; gold / gem counters from the save. The OZT Digital splash plays once
-/// per app session (after the Unity splash).
+/// Main menu (redesign, docs/ui-ref 01): HOLDOUT logo over the live city, quests / daily reward / shop list,
+/// the soldier (3D preview of the selected character) with its costume + weapon chips, the game-mode carousel
+/// (Story / Endless / Hard) and the big OYNA button; gold / gems pills, settings, a random tip. The OZT Digital splash
+/// plays once per app session (after the Unity splash).
 /// </summary>
 public class MainMenu : MonoBehaviour
 {
     public static MainMenu I { get; private set; }
 
-    public GameObject mainButtons, playButtons;
-    public Button play, shop, settings, campaign, endless, hard, coop, back;
-    public CoopPanel coopPanel;
-    public Text storySub, hardSub;
-    public CampaignPanel campaignPanel;
-    public Text gold, gems;
+    /// <summary>Set before returning to the menu (death screen "SİLAH" / "HARİTA"): opens that panel at once.</summary>
+    public enum Open { None, Loadout, Campaign }
+    public static Open OpenOnStart;
+
+    public GameObject mainButtons;
+    public Button play, shop, settings;
+    public TMP_Text gold, gems;
+    public Button goldPlus, gemPlus;
     public RectTransform logo;
     public CanvasGroup splash;
     public RectTransform splashLogo;
     public float splashSeconds = 2.4f;
     public CanvasGroup toast;
-    public Text toastText;
+    public TMP_Text toastText;
     public SettingsPanel settingsPanel;
     public ShopUI shopUI;
     public LoadoutPanel loadout;
     public DailyLoginPanel login;
     public QuestsPanel quests;
+    public CampaignPanel campaignPanel;
+    public CoopPanel coopPanel;
+    public ModePanel modePanel;
     public Button questsButton, loginButton;
     public GameObject questBadge, loginBadge;
+    public TMP_Text questBadgeText, questSub, loginSub, loginTimer;
+
+    [Header("Mode carousel")]
+    public Button modePrev, modeNext, modeCard;
+    public TMP_Text modeTitle, modeSub;
+    public Image[] modeDots;
+
+    [Header("Soldier")]
+    public RawImage soldierPreview;
+    public PreviewStage preview;
+    public TMP_Text characterName, costumeChip, weaponChip, tip;
 
     static bool splashShown;
-    float splashT = -1f, toastT, t;
+    static int modeIndex = 1; // 0 story, 1 endless, 2 hard
+    float splashT = -1f, toastT;
 
     public bool SplashActive => splashT >= 0f;
 
@@ -39,51 +58,105 @@ public class MainMenu : MonoBehaviour
 
     void Start()
     {
-        play.onClick.AddListener(() => { Click(); ShowPlay(true); });
-        back.onClick.AddListener(() => { Click(); ShowPlay(false); });
-        endless.onClick.AddListener(() => { Click(); StartMode(RunMode.Endless); });
-        if (hard) hard.onClick.AddListener(() => { Click(); StartMode(RunMode.Hard); });
-        if (coop) coop.onClick.AddListener(() => { Click(); if (coopPanel) coopPanel.Open(); });
-        campaign.onClick.AddListener(() => { Click(); if (campaignPanel) campaignPanel.Open(); else Toast(Loc.T("menu.soon")); });
-        Loc.Changed += RefreshModes;
-        shop.onClick.AddListener(() => { Click(); if (shopUI) shopUI.Open(ShopUI.Tab.Weapons); else Toast(Loc.T("menu.soon")); });
+        play.onClick.AddListener(() => { Click(); PlaySelected(); });
+        shop.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Weapons, (int)Profile.SelectedWeapon); });
+        if (goldPlus) goldPlus.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Gems, 1 + Economy.Products.Length); });
+        if (gemPlus) gemPlus.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Gems, 1); });
         if (questsButton) questsButton.onClick.AddListener(() => { Click(); quests.Open(); });
         if (loginButton) loginButton.onClick.AddListener(() => { Click(); login.Open(); });
-        Profile.Changed += RefreshWallet;
         settings.onClick.AddListener(() => { Click(); settingsPanel.Open(); });
-        ShowPlay(false);
+        if (modePrev) modePrev.onClick.AddListener(() => { Click(); modeIndex = (modeIndex + 2) % 3; RefreshMode(); });
+        if (modeNext) modeNext.onClick.AddListener(() => { Click(); modeIndex = (modeIndex + 1) % 3; RefreshMode(); });
+        if (modeCard) modeCard.onClick.AddListener(() => { Click(); ShowPlay(true); });
+        if (shopUI) shopUI.Closed += RefreshSoldier;
+        Profile.Changed += Refresh;
+        SaveSystem.Changed += Refresh;
+        Loc.Changed += Refresh;
         toast.alpha = 0f;
-        SaveSystem.Changed += RefreshWallet;
-        RefreshWallet();
+        if (tip) tip.text = Loc.T("tip." + Random.Range(1, 11));
+        Refresh();
         if (!splashShown) { splashShown = true; splashT = 0f; splash.gameObject.SetActive(true); splash.alpha = 1f; }
-        else { splash.gameObject.SetActive(false); AutoLogin(); }
+        else { splash.gameObject.SetActive(false); AfterSplash(); }
     }
 
-    void OnDestroy() { SaveSystem.Changed -= RefreshWallet; Profile.Changed -= RefreshWallet; Loc.Changed -= RefreshModes; }
+    void OnDestroy()
+    {
+        Profile.Changed -= Refresh; SaveSystem.Changed -= Refresh; Loc.Changed -= Refresh;
+        if (shopUI) shopUI.Closed -= RefreshSoldier;
+    }
 
-    void StartMode(RunMode m)
+    static void Click() { if (GameAudio.I) GameAudio.Play(SfxId.UiClick, Vector3.zero); }
+
+    void AfterSplash()
+    {
+        var o = OpenOnStart;
+        OpenOnStart = Open.None;
+        if (o == Open.Loadout && loadout) { loadout.Open(); return; }
+        if (o == Open.Campaign && campaignPanel) { campaignPanel.Open(); return; }
+        AutoLogin();
+    }
+
+    void Refresh()
+    {
+        var w = SaveSystem.Data.wallet;
+        gold.text = w.gold.ToString();
+        gems.text = w.gems.ToString();
+        int open = 0;
+        foreach (var q in Profile.Quests) if (!q.claimed) open++;
+        if (questBadge) questBadge.SetActive(open > 0);
+        if (questBadgeText) questBadgeText.text = open.ToString();
+        if (questSub) questSub.text = Loc.F("menu.quests_sub", open);
+        if (loginBadge) loginBadge.SetActive(Profile.LoginClaimable >= 0);
+        if (loginSub)
+        {
+            int next = Profile.LoginClaimable;
+            int idx = next >= 0 ? next : (Profile.LoginStreakIndex + 1) % Economy.LoginRewards.Length;
+            loginSub.text = Loc.F(next >= 0 ? "menu.login_today" : "menu.login_tomorrow", Economy.LoginRewards[idx].gold);
+        }
+        RefreshMode();
+        RefreshSoldier();
+    }
+
+    void RefreshMode()
+    {
+        string[] keys = { "menu.story", "menu.endless", "menu.hard" };
+        string[] subs = { "menu.story_card", "menu.endless_card", "menu.hard_card" };
+        if (modeTitle) modeTitle.text = Loc.T(keys[modeIndex]);
+        if (modeSub) modeSub.text = Loc.T(subs[modeIndex]);
+        if (modeDots != null)
+            for (int i = 0; i < modeDots.Length; i++)
+            {
+                modeDots[i].color = i == modeIndex ? UiKit.Hazard : UiKit.Line;
+                modeDots[i].rectTransform.sizeDelta = new Vector2(i == modeIndex ? 32f : 16f, 4f);
+            }
+    }
+
+    void RefreshSoldier()
+    {
+        var c = Profile.SelectedCostume;
+        var wpn = Profile.SelectedWeapon;
+        if (characterName) characterName.text = Loc.T(c == CostumeId.SpecOps || c == CostumeId.Firefighter ? Economy.Costume(c).Key : "menu.soldier_name");
+        if (costumeChip) costumeChip.text = Loc.T(Economy.Costume(c).Key);
+        int lv = Profile.Level(wpn, WeaponStat.Damage) + Profile.Level(wpn, WeaponStat.Magazine) + Profile.Level(wpn, WeaponStat.Reload);
+        if (weaponChip) weaponChip.text = Loc.F("menu.weapon_chip", Loc.T(Economy.Weapon(wpn).Key), lv);
+        if (preview && (!shopUI || !shopUI.IsOpen) && (!loadout || !loadout.root.activeSelf)) preview.ShowCostume(c);
+    }
+
+    /// <summary>OYNA: story → chapter select, endless / hard → weapon select.</summary>
+    public void PlaySelected()
+    {
+        if (modeIndex == 0) { if (campaignPanel) campaignPanel.Open(); return; }
+        StartMode(modeIndex == 2 ? RunMode.Hard : RunMode.Endless);
+    }
+
+    public void StartMode(RunMode m)
     {
         GameMode.Set(m);
         if (loadout) loadout.Open(); else PlayEndless();
     }
 
-    void RefreshModes()
-    {
-        var d = SaveSystem.Data;
-        if (storySub) storySub.text = Loc.F("menu.story_sub", Campaign.TotalStars(d.campaign), Campaign.Count * 3);
-        if (hardSub) hardSub.text = d.records.hardWave > 0 ? Loc.F("menu.hard_best", d.records.hardWave) : Loc.T("menu.hard_sub");
-    }
-
-    static void Click() { if (GameAudio.I) GameAudio.Play(SfxId.UiClick, Vector3.zero); }
-
-    void RefreshWallet()
-    {
-        var w = SaveSystem.Data.wallet;
-        gold.text = w.gold.ToString();
-        gems.text = w.gems.ToString();
-        if (questBadge) questBadge.SetActive(QuestsPanel.AnyClaimable());
-        if (loginBadge) loginBadge.SetActive(Profile.LoginClaimable >= 0);
-    }
+    public static void SetMode(int index) => modeIndex = Mathf.Clamp(index, 0, 2);
+    public static int ModeIndex => modeIndex;
 
     static bool loginShown;
 
@@ -95,11 +168,10 @@ public class MainMenu : MonoBehaviour
         login.Open();
     }
 
+    /// <summary>Opens / closes the game-mode screen.</summary>
     public void ShowPlay(bool on)
     {
-        mainButtons.SetActive(!on);
-        playButtons.SetActive(on);
-        if (on) RefreshModes();
+        if (modePanel) { if (on) modePanel.Open(); else modePanel.root.SetActive(false); }
     }
 
     public void PlayEndless() => LoadingScreen.Load(LoadingScreen.GameScene);
@@ -113,10 +185,11 @@ public class MainMenu : MonoBehaviour
     void Update()
     {
         float dt = Time.unscaledDeltaTime;
-        t += dt;
-        logo.localScale = Vector3.one * (1f + 0.015f * Mathf.Sin(t * 1.6f));
-        logo.localRotation = Quaternion.Euler(0f, 0f, 1.2f * Mathf.Sin(t * 0.8f));
-
+        // Full-screen pages (modes, weapons, shop, chapters) hide the main column behind them.
+        bool page = (modePanel && modePanel.root.activeSelf) || (shopUI && shopUI.IsOpen) || (loadout && loadout.root.activeSelf)
+            || (campaignPanel && campaignPanel.root.activeSelf);
+        if (mainButtons && mainButtons.activeSelf == page) mainButtons.SetActive(!page);
+        if (loginTimer) loginTimer.text = Profile.LoginClaimable >= 0 ? "" : UiKit.Time(UiKit.UntilUtcMidnight()).Substring(0, 5);
         if (splashT >= 0f)
         {
             splashT += dt;
@@ -125,9 +198,8 @@ public class MainMenu : MonoBehaviour
             var g = splashLogo.GetComponent<CanvasGroup>();
             if (g) g.alpha = k < 0.25f ? k / 0.25f : k > 0.75f ? Mathf.Clamp01((1f - k) / 0.25f) : 1f;
             if (k > 0.85f) splash.alpha = Mathf.Clamp01((1f - k) / 0.15f);
-            if (k >= 1f) { splashT = -1f; splash.gameObject.SetActive(false); AutoLogin(); }
+            if (k >= 1f) { splashT = -1f; splash.gameObject.SetActive(false); AfterSplash(); }
         }
-
         if (toastT > 0f) toastT -= dt;
         toast.alpha = Mathf.MoveTowards(toast.alpha, toastT > 0f ? 1f : 0f, dt * 6f);
     }

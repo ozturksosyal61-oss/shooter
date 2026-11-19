@@ -743,7 +743,7 @@ public static partial class GameSceneBuilder
 
     static void BuildObjectiveHud(HUD hud, Tex t)
     {
-        var root = hud.transform;
+        var root = hud.transform.Find("Legacy") ?? hud.transform;
         var icons = ObjectiveIcons();
         var obj = new GameObject("Objectives", typeof(RectTransform)).GetComponent<RectTransform>();
         obj.SetParent(root, false);

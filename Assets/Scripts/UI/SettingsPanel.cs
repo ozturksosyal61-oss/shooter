@@ -1,3 +1,4 @@
+using TMPro;
 using System;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,15 +18,18 @@ public class SettingsPanel : MonoBehaviour
     public GameObject root;
     public Slider music, sfx, joySize, joyAlpha;
     public Button vibration;
-    public Text vibrationLabel;
+    public TMP_Text vibrationLabel;
     public Button[] fpsButtons;
     public Button[] qualityButtons;
     public Button[] langButtons;
     public Button support, privacy, terms, reset, close, restore;
     public GameObject confirm;
     public Button confirmYes, confirmNo;
-    public Text resetDone;
-    public Color onColor = new Color(1f, 0.55f, 0.1f), offColor = new Color(0.17f, 0.2f, 0.11f);
+    public TMP_Text resetDone;
+    [Header("Redesign")]
+    public TMP_Text musicValue, sfxValue, joySizeValue, joyAlphaValue, version;
+    public RectTransform vibrationKnob;
+    public Image vibrationTrack;
 
     public bool IsOpen => root && root.activeSelf;
     public event Action Closed;
@@ -128,16 +132,29 @@ public class SettingsPanel : MonoBehaviour
         joySize.SetValueWithoutNotify(s.joystickSize);
         joyAlpha.SetValueWithoutNotify(s.joystickAlpha);
         vibrationLabel.text = Loc.T(s.vibration ? "set.on" : "set.off");
-        vibration.image.color = s.vibration ? onColor : offColor;
+        if (vibrationTrack) vibrationTrack.color = s.vibration ? UiKit.Hazard : UiKit.Hex(0x232B1E);
+        if (vibrationKnob) vibrationKnob.anchoredPosition = new Vector2(s.vibration ? 16f : -16f, 0f);
+        if (musicValue) musicValue.text = Mathf.RoundToInt(s.music * 100f).ToString();
+        if (sfxValue) sfxValue.text = Mathf.RoundToInt(s.sfx * 100f).ToString();
+        if (joySizeValue) joySizeValue.text = Mathf.RoundToInt(Mathf.InverseLerp(Settings.MinJoystickSize, Settings.MaxJoystickSize, s.joystickSize) * 100f).ToString();
+        if (joyAlphaValue) joyAlphaValue.text = Mathf.RoundToInt(Mathf.InverseLerp(Settings.MinJoystickAlpha, Settings.MaxJoystickAlpha, s.joystickAlpha) * 100f).ToString();
+        if (version) version.text = Loc.F("set.version", Application.version);
         var fps = Settings.SupportedFps(Settings.DisplayHz());
         int curFps = Settings.ClampFps(s.fps, Settings.DisplayHz());
         for (int i = 0; i < fpsButtons.Length; i++)
         {
             int f = Settings.FpsOptions[i];
             fpsButtons[i].gameObject.SetActive(fps.Contains(f));
-            fpsButtons[i].image.color = f == curFps ? onColor : offColor;
+            Seg(fpsButtons[i], f == curFps);
         }
-        for (int i = 0; i < qualityButtons.Length; i++) qualityButtons[i].image.color = i == Settings.Quality ? onColor : offColor;
-        for (int i = 0; i < langButtons.Length; i++) langButtons[i].image.color = (i == 0 ? "tr" : "en") == s.lang ? onColor : offColor;
+        for (int i = 0; i < qualityButtons.Length; i++) Seg(qualityButtons[i], i == Settings.Quality);
+        for (int i = 0; i < langButtons.Length; i++) Seg(langButtons[i], (i == 0 ? "tr" : "en") == s.lang);
+    }
+
+    /// <summary>Segmented control cell: selected = primary yellow, others ghost.</summary>
+    static void Seg(Button b, bool on)
+    {
+        var pb = b.GetComponent<PressButton>();
+        if (pb) pb.SetStyle(on ? UiStyle.Yellow : UiStyle.Ghost);
     }
 }

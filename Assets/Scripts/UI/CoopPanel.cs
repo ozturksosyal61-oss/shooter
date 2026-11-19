@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,8 +11,8 @@ public class CoopPanel : MonoBehaviour
     public GameObject root;
     public GameObject idleGroup, roomGroup;
     public Button create, join, start, leave, back;
-    public InputField codeInput;
-    public Text codeText, playersText, status;
+    public TMP_InputField codeInput;
+    public TMP_Text codeText, playersText, status;
 
     void Awake()
     {

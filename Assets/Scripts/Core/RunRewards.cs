@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,9 +12,20 @@ public class RunRewards : MonoBehaviour
     public static RunRewards I { get; private set; }
 
     public GameObject root;
-    public Text goldText;
+    public TMP_Text goldText;
     public Button doubleButton, continueAdButton, continueGemButton;
-    public Text doubleLabel, continueAdLabel, continueGemLabel, message;
+    public TMP_Text doubleLabel, continueAdLabel, continueGemLabel, message;
+    [Header("Revive offer (full screen, before the result screen)")]
+    public GameObject revivePanel;
+    public TMP_Text reviveCount, reviveSub;
+    public Image reviveRing;
+    public Button reviveSkip;
+    public GameObject hardTag;
+    public float reviveSeconds = 5f;
+
+    /// <summary>The "YERE DÜŞTÜN" continue offer is on screen (the result screen waits for it).</summary>
+    public bool ReviveOpen => revivePanel && revivePanel.activeSelf;
+    float reviveT;
 
     public int LastGold { get; private set; }
     public int TotalGold { get; private set; }
@@ -36,7 +48,9 @@ public class RunRewards : MonoBehaviour
         if (doubleButton) doubleButton.onClick.AddListener(DoubleGold);
         if (continueAdButton) continueAdButton.onClick.AddListener(ContinueWithAd);
         if (continueGemButton) continueGemButton.onClick.AddListener(ContinueWithGems);
+        if (reviveSkip) reviveSkip.onClick.AddListener(() => { GameAudio.Play(SfxId.UiClick, Vector3.zero); CloseRevive(); });
         if (root) root.SetActive(false);
+        if (revivePanel) revivePanel.SetActive(false);
     }
 
     void OnDestroy()
@@ -61,11 +75,30 @@ public class RunRewards : MonoBehaviour
         shown = 0f;
         Refresh();
         if (root) root.SetActive(true);
+        // Continue offer first (once per run, not after a won chapter / in co-op).
+        if (revivePanel && gm.Continues == 0 && !gm.Won && !GameMode.IsCoop)
+        {
+            reviveT = reviveSeconds;
+            revivePanel.SetActive(true);
+            int wv = WaveDirector.I ? WaveDirector.I.Wave : 0;
+            if (reviveSub) reviveSub.text = Loc.F("rew.revive_sub", wv, gm.Kills);
+        }
+        if (hardTag) hardTag.SetActive(GameMode.IsHard);
     }
 
     void OnRevived()
     {
         if (root) root.SetActive(false);
+        if (revivePanel) revivePanel.SetActive(false);
+    }
+
+    /// <summary>Declined / timed out: the result screen comes up.</summary>
+    public void CloseRevive()
+    {
+        if (!ReviveOpen) return;
+        revivePanel.SetActive(false);
+        var gm = GameManager.I;
+        if (gm && gm.hud) gm.hud.RevealGameOver();
     }
 
     void Refresh()
@@ -114,6 +147,13 @@ public class RunRewards : MonoBehaviour
 
     void Update()
     {
+        if (ReviveOpen && !busy)
+        {
+            reviveT -= Time.unscaledDeltaTime;
+            if (reviveCount) reviveCount.text = Mathf.Max(0, Mathf.CeilToInt(reviveT)).ToString();
+            if (reviveRing) reviveRing.fillAmount = Mathf.Clamp01(reviveT / reviveSeconds);
+            if (reviveT <= 0f) CloseRevive();
+        }
         if (!root || !root.activeSelf || !goldText) return;
         float target = TotalGold;
         if (shown < target)
@@ -123,6 +163,6 @@ public class RunRewards : MonoBehaviour
             tickT -= Time.unscaledDeltaTime;
             if (tickT <= 0f && (int)shown != (int)before) { tickT = 0.07f; GameAudio.Play(SfxId.Coin, Vector3.zero); }
         }
-        goldText.text = Loc.F("rew.gold", Mathf.RoundToInt(shown));
+        goldText.text = "+" + Mathf.RoundToInt(shown);
     }
 }

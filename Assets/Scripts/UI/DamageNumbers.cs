@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,13 +7,13 @@ public class DamageNumbers : MonoBehaviour
 {
     public static DamageNumbers I { get; private set; }
 
-    public Text template;
+    public TMP_Text template;
     public int poolSize = 32;
     public float lifetime = 0.7f;
     public Color normalColor = Color.white;
     public Color critColor = new Color(1f, 0.85f, 0.15f);
 
-    Text[] texts;
+    TMP_Text[] texts;
     Vector3[] world;
     Vector2[] drift;
     float[] born;
@@ -26,7 +27,7 @@ public class DamageNumbers : MonoBehaviour
     {
         I = this;
         canvas = GetComponentInParent<Canvas>();
-        texts = new Text[poolSize];
+        texts = new TMP_Text[poolSize];
         world = new Vector3[poolSize];
         drift = new Vector2[poolSize];
         born = new float[poolSize];

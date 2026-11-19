@@ -11,7 +11,8 @@
         "Unity.Services.Authentication",
         "Unity.Services.Multiplayer",
         "Unity.Netcode.Runtime",
-        "Unity.Services.Core.Environments"
+        "Unity.Services.Core.Environments",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -1,3 +1,4 @@
+using TMPro;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,8 +17,8 @@ public class CardPicker : MonoBehaviour
     public CanvasGroup group;
     public Image dim;
     public RectTransform titleRoot;
-    public Text header;
-    public Text subHeader;
+    public TMP_Text header;
+    public TMP_Text subHeader;
     public RectTransform[] cards;
     public Image[] backgrounds;
     public Image[] rarityStrips;
@@ -25,9 +26,9 @@ public class CardPicker : MonoBehaviour
     public Image[] flashes;
     public RectTransform[] shines;
     public GameObject[] newBadges;
-    public Text[] titles;
-    public Text[] descriptions;
-    public Text[] rarityTexts;
+    public TMP_Text[] titles;
+    public TMP_Text[] descriptions;
+    public TMP_Text[] rarityTexts;
     public Image[] icons;
     [Tooltip("3 per card, left to right.")]
     public Image[] dots;

@@ -1,3 +1,4 @@
+using TMPro;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -13,7 +14,7 @@ public class LoadingScreen : MonoBehaviour
     public const int TipCount = 10;
 
     public CanvasGroup group;
-    public Text tip;
+    public TMP_Text tip;
     public RectTransform barFill;
     public float minSeconds = 1.1f;
 

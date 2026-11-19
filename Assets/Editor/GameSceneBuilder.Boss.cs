@@ -199,49 +199,4 @@ public static partial class GameSceneBuilder
         new GameObject("PropTosser").AddComponent<PropTosser>();
     }
 
-    static void BuildBossHud(HUD hud)
-    {
-        var root = hud.transform;
-        var host = Rect("Boss", root);
-        Stretch(host);
-        var threats = root.Find("Threats");
-        if (threats) host.SetSiblingIndex(threats.GetSiblingIndex() + 1);
-        var bh = host.gameObject.AddComponent<BossHUD>();
-
-        // Health bar: top centre, under the wave label.
-        var bar = Rect("Bar", host);
-        Anchor(bar, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -118f), new Vector2(940f, 96f));
-        var bg = bar.gameObject.AddComponent<CanvasGroup>();
-        bg.blocksRaycasts = false; bg.interactable = false;
-        var frame = Panel("Frame", bar, UiKhakiDark, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(940f, 50f));
-        var trough = BarFill("Trough", frame.transform, new Color(0f, 0f, 0f, 0.6f), 8f);
-        trough.pivot = new Vector2(0.5f, 0.5f);
-        var lagBar = BarFill("Lag", frame.transform, new Color(1f, 1f, 1f, 0.9f), 8f);
-        var fill = BarFill("Fill", frame.transform, new Color(0.86f, 0.12f, 0.1f), 8f);
-        var shine = Sliced("Shine", fill, ui.flat, new Color(1f, 1f, 1f, 0.2f));
-        shine.rectTransform.anchorMin = new Vector2(0f, 0.55f); shine.rectTransform.anchorMax = Vector2.one;
-        shine.rectTransform.offsetMin = new Vector2(4f, 0f); shine.rectTransform.offsetMax = new Vector2(-4f, -3f);
-        var skull = Img("Skull", frame.transform, ui.skull, new Color(1f, 0.35f, 0.3f));
-        Anchor(skull.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 2f), new Vector2(84f, 84f));
-        var name = Txt("Name", bar, 34, TextAnchor.LowerLeft, UiCream);
-        Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(48f, 0f), new Vector2(500f, 46f));
-        name.text = "KASAP";
-        var weak = Txt("Weak", bar, 40, TextAnchor.LowerRight, UiGold);
-        Anchor(weak.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 0f), new Vector2(-8f, -44f), new Vector2(300f, 52f));
-        L(weak, "boss.weak");
-        bh.barGroup = bg; bh.barFill = fill; bh.barLag = lagBar; bh.barFillImage = fill.GetComponent<Image>();
-        bh.barName = name; bh.weakTag = weak;
-
-        // Intro title (centre, a little above the soldier).
-        var intro = Rect("Intro", host);
-        Anchor(intro, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 170f), new Vector2(1200f, 260f));
-        var ig = intro.gameObject.AddComponent<CanvasGroup>();
-        ig.blocksRaycasts = false; ig.interactable = false;
-        var title = Txt("Title", intro, 150, TextAnchor.MiddleCenter, new Color(1f, 0.3f, 0.2f));
-        Anchor(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1200f, 180f));
-        title.text = "KASAP";
-        var sub = Txt("Sub", intro, 40, TextAnchor.MiddleCenter, UiCream);
-        Anchor(sub.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 20f), new Vector2(1200f, 60f));
-        bh.introGroup = ig; bh.introTitle = title; bh.introSub = sub;
-    }
 }

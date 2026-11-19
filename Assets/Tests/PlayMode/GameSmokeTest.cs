@@ -122,7 +122,10 @@ public class GameSmokeTest
         Debug.Log($"SMOKE: gameover={gm.IsGameOver} time={gm.GameTime:0.0} score={gm.Score}");
         Assert.IsTrue(gm.IsGameOver, "player should eventually die");
 
-        // The game-over panel (with the TEKRAR button) must be usable within 1 s.
+        // Revive offer first (YERE DÜŞTÜN, countdown); declining it brings up the result screen within 1 s.
+        yield return Wait(0.3f);
+        Assert.IsTrue(RunRewards.I.ReviveOpen, "revive offer on death");
+        RunRewards.I.CloseRevive();
         yield return Wait(1f);
         var hud = Object.FindAnyObjectByType<HUD>();
         Assert.IsTrue(hud.gameOverPanel.activeSelf, "game over panel within 1 s");
@@ -723,14 +726,14 @@ public class GameSmokeTest
             mm.settingsPanel.Change(x => x.lang = "en");
             yield return null;
             Assert.AreEqual(Lang.En, Loc.Current);
-            Assert.AreEqual("PLAY", mm.play.GetComponentInChildren<Text>().text);
+            Assert.AreEqual("PLAY", mm.play.GetComponentInChildren<TMPro.TMP_Text>().text);
             mm.settingsPanel.Change(x => x.lang = "tr");
             mm.settingsPanel.Change(x => x.quality = 0);
             Assert.Less(Settings.ParticleScale, 1f);
             mm.settingsPanel.Change(x => x.quality = 2);
             mm.settingsPanel.Close();
             Assert.IsNotNull(mem.json, "settings saved on close");
-            Assert.AreEqual("OYNA", mm.play.GetComponentInChildren<Text>().text);
+            Assert.AreEqual("OYNA", mm.play.GetComponentInChildren<TMPro.TMP_Text>().text);
 
             // Endless → loading screen → game.
             mm.PlayEndless();
@@ -786,7 +789,7 @@ public class GameSmokeTest
         Assert.AreEqual(1, Profile.Level(WeaponId.Smg, WeaponStat.Damage));
 
         // Costume.
-        shop.Open(ShopUI.Tab.Costumes, (int)CostumeId.Woodland);
+        shop.Open(ShopUI.Tab.Characters, (int)CostumeId.Woodland);
         shop.ActNow();
         Assert.AreEqual(CostumeId.Woodland, Profile.SelectedCostume);
 
@@ -1608,10 +1611,67 @@ public class GameSmokeTest
         Debug.Log("CAPTURE: menu " + dir);
     }
 
-    static void ShotCanvas(string path, Canvas canvas)
+    /// <summary>Every redesigned screen (docs/ui-ref) at 19.5:9 (1600×738). CAPTURE_DIR, without -nographics.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureUI()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        const int W = 1600, H = 738;
+        Profile.Grant(584, 0, "test");
+        SceneManager.LoadScene(LoadingScreen.MenuScene);
+        yield return null;
+        var mm = MainMenu.I;
+        yield return WaitUntil(() => !mm.SplashActive, 6f);
+        yield return Wait(1f);
+        if (mm.login) mm.login.root.SetActive(false);
+        var c = mm.GetComponent<Canvas>();
+        void S(string n) => ShotCanvas(Path.Combine(dir, n + ".png"), c, W, H);
+        S("ui01_main");
+        mm.ShowPlay(true); yield return null; S("ui02_modes"); mm.modePanel.root.SetActive(false);
+        mm.StartMode(RunMode.Endless); yield return Wait(0.3f); S("ui03_loadout"); mm.loadout.root.SetActive(false);
+        mm.shopUI.Open(ShopUI.Tab.Weapons, 0); yield return Wait(0.3f); S("ui04_shop_weapons");
+        mm.shopUI.Open(ShopUI.Tab.Characters, 0); yield return Wait(0.3f); S("ui05_shop_characters");
+        mm.shopUI.Open(ShopUI.Tab.Bonuses, 0); yield return null; S("ui06_shop_bonuses");
+        mm.shopUI.Open(ShopUI.Tab.Gems, 0); yield return null; S("ui07_shop_gems");
+        mm.shopUI.Close();
+        mm.login.Open(); yield return null; S("ui08_login"); mm.login.root.SetActive(false);
+        mm.quests.Open(); yield return null; S("ui09_quests"); mm.quests.root.SetActive(false);
+        mm.settingsPanel.Open(); yield return null; S("ui10_settings"); mm.settingsPanel.Close();
+        mm.campaignPanel.Open(); yield return null; S("ui15_campaign"); mm.campaignPanel.root.SetActive(false);
+
+        GameMode.Set(RunMode.Endless);
+        yield return LoadGame();
+        var gm = GameManager.I;
+        yield return Wait(4f);
+        var hc = gm.hud.GetComponent<Canvas>();
+        void G(string n) => ShotCanvas(Path.Combine(dir, n + ".png"), hc, W, H);
+        G("ui11_hud");
+        gm.player.TakeDamage(9999f, Vector3.forward);
+        yield return Wait(0.6f);
+        G("ui12_revive");
+        RunRewards.I.CloseRevive();
+        yield return Wait(1.5f);
+        G("ui13_death");
+
+        GameMode.Set(RunMode.Campaign, 2);
+        yield return LoadGame();
+        gm = GameManager.I;
+        yield return Wait(1f);
+        gm.player.TakeDamage(9999f, Vector3.forward);
+        yield return Wait(0.5f);
+        RunRewards.I.CloseRevive();
+        yield return Wait(1.5f);
+        G2(gm, "ui14_story_failed");
+        GameMode.Set(RunMode.Endless);
+
+        void G2(GameManager g, string n) => ShotCanvas(Path.Combine(dir, n + ".png"), g.hud.GetComponent<Canvas>(), W, H);
+    }
+
+    static void ShotCanvas(string path, Canvas canvas, int w = 1600, int h = 900)
     {
         var cam = Camera.main;
-        var rt = new RenderTexture(1600, 900, 24);
+        var rt = new RenderTexture(w, h, 24);
         cam.targetTexture = rt;
         canvas.renderMode = RenderMode.ScreenSpaceCamera;
         canvas.worldCamera = cam;
@@ -1619,8 +1679,8 @@ public class GameSmokeTest
         Canvas.ForceUpdateCanvases();
         cam.Render();
         RenderTexture.active = rt;
-        var tex = new Texture2D(1600, 900, TextureFormat.RGB24, false);
-        tex.ReadPixels(new Rect(0, 0, 1600, 900), 0, 0);
+        var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
         tex.Apply();
         File.WriteAllBytes(path, tex.EncodeToPNG());
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;

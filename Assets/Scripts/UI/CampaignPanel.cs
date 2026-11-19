@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,14 +10,14 @@ public class CampaignPanel : MonoBehaviour
 {
     public GameObject root;
     public Button[] chapterButtons;
-    public Text[] numbers, titles, descs, infos;
+    public TMP_Text[] numbers, titles, descs, infos;
     /// <summary>Three per chapter: index = chapter * 3 + star.</summary>
     public Image[] stars;
     public GameObject[] locks;
     public Button back;
-    public Text total;
+    public TMP_Text total;
     public LoadoutPanel loadout;
-    public Color open = new Color(0.34f, 0.4f, 0.22f), locked = new Color(0.17f, 0.2f, 0.11f), starOn = new Color(1f, 0.85f, 0.2f);
+    public Color open = new Color(0.078f, 0.098f, 0.071f), locked = new Color(0.047f, 0.055f, 0.04f), starOn = new Color(1f, 0.788f, 0.235f);
 
     void Awake()
     {
@@ -67,7 +68,7 @@ public class CampaignPanel : MonoBehaviour
             for (int k = 0; k < 3; k++)
             {
                 var img = stars[i * 3 + k];
-                if (img) img.color = k < s ? starOn : new Color(0f, 0f, 0f, 0.45f);
+                if (img) img.color = k < s ? starOn : new Color(0.204f, 0.251f, 0.173f, 1f);
             }
         }
         if (total) total.text = Loc.F("menu.story_sub", Campaign.TotalStars(data), Campaign.Count * 3);

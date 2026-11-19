@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,11 +12,11 @@ public class BossHUD : MonoBehaviour
     public RectTransform barFill;
     public RectTransform barLag;
     public Image barFillImage;
-    public Text barName;
-    public Text weakTag;
+    public TMP_Text barName;
+    public TMP_Text weakTag;
     public CanvasGroup introGroup;
-    public Text introTitle;
-    public Text introSub;
+    public TMP_Text introTitle;
+    public TMP_Text introSub;
     public float introSeconds = 2.4f;
 
     static readonly Color FillColor = new Color(0.86f, 0.12f, 0.1f);

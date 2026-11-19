@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 /// <summary>
@@ -11,19 +12,15 @@ public class Warmup : MonoBehaviour
     [Tooltip("A skinned character (e.g. the rigged zombie model) used to warm skinned variants.")]
     public GameObject skinnedSample;
     public Material[] skinnedMaterials;
-    public Font font;
-    public int[] fontSizes = { 24, 26, 28, 30, 34, 36, 38, 40, 46, 48, 50, 54, 60, 64, 70, 72, 84, 110, 120 };
+    [Tooltip("TMP font assets (SDF: one atlas for every size); pre-filled in the editor, topped up here.")]
+    public TMP_FontAsset[] fonts;
 
-    const string Glyphs = "0123456789x/+-!?:;·.,()%•♥»<>*o' ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZabcçdefgğhıijklmnoöpqrsştuüvwxyzFPS—→";
+    const string Glyphs = "0123456789x/+-!?:;.,()% ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÇĞİÖŞÜçğıöşü";
 
     void Start()
     {
-        if (font)
-            foreach (int size in fontSizes)
-            {
-                font.RequestCharactersInTexture(Glyphs, size, FontStyle.Bold);
-                font.RequestCharactersInTexture(Glyphs, size, FontStyle.Normal);
-            }
+        if (fonts != null)
+            foreach (var f in fonts) if (f) f.TryAddCharacters(Glyphs);
 
         var cam = Camera.main;
         // No GPU (batchmode -nographics bots): nothing to compile, and render textures can't be created.
