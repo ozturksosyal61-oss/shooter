@@ -471,6 +471,8 @@ public class HUD : MonoBehaviour
 
     void UpdateFps(float dt)
     {
+        // Developer readout: hidden in store builds.
+        if (!(Application.isEditor || Debug.isDebugBuild)) { if (fpsText && fpsText.gameObject.activeSelf) fpsText.gameObject.SetActive(false); return; }
         fpsFrames++;
         fpsTimer += dt;
         if (fpsTimer < 0.5f) return;

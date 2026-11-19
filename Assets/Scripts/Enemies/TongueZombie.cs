@@ -327,7 +327,7 @@ public class TongueZombie : Zombie
         if (!feedback) return;
         GameAudio.Play(SfxId.TongueSnap, tip);
         if (Fx.I) Fx.I.Death(tip, (tip - Mouth).normalized);
-        if (DamageNumbers.I) DamageNumbers.I.ShowText(tip + Vector3.up * 0.8f, "KOPTU!", new Color(1f, 0.55f, 0.85f));
+        if (DamageNumbers.I) DamageNumbers.I.ShowText(tip + Vector3.up * 0.8f, Loc.T("hud.tongue_snap"), new Color(1f, 0.55f, 0.85f));
         GameManager.I.Shake(0.2f);
     }
 

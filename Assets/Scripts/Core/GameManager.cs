@@ -303,6 +303,7 @@ public class GameManager : MonoBehaviour
         else r.newScore = false; // chapters have stars, not score records
         Records = r;
         SaveSystem.Write();
+        StoreReview.RunFinished(r.newScore || wave >= StoreReview.GoodWave);
         GameOverStarted?.Invoke();
         gameOverCo = StartCoroutine(GameOverRoutine(wave));
     }
@@ -331,6 +332,7 @@ public class GameManager : MonoBehaviour
         ChapterGold = gold; ChapterGems = gems;
         Profile.Grant(gold, gems, "chapter");
         SaveSystem.Write();
+        StoreReview.RunFinished(true);
         if (MusicDirector.I) MusicDirector.I.Duck(0.4f, 1.5f);
         GameOverStarted?.Invoke();
         gameOverCo = StartCoroutine(VictoryRoutine());

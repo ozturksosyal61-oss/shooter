@@ -66,6 +66,9 @@ public class EconomyData
     public int questDay = -1;
     public List<QuestState> quests = new List<QuestState>();
     public int freeGemDay = -1;
+    /// <summary>Finished runs (store rating prompt) and the UTC day the prompt was last requested.</summary>
+    public int runsFinished;
+    public int reviewDay = -1;
     public long lifetimeGold;
     public List<string> receipts = new List<string>();
 }

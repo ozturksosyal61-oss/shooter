@@ -1030,6 +1030,16 @@ public class CoopTests
     }
 
     [Test]
+    public void StoreReviewOnlyAfterGoodMoments()
+    {
+        Assert.IsFalse(StoreReview.ShouldAsk(10, false, 100, -1), "not after a bad run");
+        Assert.IsFalse(StoreReview.ShouldAsk(StoreReview.MinRuns - 1, true, 100, -1), "not for a brand new player");
+        Assert.IsTrue(StoreReview.ShouldAsk(StoreReview.MinRuns, true, 100, -1));
+        Assert.IsFalse(StoreReview.ShouldAsk(20, true, 100 + StoreReview.MinDaysBetween - 1, 100), "not again too soon");
+        Assert.IsTrue(StoreReview.ShouldAsk(20, true, 100 + StoreReview.MinDaysBetween, 100));
+    }
+
+    [Test]
     public void AimAssistIsSoftAndConeLimited()
     {
         Vector3 f = Vector3.forward;

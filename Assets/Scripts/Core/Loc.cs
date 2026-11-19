@@ -97,6 +97,7 @@ public static class Loc
         ["coop.err.create"] = new[] { "Oda kurulamadı — internetini kontrol et.", "Couldn't create a room — check your connection." },
         ["coop.err.join"] = new[] { "Odaya girilemedi — kodu kontrol et.", "Couldn't join — check the code." },
         ["coop.err.code"] = new[] { "Kod 6 karakter olmalı.", "The code has 6 characters." },
+        ["hud.tongue_snap"] = new[] { "KOPTU!", "SNAPPED!" },
         ["coop.you"] = new[] { "SEN", "YOU" },
         ["coop.player"] = new[] { "OYUNCU {0}", "PLAYER {0}" },
         ["coop.downed"] = new[] { "YARALANDIN!", "YOU'RE DOWN!" },

@@ -209,7 +209,7 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
   - [x] Zombi Animator: idle/walk/run (koşucu), temasla saldırı (attack/punch), savrulma → dying, doğuşta scream (vekil: agonizing)
   - [x] CC0 tüfek (Quaternius), iki el IK, namlu ucundan mermi/muzzle flash
   - [x] 30'luk şarjör, otomatik + taktik reload, HUD mermi sayacı + reload barı
-- [ ] Mixamo "Zombie Scream" indir (şu an agonizing vekil); zombi yürüme klibi yavaş (≈0.5 m/s) → daha hızlı bir walk klibi
+- [x] Mixamo "Zombie Scream" (F14 polish) · [ ] zombi yürüme klibi yavaş (≈0.5 m/s) → daha hızlı bir walk klibi (Mixamo indirmesi gerek)
 - [ ] Ateş animasyonu/recoil için additive katman (şu an procedural)
 - [x] **Faz 4 — Ses** (2026-11-15)
   - [x] CC0 SFX: tüfek (3), isabet et/kritik/beton/metal, zombi inleme(6)/çığlık(4)/saldırı(4)/ölüm(4), oyuncu hasar(4)/ölüm(2), ayak sesi(5), vault zıplama/iniş, reload parçaları (animation event), kill-streak, UI tık, ölüm jingle'ı, patlama
@@ -258,8 +258,9 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
   - [x] Boss dalgası (10, 15, 20…), kamera girişi + isim + boss müziği, boss barı, azaltılmış spawn; ödül + yavaş çekim + epik kart
   - [x] İlk helikopter 2 görevde; sentez sesler (`Tools/synth_boss.py`); bot tavanı 600 sn, botlar hücumdan/yer vuruşundan kaçar
 - [x] **Faz 14 — Yeni boss'lar** (2026-11-19): Sıçrayan (sıçrama, engel aşar), Kovan Ana (asit gölü, yavrular), Ezici (zırh, ezip geçer); sıralı büyüklük/can, hikâye bölümlerine dağıtıldı, botlarla sıra doğrulandı
-- [ ] Boss'lara özel Mixamo animasyonları (şu an retarget klipler)
+- [x] Boss'lara özel Mixamo animasyonları (F14 polish)
 - [x] **Co-op C1** (2026-11-19): Netcode + Relay/Lobby, CO-OP paneli (oda kodu), NetPlayer avatarları, host-otoriteli zombi snapshot'ları + istemci kuklaları, isabet/hasar RPC'leri, 40 m bağ
 - [x] **Co-op C2 + C3** (2026-11-19): host-otoriteli hasar (`SquadMember`), kill kredisi + takım skoru, kozmetik mermi izleri, özel zombi / boss kuklaları (faz + telegraph senkronu), `CoopNet` olayları (patlama, can paketi, hedefler, telsiz, boss atışı), yere düşme + kaldırma + dalga arası dirilme, `CoopHUD`, takım sonuç tablosu, kopma bildirimi; oyuncu sayısıyla ölçeklenen dalgalar
-- [ ] Cihazda performans profili (60 FPS hedefi, 70 zombi), gerekirse GPU instancing/LOD
-- [ ] Silah çeşitleri / power-up, dalga yapısı, ana menü
+- [x] Cihaz testi (TestFlight, 2026-11-19): akıcı
+- [x] Silah çeşitleri, kartlar, dalgalar, ana menü
+- [x] Yayın cilası: FPS sayacı yalnız editör / development build'de, App Store puanlama isteği (`StoreReview`: ≥ 3 bitmiş tur + iyi an — rekor / bölüm / dalga ≥ 6 — en fazla 60 günde bir; `economy.runsFinished`, `reviewDay`)
