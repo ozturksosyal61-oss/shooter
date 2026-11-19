@@ -1637,6 +1637,18 @@ public class GameSmokeTest
         mm.shopUI.Open(ShopUI.Tab.Costumes, 0); yield return Wait(0.3f); S("ui05b_shop_costumes");
         mm.shopUI.Open(ShopUI.Tab.Bonuses, 0); yield return null; S("ui06_shop_bonuses");
         mm.shopUI.Open(ShopUI.Tab.Gems, 0); yield return null; S("ui07_shop_gems");
+        {
+            // Last packs (starter, VIP, gold offers). Batch-mode layout uses the window size, not the 1600×738 capture,
+            // so place the content by the reference viewport width (1280 − 284 sidebar − 56 safe area).
+            var pc = mm.shopUI.productContent;
+            Canvas.ForceUpdateCanvases();
+            var sr = pc.GetComponentInParent<UnityEngine.UI.ScrollRect>();
+            sr.velocity = Vector2.zero; sr.inertia = false;
+            pc.anchoredPosition = new Vector2(-(pc.rect.width - 940f), pc.anchoredPosition.y);
+            yield return null;
+            S("ui07b_shop_gems_end");
+            sr.inertia = true;
+        }
         mm.shopUI.Close();
         mm.login.Open(); yield return null; S("ui08_login"); mm.login.root.SetActive(false);
         mm.quests.Open(); yield return null; S("ui09_quests"); mm.quests.root.SetActive(false);

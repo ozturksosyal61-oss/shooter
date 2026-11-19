@@ -580,7 +580,8 @@ public static partial class GameSceneBuilder
         var c = new ShopUI.Card { button = CardButton(body), frame = body };
         var art = KImg("Art", body.transform, kit.soft, new Color(UiKit.Hazard.r, UiKit.Hazard.g, UiKit.Hazard.b, 0.10f)); In(art, 6f, 60f, 210f, 230f);
         c.preview = Preview("Preview", body.transform, rt); In(c.preview, 6f, 30f, 210f, 250f);
-        c.icon = KIcon("Icon", body.transform, kit.user, UiKit.Disabled, 40f); In(c.icon, 91f, 130f, 40f, 40f);
+        // Lock badge (top right) over the character still.
+        c.icon = KIcon("Icon", body.transform, kit.user, UiKit.Secondary, 26f); In(c.icon, 180f, 14f, 26f, 26f);
         c.tag = KChip("Tag", body.transform, null, UiKit.Hazard, UiKit.Ink, 22f, 11f);
         c.tagBg = c.tag.transform.parent.GetComponent<Image>();
         In(c.tagBg, 16f, 16f, 80f, 22f);

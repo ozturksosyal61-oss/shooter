@@ -79,6 +79,9 @@ public class ShopUI : MonoBehaviour
     readonly List<Card> productCards = new List<Card>();
     readonly List<Item> productItems = new List<Item>();
     int selected;
+    // Shop thumbnails: one still per costume (all cards show their character; the selected one turns live).
+    readonly Dictionary<int, RenderTexture> thumbs = new Dictionary<int, RenderTexture>();
+    WeaponId thumbWeapon = (WeaponId)(-1);
     Action pendingConfirm;
     float messageT;
 
@@ -124,7 +127,42 @@ public class ShopUI : MonoBehaviour
         Loc.Changed += Refresh;
     }
 
-    void OnDestroy() { Profile.Changed -= Refresh; Loc.Changed -= Refresh; }
+    void OnDestroy()
+    {
+        Profile.Changed -= Refresh; Loc.Changed -= Refresh;
+        foreach (var t in thumbs.Values) if (t) { t.Release(); Destroy(t); }
+        thumbs.Clear();
+    }
+
+    /// <summary>Thumbnail key + what it shows (the soldier card follows its current skin).</summary>
+    static int ThumbKey(Item it, out CostumeId shown)
+    {
+        var c = (CostumeId)it.index;
+        if (it.character && !Economy.IsCharacter(c)) { shown = Profile.SoldierSkin; return 200 + (int)shown; }
+        shown = c;
+        return it.character ? 100 + it.index : it.index;
+    }
+
+    /// <summary>Stills for the current tab's cards (cached; re-rendered when the held weapon changed).</summary>
+    void EnsureThumbs()
+    {
+        if (!preview) return;
+        var w = Profile.SelectedWeapon;
+        bool redo = w != thumbWeapon, any = false;
+        foreach (var it in items)
+        {
+            if (it.kind != Kind.Costume) continue;
+            int key = ThumbKey(it, out var c);
+            if (thumbs.TryGetValue(key, out var rt) && rt && !redo) continue;
+            if (!rt) { rt = new RenderTexture(252, 300, 24) { name = "Thumb" + key }; thumbs[key] = rt; }
+            any |= preview.Snapshot(c, w, rt);
+        }
+        thumbWeapon = w;
+        if (!any) return;
+        if (selected >= 0 && selected < items.Count) { ThumbKey(items[selected], out var sc); preview.ShowCostume(sc); }
+    }
+
+    RenderTexture ThumbOf(Item it) => thumbs.TryGetValue(ThumbKey(it, out _), out var rt) ? rt : null;
 
     static Card Clone(Card t, Transform parent)
     {
@@ -294,6 +332,7 @@ public class ShopUI : MonoBehaviour
     /// <summary>Card i = items[i]: characters tab = soldier + SpecOps + Firefighter; costumes tab = soldier skins.</summary>
     void RefreshCharacters()
     {
+        EnsureThumbs();
         var cur = Profile.SelectedCostume;
         CostumeId shown = CostumeId.Standard;
         for (int i = 0; i < characterCards.Count; i++)
@@ -317,9 +356,12 @@ public class ShopUI : MonoBehaviour
             else if (d.gold > 0) { tagKey = "rarity.rare"; tagBg = UiKit.Hex(0x14304A); tagFg = UiKit.Gem; }
             else { tagKey = "rarity.standard"; tagBg = UiKit.Hex(0x2A3324); tagFg = UiKit.Secondary; }
             card.tag.text = Loc.T(tagKey); card.tagBg.color = tagBg; card.tag.color = tagFg;
-            card.preview.gameObject.SetActive(sel);
-            if (sel) card.preview.texture = previewImage.texture;
-            card.icon.gameObject.SetActive(!sel);
+            // Every card shows its character: the selected one live (turning), the others as a still.
+            var thumb = sel ? previewImage.texture : ThumbOf(it);
+            card.preview.gameObject.SetActive(thumb);
+            card.preview.texture = thumb;
+            // Lock badge on locked cards; without a picture (no GPU) the icon stands in.
+            card.icon.gameObject.SetActive(!owned || !thumb);
             card.icon.sprite = owned ? userIcon : lockIcon;
             if (card.selected) card.selected.gameObject.SetActive(sel || eq);
             if (card.selected) card.selected.color = eq ? UiKit.Hazard : UiKit.Line2;
@@ -376,6 +418,7 @@ public class ShopUI : MonoBehaviour
                 var p = Economy.Product(it.product).Value;
                 bool owned = p.kind == ProductKind.NonConsumable && (p.vip ? Profile.Vip : Profile.StarterPackOwned);
                 c.sub.text = Amount(p);
+                c.sub.color = p.vip ? UiKit.Gold : UiKit.Gem;
                 c.icon.sprite = gemIcon;
                 SetButton(c.action, owned ? UiStyle.Disabled : UiStyle.Yellow, owned ? Loc.T("shop.owned") : Store.Price(p.id), !owned && Store.Ready);
                 if (c.tagBg) c.tagBg.gameObject.SetActive(p.kind == ProductKind.Consumable && p.gems == Economy.CharacterGems);
@@ -384,6 +427,7 @@ public class ShopUI : MonoBehaviour
             {
                 var o = Economy.GoldOffers[it.index];
                 c.sub.text = Loc.T("shop.gold_trade");
+                c.sub.color = UiKit.Gold;
                 c.icon.sprite = goldIcon ? goldIcon : coinIcon;
                 SetButton(c.action, Profile.CanAfford(0, o.gems) ? UiStyle.Gem : UiStyle.Disabled, o.gems.ToString(), true, gemIcon);
                 if (c.tagBg) c.tagBg.gameObject.SetActive(false);

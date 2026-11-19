@@ -57,6 +57,32 @@ public class PreviewStage : MonoBehaviour
         cam.transform.LookAt(transform.TransformPoint(soldierLook));
     }
 
+    /// <summary>
+    /// Renders one still of a character / costume (holding <paramref name="held"/>, 3/4 view) into <paramref name="rt"/>:
+    /// shop thumbnails, so every card shows its character, not only the selected one. Leaves that model shown;
+    /// the caller shows the selected one again afterwards. No-op without a GPU.
+    /// </summary>
+    public bool Snapshot(CostumeId c, WeaponId held, RenderTexture rt, float yaw = 28f)
+    {
+        if (!CanRender || !cam || !rt) return false;
+        var rot = soldierPivot.rotation;
+        soldierPivot.rotation = Quaternion.Euler(0f, yaw, 0f);
+        ShowCostume(c, held);
+        var anim = activeModel ? activeModel.GetComponent<Animator>() : null;
+        if (anim)
+        {
+            anim.Update(0f);
+            // Settle the aim pose (upper-body layer + hand IK) before the still.
+            for (int i = 0; i < 3; i++) { if (activeRig) activeRig.Tick(0.5f, Vector3.zero, 0f, true, false); anim.Update(0.2f); }
+        }
+        var prev = cam.targetTexture;
+        cam.targetTexture = rt;
+        cam.Render();
+        cam.targetTexture = prev;
+        soldierPivot.rotation = rot;
+        return true;
+    }
+
     public void ShowWeapon(WeaponId w)
     {
         cam.enabled = CanRender;
