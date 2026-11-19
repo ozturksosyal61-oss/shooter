@@ -146,3 +146,17 @@ Aynı koşul: `PLAYTEST_BOSS=1` (dalga 6, seviye 8), `PLAYTEST_BOSS_TYPE=<tip>`,
 
 - Sıralama tuttu: her mutasyon bir öncekinden uzun sürüyor / daha ölümcül. Ezici'de botlar önden ateş ediyor (zırh) → oyuncu arkasına geçmeyi öğrenmeli; telsiz + "ZIRH!" yazısı bunu söylüyor.
 - Yüksek dalgaya atlayan senaryo (`PLAYTEST_BOSS_WAVE=11/16`) temsilî değil: botlar boss'tan değil dalga 16'nın normal / bombalı zombilerinden ölüyor (4 isabette 100 can).
+
+## Aim assist + variller (2026-11-19)
+Auto-aim kaldırıldı → `AimAssistConfig` (herkese ve her moda aynı): sürüklerken ±5° içinde açının %30'u düzeltilir; sürüklemeden basılı tutunca yürüme / basış anındaki bakış yönüne ateş, ±8° içindeki en yakın zombiye açının %50'si, dönüş ≤ 300°/sn (sabit taban → kilitlenme yok). Dilci yakalayınca silah Dilci'de kalır (mekanik gereği). Variller: can 150 (~6 M4 mermisi), yarı canda duman + kıvılcım, yarıçap 4.5 → 3 m, zombi 220 / asker 40 → 30, zincir 0.2 sn (yarıçap + 0.8 m); sıklık: yol kenarı patlayan pay %60 → %70, kaldırım %30 → %42, ara sokak %15 → %24, yıkıntı (sanayi / liman) %35 → %45.
+
+Seed 7, timescale 8, 600 sn tavan:
+
+| Bot | süre | dalga | kill | isabet | not |
+|---|---|---|---|---|---|
+| turret (yerinde, sürüklemeden basılı) | 15 sn | 1 | 1 | %3 | eskiden auto-aim ile ~100 sn; artık nişan almayan oyuncu cezalı (bilerek) |
+| human (nişan + gecikme) | 321 sn | 6 | 285 | %65 | Kasap'a ulaştı (%30 can kaldı); önceki bant 190–400 sn |
+| kite | 355 sn | 8 | 681 | %93 | Kasap'ı 28 sn'de yendi, 7 varil; önceki 507–600 sn (tek seed, varilden ölümler dahil) |
+| explore | 247 sn | 6 | 347 | %85 | |
+
+- Nişan alan botlar önceki bantta → zombi canı değiştirilmedi. Botlar fareyle tam nişan alıyor; gerçek dokunmatik sürüklemede isabet daha düşük olacak — cihaz testinden sonra erken dalga canı (`Difficulty.HealthPerWave`) gerekirse düşürülür.

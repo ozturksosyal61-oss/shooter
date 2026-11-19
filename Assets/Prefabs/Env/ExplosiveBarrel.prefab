@@ -173,11 +173,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 28e9280f799ed5e4aa8dc5ea46ecd503, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game::ExplosiveBarrel
-  health: 40
-  radius: 4.5
+  health: 150
+  radius: 3
   zombieDamage: 220
-  playerDamage: 40
-  chainDelay: 0.18
+  playerDamage: 30
+  chainDelay: 0.2
+  chainReach: 0.8
   model: {fileID: 7424288075522798538}
   colliders:
   - {fileID: 3827426547376616349}

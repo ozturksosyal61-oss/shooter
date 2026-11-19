@@ -1,7 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Rifle: aim (drag / screen point / nearest-zombie auto-aim), pooled bullets from the muzzle,
+/// Rifle: aim (drag / screen point with a slight assist, or hold = walk / facing direction with a soft magnet —
+/// <see cref="AimAssistConfig"/>), pooled bullets from the muzzle,
 /// 40-round magazine: automatic, tactical and manual reloads (no firing while reloading).
 /// Active reload: pressing reload again inside the sweet spot finishes instantly and buffs the next magazine;
 /// missing it jams the gun for a moment.
@@ -22,7 +23,6 @@ public class Weapon : MonoBehaviour
     public float damageJitter = 0.15f;
     [Range(0f, 1f)] public float critChance = 0.12f;
     public float critMultiplier = 2f;
-    public float autoAimRange = 18f;
     public float maxAimAngleToFire = 40f;
     public float cameraKick = 0.12f;
     [Header("Weapon type (set by WeaponLoadout)")]
@@ -76,6 +76,8 @@ public class Weapon : MonoBehaviour
     float cooldown, flashUntil, reloadT, idleT;
     bool lowAmmoWarned, dryFired;
     Camera cam;
+    bool holding;
+    Vector3 holdBase;
     static readonly Plane AimPlane = new Plane(Vector3.up, new Vector3(0f, 1f, 0f));
 
     void Awake()
@@ -114,18 +116,32 @@ public class Weapon : MonoBehaviour
         Vector3 pos = owner.transform.position;
 
         Vector3 aim = Vector3.zero;
+        bool hold = false;
         if (IsFiring)
         {
-            if (input.AimAtScreenPoint) aim = ScreenToGroundDir(input.AimScreenPoint, pos);
-            else if (input.HasAimDir) aim = new Vector3(input.AimDir.x, 0f, input.AimDir.y);
+            if (owner.IsGrabbed && owner.Grabber.Targetable)
+            {
+                // Held by a tongue (being reeled in, the stick pushes away): the gun stays on the Dilci.
+                aim = owner.Grabber.transform.position - pos; aim.y = 0f; aim.Normalize();
+            }
+            else if (input.AimAtScreenPoint)
+                aim = AimAssist.Apply(pos, ScreenToGroundDir(input.AimScreenPoint, pos), AimAssistConfig.DragCone, AimAssistConfig.DragPull);
+            else if (input.HasAimDir)
+                aim = AimAssist.Apply(pos, new Vector3(input.AimDir.x, 0f, input.AimDir.y), AimAssistConfig.DragCone, AimAssistConfig.DragPull);
             else
             {
-                // Held by a tongue: auto-aim goes for the Dilci.
-                Zombie z = owner.IsGrabbed && owner.Grabber.Targetable ? owner.Grabber : Zombie.FindNearest(pos, autoAimRange);
-                if (z) { aim = z.transform.position - pos; aim.y = 0f; aim.Normalize(); }
-                else aim = moveDir.sqrMagnitude > 0.01f ? moveDir : owner.transform.forward;
+                // Hold without a drag: along the walk direction, or where the soldier faced when the press began
+                // (a fixed base, so the magnet can't walk the aim onto a target = no lock-on).
+                hold = true;
+                if (!holding) holdBase = owner.transform.forward;
+                Vector3 baseDir = moveDir.sqrMagnitude > 0.01f ? moveDir : holdBase;
+                Vector3 want = AimAssist.Apply(pos, baseDir, AimAssistConfig.HoldCone, AimAssistConfig.HoldPull);
+                aim = holding && AimDir.sqrMagnitude > 0.01f
+                    ? Vector3.RotateTowards(AimDir, want, AimAssistConfig.HoldTurnSpeed * Mathf.Deg2Rad * dt, 0f)
+                    : want;
             }
         }
+        holding = hold;
         AimDir = aim;
 
         if (input && input.ReloadPressed) OnReloadButton();

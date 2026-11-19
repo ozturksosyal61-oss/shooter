@@ -2,27 +2,31 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Red fuel barrel placed by the city generator. Shooting it (or a nearby blast) sets it off: area damage to
-/// zombies AND the player, knockback, heavy shake, sound with music duck. Chains to other barrels in range.
+/// Red fuel barrel placed by the city generator. ~6 rifle rounds set it off (white flash per hit, smoke + sparks below
+/// half health), or a nearby blast: ~3 m area damage (zombies high, soldiers medium), knockback, heavy shake, sound
+/// with music duck. Chains to barrels close by after 0.2 s.
 /// Pooled with the chunk: <see cref="ResetBarrel"/> when it is placed again.
 /// </summary>
 public class ExplosiveBarrel : MonoBehaviour
 {
     public static readonly List<ExplosiveBarrel> Active = new List<ExplosiveBarrel>(32);
 
-    public float health = 40f;
-    public float radius = 4.5f;
+    public float health = 150f;
+    public float radius = 3f;
     public float zombieDamage = 220f;
-    public float playerDamage = 40f;
-    public float chainDelay = 0.18f;
+    public float playerDamage = 30f;
+    public float chainDelay = 0.2f;
+    [Tooltip("Barrels within radius + this get set off by a blast.")]
+    public float chainReach = 0.8f;
     public GameObject model;
     public Collider[] colliders;
     public HitFlash flash;
 
-    float hp, fuse = -1f;
+    float hp, fuse = -1f, smokeT;
     bool exploded;
 
     public bool Exploded => exploded;
+    public float Health01 => health > 0f ? Mathf.Clamp01(hp / health) : 0f;
 
     void Awake() => ResetBarrel();
 
@@ -42,6 +46,7 @@ public class ExplosiveBarrel : MonoBehaviour
     {
         hp = health;
         fuse = -1f;
+        smokeT = 0f;
         exploded = false;
         if (model) model.SetActive(true);
         if (colliders != null) foreach (var c in colliders) c.enabled = true;
@@ -62,12 +67,25 @@ public class ExplosiveBarrel : MonoBehaviour
         if (exploded || fuse >= 0f || !gameObject.activeInHierarchy || CoopNet.IsClient) return;
         Vector3 d = transform.position - pos; d.y = 0f;
         if (d.sqrMagnitude < 0.04f) return; // its own blast
-        if (d.sqrMagnitude <= (r + 0.6f) * (r + 0.6f)) fuse = chainDelay;
+        if (d.sqrMagnitude <= (r + chainReach) * (r + chainReach)) fuse = chainDelay;
     }
 
     void Update()
     {
-        if (fuse < 0f || exploded) return;
+        if (exploded) return;
+        // Damaged (below half): leaks smoke and sparks so it reads as "about to go".
+        if ((hp < health * 0.5f || fuse >= 0f) && Fx.I)
+        {
+            smokeT -= Time.deltaTime;
+            if (smokeT <= 0f)
+            {
+                smokeT = fuse >= 0f ? 0.05f : 0.22f;
+                Vector3 top = transform.position + Vector3.up * 1.1f;
+                Fx.I.Dust(top);
+                if (Random.value < 0.6f) Fx.I.Spark(top + Random.insideUnitSphere * 0.25f, Vector3.up + Random.insideUnitSphere * 0.5f);
+            }
+        }
+        if (fuse < 0f) return;
         fuse -= Time.deltaTime;
         if (fuse <= 0f) Explode();
     }

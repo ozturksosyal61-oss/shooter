@@ -53,6 +53,20 @@ public class GameSmokeTest
         InputSystem.QueueStateEvent(mouse, new MouseState { position = pos }.WithButton(MouseButton.Left, left));
     }
 
+    /// <summary>Fires like a player who aims (screen point = drag-style, assist ±5°) at the nearest zombie while <paramref name="cond"/> holds.</summary>
+    IEnumerator AimNearestWhile(System.Func<bool> cond)
+    {
+        while (cond())
+        {
+            var gm = GameManager.I;
+            var z = gm && gm.player ? Zombie.FindNearest(gm.player.transform.position, 25f) : null;
+            if (z && Camera.main) InputSystem.QueueStateEvent(mouse, new MouseState { position = (Vector2)Camera.main.WorldToScreenPoint(z.AimPoint) }.WithButton(MouseButton.Right, true));
+            else InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f) });
+            yield return null;
+        }
+        InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f) });
+    }
+
     static IEnumerator Wait(float seconds)
     {
         float t0 = Time.realtimeSinceStartup;
@@ -95,10 +109,14 @@ public class GameSmokeTest
             if (spawner.TryFindSpawnPoint(gm.player.transform.position, out _) && spawner.LastSpawnWasOutsideView) outside++;
         Assert.GreaterOrEqual(outside, 18, "spawns should be just outside the view");
 
-        // Hold left mouse on the right half: fire with auto-aim (no drag).
+        // Hold left mouse on the right half (no drag): shoots along the facing with a soft ±8° magnet.
         var firePos = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f);
         SetMouse(firePos, true);
-        yield return Wait(16f);
+        yield return Wait(2f);
+        Assert.IsTrue(gm.player.weapon.IsFiring, "hold = fire");
+        // Then aim at zombies like a player (drag-style aim, ±5° assist).
+        float aimStart = Time.realtimeSinceStartup;
+        yield return AimNearestWhile(() => Time.realtimeSinceStartup - aimStart < 14f && !gm.player.IsDead);
         Debug.Log($"SMOKE: zombies={Zombie.Active.Count} score={gm.Score} combo={gm.Combo} hp={gm.player.Health} fps~{1f / Time.smoothDeltaTime:0}");
         Assert.Greater(gm.Score, 0, "auto-aim should have killed zombies");
 
@@ -300,7 +318,7 @@ public class GameSmokeTest
         Assert.AreEqual(1, gm.Multiplier);
 
         // Breather: spawning stops and health regenerates.
-        while (!waves.InBreak && !gm.IsGameOver) yield return null;
+        yield return AimNearestWhile(() => !waves.InBreak && !gm.IsGameOver);
         Assert.IsFalse(gm.IsGameOver, "player should survive wave 1 while shooting");
         SetMouse(new Vector2(Screen.width * 0.6f, Screen.height * 0.5f), false);
         Debug.Log($"SMOKE: wave 1 lasted ~{waveLen}s, breather {waves.PhaseTimeLeft:0.0}s, hp={gm.player.Health:0}");

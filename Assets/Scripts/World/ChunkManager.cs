@@ -69,9 +69,9 @@ public class ChunkManager : MonoBehaviour
     public GameObject[] burningBarrels;
     [Tooltip("Red barrels that explode when shot.")]
     public GameObject[] explosiveBarrels;
-    [Range(0f, 1f)] public float explosiveBarrelShare = 0.6f;
+    [Range(0f, 1f)] public float explosiveBarrelShare = 0.7f;
     [Tooltip("Chance per chunk of an extra explosive barrel on the sidewalk.")]
-    [Range(0f, 1f)] public float sidewalkBarrelChance = 0.3f;
+    [Range(0f, 1f)] public float sidewalkBarrelChance = 0.42f;
     [Range(0f, 1f)] public float busStopChance = 0.12f;
     public GameObject[] roadDecor;
 
@@ -492,7 +492,7 @@ public class ChunkManager : MonoBehaviour
         {
             double r = rng.NextDouble();
             if (r < 0.35) { Spawn(ch, Pick(kit.debris, rng), new Vector2(Range(rng, 1f, 19f), Range(rng, 8.4f, 11.6f)), Range(rng, 0f, 360f)); continue; }
-            var p = r < 0.6 ? kit.crate : r < 0.85 ? Pick(burningBarrels, rng) : Pick(explosiveBarrels, rng);
+            var p = r < 0.58 ? kit.crate : r < 0.76 ? Pick(burningBarrels, rng) : Pick(explosiveBarrels, rng);
             float zz = rng.Next(2) == 0 ? 11.3f : 8.7f;
             TryPlace(ch, p, rng, () => new Vector2(Range(rng, 2f, 18f), zz), () => Range(rng, -10f, 10f));
         }
@@ -511,7 +511,7 @@ public class ChunkManager : MonoBehaviour
         int wrecks = rng.Next(0, 3);
         for (int i = 0; i < wrecks; i++) TryPlace(ch, Pick(kit.wrecks, rng), rng, () => new Vector2(Range(rng, x0, x1), Range(rng, z0, z1)), () => Range(rng, 0f, 360f));
         if (rng.NextDouble() < 0.4) TryPlace(ch, Pick(burningBarrels, rng), rng, () => new Vector2(Range(rng, x0, x1), Range(rng, z0, z1)), () => 0f);
-        if ((d == District.Sanayi || d == District.Liman) && rng.NextDouble() < 0.35)
+        if ((d == District.Sanayi || d == District.Liman) && rng.NextDouble() < 0.45)
             TryPlace(ch, Pick(explosiveBarrels, rng), rng, () => new Vector2(Range(rng, x0, x1), Range(rng, z0, z1)), () => 0f);
         int deb = rng.Next(4, 8);
         for (int i = 0; i < deb; i++) Spawn(ch, Pick(kit.debris, rng), new Vector2(Range(rng, 1f, 19f), Range(rng, 1f, 19f)), Range(rng, 0f, 360f));

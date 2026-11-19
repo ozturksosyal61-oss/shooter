@@ -1030,6 +1030,20 @@ public class CoopTests
     }
 
     [Test]
+    public void AimAssistIsSoftAndConeLimited()
+    {
+        Vector3 f = Vector3.forward;
+        Vector3 at4 = Quaternion.Euler(0f, 4f, 0f) * f, at7 = Quaternion.Euler(0f, 7f, 0f) * f, at20 = Quaternion.Euler(0f, 20f, 0f) * f;
+        float drag = Vector3.SignedAngle(f, AimAssist.Bend(f, at4, AimAssistConfig.DragCone, AimAssistConfig.DragPull), Vector3.up);
+        Assert.AreEqual(4f * AimAssistConfig.DragPull, drag, 0.01f, "drag: a small nudge, not a snap");
+        Assert.AreEqual(0f, Vector3.Angle(f, AimAssist.Bend(f, at7, AimAssistConfig.DragCone, AimAssistConfig.DragPull)), 0.01f, "drag: outside ±5° nothing");
+        float hold = Vector3.SignedAngle(f, AimAssist.Bend(f, at7, AimAssistConfig.HoldCone, AimAssistConfig.HoldPull), Vector3.up);
+        Assert.Less(hold, 7f, "hold: no full lock"); Assert.Greater(hold, 0f, "hold: soft magnet inside ±8°");
+        Assert.AreEqual(0f, Vector3.Angle(f, AimAssist.Bend(f, at20, AimAssistConfig.HoldCone, AimAssistConfig.HoldPull)), 0.01f, "hold: outside ±8° nothing");
+        Assert.LessOrEqual(AimAssistConfig.DragCone, AimAssistConfig.HoldCone);
+    }
+
+    [Test]
     public void ReviveAndTeamOverRules()
     {
         float p = 0f;
