@@ -1450,14 +1450,25 @@ public class GameSmokeTest
             Vector3 bpos = barrel.transform.position;
             Teleport(p, stand);
             yield return null;
+            // A real bullet from the muzzle (not Hit()) must reach the barrel: it flies at muzzle height.
+            {
+                var wpn = p.weapon;
+                p.transform.rotation = Quaternion.LookRotation(new Vector3(bpos.x - stand.x, 0f, bpos.z - stand.z));
+                yield return null;
+                Vector3 mz = wpn.muzzle.position;
+                Vector3 toB = new Vector3(bpos.x - mz.x, 0f, bpos.z - mz.z);
+                wpn.SpawnBullet(mz, new Vector3(stand.x, mz.y, stand.z), toB.normalized, 55f, 25f, false, 1f, 0);
+                yield return Wait(0.4f);
+                Assert.Less(barrel.Health01, 1f, $"a bullet at muzzle height ({mz.y:0.00} m) hits the barrel");
+                Debug.Log($"SMOKE: muzzle y={mz.y:0.00} (bullet radius 0.14) vs barrel box top {barrel.GetComponent<BoxCollider>().bounds.max.y - bpos.y:0.00}");
+            }
             var spawner = Object.FindAnyObjectByType<ZombieSpawner>();
             var sh = spawner.TrySpawnSpecial(ZombieKind.Shield, bpos + (p.transform.position - bpos).normalized * 1.6f, Difficulty.ForWave(3));
             yield return WaitUntil(() => sh.Targetable, 8f);
             float hp0 = sh.Health;
             float php = p.Health;
             heard.Clear();
-            barrel.Hit(10f);
-            Assert.IsFalse(barrel.Exploded, "one weak hit is not enough");
+            Assert.IsFalse(barrel.Exploded, "one hit is not enough (~6 rounds)");
             barrel.Hit(999f);
             Assert.IsTrue(barrel.Exploded);
             Assert.IsTrue(heard.Contains(SfxId.BarrelExplode));

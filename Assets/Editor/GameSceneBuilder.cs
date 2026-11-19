@@ -677,6 +677,8 @@ public static partial class GameSceneBuilder
             {
                 var b = root.AddComponent<ExplosiveBarrel>();
                 b.model = root.transform.Find("Model").gameObject;
+                // Bullets fly at muzzle height (~1.15 m) — the 1.05 m barrel box alone let them pass over the lid.
+                if (root.TryGetComponent<BoxCollider>(out var box)) { box.size = new Vector3(box.size.x, 1.7f, box.size.z); box.center = new Vector3(box.center.x, 0.85f, box.center.z); }
                 b.colliders = root.GetComponents<Collider>();
                 var f = root.AddComponent<HitFlash>();
                 f.renderers = rs.ToArray();

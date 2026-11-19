@@ -10,7 +10,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 - **Tüm oyun içi metinler tek localization tablosundan:** `Assets/Scripts/Core/Loc.cs` (`Loc.T(key)`, `Loc.F(key, args)`, `Loc.Upper` Türkçe i/İ uyumlu; sütunlar tr/en; dil kayıt dosyasında `settings.lang`, `Settings.Apply` → `Loc.Current`). Sabit UI etiketleri `LocText` (builder'da `L(text, key)`). Kodda/builder'da oyuncuya görünen düz string yazma — anahtar ekle. Kart metinleri `card.<CardId>.title/.1/.2/.3` (+ opsiyonel `.icon`). Yeni karakter gerekirse `Warmup.Glyphs`'e ekle.
 
 ## Yayın ayarları
-- `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **6** (Android versionCode 6; her TestFlight yüklemesinde artır), minimum iOS **15.0**, yalnız yatay (sol/sağ).
+- `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **7** (Android versionCode 7; her TestFlight yüklemesinde artır), minimum iOS **15.0**, yalnız yatay (sol/sağ).
 - **İkon:** `Assets/Art/Icon/AppIcon.png` (1024², opak RGB, kare; kaynak masaüstü `ikon.png`) → varsayılan + iOS tüm boyutlar + App Store marketing 1024; Android adaptive (`AppIcon_Foreground.png` şeffaf, %66 güvenli alan + `AppIcon_Background.png` düz #23261F); Unity 6.6'da round/legacy tipleri kaldırıldı → eski launcher'lar varsayılan ikonu kullanır.
 - `IosPostBuild` (her iOS build'de, Unity Cloud Build dahil; `[PostProcessBuild(1000)]`, LevelPlay'inkinden sonra): `CADisableMinimumFrameDurationOnPhone` (ProMotion), `CFBundleDisplayName` Holdout, `ITSAppUsesNonExemptEncryption` false, `NSUserTrackingUsageDescription` (temel EN "Used to show you more relevant ads.", `tr.lproj/InfoPlist.strings` TR "Sana daha uygun reklamlar göstermek için kullanılır."; `en.lproj` + `CFBundleLocalizations` en/tr; .lproj klasör referansı olarak eklenir), `SKAdNetworkItems` (LevelPlay'in önerdiği ironSource + Unity Ads listeleri, 82 kimlik koda gömülü, var olanlarla birleştirilir). ATT izni LevelPlay.Init'ten önce istenir (`LevelPlayAdBackend.Init`, Unity iOS Support).
 - iOS build: `Unity.exe -batchmode -nographics -projectPath . -buildTarget iOS -executeMethod ProjectSetup.BuildIos -quit -logFile <log>` → `Builds/iOS` (Xcode projesi), zip `Builds/Holdout_iOS_<sürüm>.zip`. `Builds/` git'e girmez.
@@ -182,7 +182,7 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
 - [x] Mağaza metinleri, App Privacy / yaş / inceleme notu (`StoreAssets/AppStore/`), destek / gizlilik / koşullar sayfaları (`StoreAssets/Web/holdout/` → siteye yüklenecek)
 - [x] TestFlight: cihaz testi tamam (2026-11-19)
 - [x] **LevelPlay test modunu kapat** (`AdConfig.TestMode = false`, `Assets/Scripts/Core/AdService.cs`)
-- [x] Build numarası 6 (`ProjectSetup.IosBuildNumber`, Android versionCode 6)
+- [x] Build numarası 7 (`ProjectSetup.IosBuildNumber`, Android versionCode 7; 7 = varil düzeltmesi)
 - [ ] Web sayfalarını siteye yükle, App Store Connect formları, build 6 + IAP'ler incelemeye
 
 ## İlerleme
