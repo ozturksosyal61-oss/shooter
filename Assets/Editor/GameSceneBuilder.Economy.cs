@@ -23,7 +23,8 @@ public static partial class GameSceneBuilder
     static readonly Vector3 RifleRootPos = new Vector3(0.1f, 0.95f, 0.2f);
     const float GunScale = 1.1f;
 
-    static IEnumerable<string> CostumeNames() => System.Enum.GetNames(typeof(CostumeId)).Where(n => n != nameof(CostumeId.Standard));
+    /// <summary>Texture costumes on the soldier mesh (whole-character costumes have their own model).</summary>
+    static IEnumerable<string> CostumeNames() => System.Enum.GetNames(typeof(CostumeId)).Where(n => n != nameof(CostumeId.Standard) && n != nameof(CostumeId.SpecOps) && n != nameof(CostumeId.Firefighter));
     static string CostumeTex(string name) => $"{SoldierDir}/Textures/Costumes/Soldier_{name}.png";
     static string SoldierDir => System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(SoldierTex)).Replace('\\', '/');
 
@@ -114,6 +115,39 @@ public static partial class GameSceneBuilder
         lo.costumeMaterials = CostumeMaterials(lo.body.sharedMaterial);
     }
 
+    // ---------------------------------------------------------------- F15: whole-character costumes
+    static readonly (CostumeId id, string name)[] PlayerCharacters = { (CostumeId.SpecOps, "OzelHarekat"), (CostumeId.Firefighter, "Itfaiyeci") };
+
+    /// <summary>Material of a player character (own texture, colours untouched); null when its rig is missing.</summary>
+    static Material PlayerCharacterMaterial(string name)
+    {
+        string dir = $"Assets/Art/Characters/{name}";
+        if (!System.IO.File.Exists(Rigged(dir))) { Debug.LogWarning($"BUILD: player character {name} missing — run Tools/prepare_players.py"); return null; }
+        ConfigureCharacterTexture(BaseColor(dir));
+        ConfigureRig(Rigged(dir), false);
+        return Mat("M_" + name, "Universal Render Pipeline/Simple Lit", x => { x.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(BaseColor(dir))); x.SetColor("_BaseColor", Color.white); });
+    }
+
+    /// <summary>Extra character models on the Player prefab (inactive); <see cref="WeaponLoadout.ApplyCostume"/> swaps them in.</summary>
+    static void AddPlayerCharacters(GameObject go, GameObject soldierModel, AnimatorController controller, SoldierRig soldierRig)
+    {
+        var lo = go.GetComponent<WeaponLoadout>();
+        lo.defaultModel = soldierModel;
+        lo.costumeModels = new GameObject[System.Enum.GetValues(typeof(CostumeId)).Length];
+        foreach (var (id, name) in PlayerCharacters)
+        {
+            var mat = PlayerCharacterMaterial(name);
+            if (!mat) continue;
+            var cm = AddRiggedModel(go.transform, Rigged($"Assets/Art/Characters/{name}"), mat, 1.8f, controller, true);
+            cm.name = name;
+            var r = cm.AddComponent<SoldierRig>();
+            r.walkClipSpeed = soldierRig.walkClipSpeed; r.runClipSpeed = soldierRig.runClipSpeed; r.reloadClipLength = soldierRig.reloadClipLength;
+            r.weaponRoot = soldierRig.weaponRoot; r.rightGrip = soldierRig.rightGrip; r.leftGrip = soldierRig.leftGrip;
+            cm.SetActive(false);
+            lo.costumeModels[(int)id] = cm;
+        }
+    }
+
     // ---------------------------------------------------------------- game scene: run rewards on the game-over panel
     static void BuildRewardsUi(HUD hud, TouchControls controls)
     {
@@ -170,6 +204,18 @@ public static partial class GameSceneBuilder
         stage.soldierPivot = sp;
         stage.soldierBody = model.GetComponentInChildren<SkinnedMeshRenderer>();
         stage.costumeMaterials = CostumeMaterials(m.soldier);
+        stage.soldierModel = model;
+        stage.costumeModels = new GameObject[System.Enum.GetValues(typeof(CostumeId)).Length];
+        foreach (var (id, name) in PlayerCharacters)
+        {
+            var mat = PlayerCharacterMaterial(name);
+            if (!mat) continue;
+            var cm = AddRiggedModel(sp, Rigged($"Assets/Art/Characters/{name}"), mat, 1.8f, ctrl, true);
+            cm.name = name;
+            cm.GetComponent<Animator>().cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            cm.SetActive(false);
+            stage.costumeModels[(int)id] = cm;
+        }
         stage.soldierCamPos = new Vector3(0f, 1.25f, 4.2f);
         stage.soldierLook = new Vector3(0f, 0.95f, 0f);
 

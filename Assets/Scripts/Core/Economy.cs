@@ -4,7 +4,8 @@ using UnityEngine;
 
 public enum WeaponId { M4, Smg, Shotgun, Hmg, Sniper }
 public enum WeaponStat { Damage, Magazine, Reload }
-public enum CostumeId { Standard, Woodland, Desert, Night, Arctic, Gold, Commando }
+/// <summary>Standard..Commando: soldier textures. SpecOps / Firefighter (F15): whole other characters (own model, same animations).</summary>
+public enum CostumeId { Standard, Woodland, Desert, Night, Arctic, Gold, Commando, SpecOps, Firefighter }
 public enum BonusId { StartHealth, StartCard, GoldBoost }
 public enum QuestKind { Kills, Specials, Bosses, ReachWave, Objectives, Runs, Combo }
 
@@ -95,6 +96,8 @@ public static class Economy
         new CostumeDef { id = CostumeId.Arctic, gold = 1500 },
         new CostumeDef { id = CostumeId.Gold, gems = 300 },
         new CostumeDef { id = CostumeId.Commando, packOnly = true },
+        new CostumeDef { id = CostumeId.SpecOps, gold = 4000 },
+        new CostumeDef { id = CostumeId.Firefighter, gems = 250 },
     };
 
     public static readonly BonusDef[] Bonuses =

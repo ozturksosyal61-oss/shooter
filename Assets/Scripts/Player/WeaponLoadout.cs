@@ -19,6 +19,13 @@ public class WeaponLoadout : MonoBehaviour
     public Slot[] slots;
     public Material[] costumeMaterials;   // indexed by CostumeId
     public SkinnedMeshRenderer body;
+    [Tooltip("Whole-character costumes (indexed by CostumeId; null = the soldier model with a costume texture).")]
+    public GameObject[] costumeModels;
+    public GameObject defaultModel;
+
+    GameObject activeModel;
+    SkinnedMeshRenderer soldierBody;
+    Slot currentSlot;
 
     public WeaponId Current { get; private set; }
     public CostumeId Costume { get; private set; }
@@ -26,6 +33,8 @@ public class WeaponLoadout : MonoBehaviour
 
     void Awake()
     {
+        soldierBody = body;
+        activeModel = defaultModel;
         var pc = GetComponent<PlayerController>();
         Apply(Override ?? Profile.SelectedWeapon, pc);
         ApplyCostume(Profile.SelectedCostume, pc);
@@ -49,6 +58,7 @@ public class WeaponLoadout : MonoBehaviour
             if (on) s = sl;
         }
         if (s == null) return;
+        currentSlot = s;
         var w = pc.weapon;
         w.muzzle = s.muzzle;
         w.muzzleFlash = s.flash;
@@ -75,9 +85,34 @@ public class WeaponLoadout : MonoBehaviour
         pc.moveSpeed *= d.moveMul;
     }
 
+    public GameObject ModelFor(CostumeId c) =>
+        costumeModels != null && (int)c < costumeModels.Length && costumeModels[(int)c] ? costumeModels[(int)c] : defaultModel;
+
+    public GameObject ActiveModel => activeModel;
+
     public void ApplyCostume(CostumeId c, PlayerController pc)
     {
         Costume = c;
+        var target = ModelFor(c);
+        if (target && target != activeModel)
+        {
+            // Whole-character swap: same animator controller (humanoid clips), weapon IK moves to the new rig.
+            if (costumeModels != null) foreach (var mo in costumeModels) if (mo) mo.SetActive(mo == target);
+            if (defaultModel) defaultModel.SetActive(defaultModel == target);
+            activeModel = target;
+            var rig = target.GetComponent<SoldierRig>();
+            pc.rig = rig;
+            pc.model = target.transform;
+            if (pc.weapon) pc.weapon.rig = rig;
+            if (rig && currentSlot != null) { rig.weaponRoot = currentSlot.root; rig.rightGrip = currentSlot.rightGrip; rig.leftGrip = currentSlot.leftGrip; }
+            body = target == defaultModel ? soldierBody : target.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            if (pc.flash) pc.flash.SetRenderers(target.GetComponentsInChildren<SkinnedMeshRenderer>(true));
+        }
+        if (target != defaultModel)
+        {
+            if (pc.flash && body) pc.flash.SetBaseMaterial(body.sharedMaterial);
+            return;
+        }
         if (costumeMaterials == null || (int)c >= costumeMaterials.Length || !costumeMaterials[(int)c]) return;
         var m = costumeMaterials[(int)c];
         if (body) body.sharedMaterial = m;

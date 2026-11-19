@@ -1075,6 +1075,39 @@ public class GameSmokeTest
         Assert.Greater(crusher.ArmorHits, 0);
     }
 
+    [UnityTest, Timeout(180000)]
+    public IEnumerator PlayerCharacters()
+    {
+        foreach (var c in new[] { CostumeId.SpecOps, CostumeId.Firefighter })
+        {
+            Profile.Grant(100000, 1000, "test");
+            Assert.IsTrue(Profile.BuyCostume(c), "buy " + c);
+            Assert.AreEqual(c, Profile.SelectedCostume);
+            yield return LoadGame();
+            var p = GameManager.I.player;
+            var lo = p.GetComponent<WeaponLoadout>();
+            var model = lo.ActiveModel;
+            Assert.NotNull(model);
+            Assert.AreEqual(lo.ModelFor(c), model, c + " model active");
+            Assert.AreNotEqual(lo.defaultModel, model, "not the soldier");
+            Assert.IsTrue(model.activeSelf);
+            Assert.IsFalse(lo.defaultModel.activeSelf, "soldier hidden");
+            Assert.AreEqual(model.GetComponent<SoldierRig>(), p.rig, "controller drives the new rig");
+            Assert.AreEqual(p.rig, p.weapon.rig);
+            Assert.NotNull(p.rig.weaponRoot, "weapon IK bound to the new rig");
+            var anim = model.GetComponent<Animator>();
+            Assert.IsTrue(anim.isHuman && anim.avatar.isValid, "humanoid avatar");
+            // Plays the soldier's clips: out of the T-pose the left hand is not stretched out sideways (it holds the gun).
+            yield return Wait(0.4f);
+            Vector3 arm = anim.GetBoneTransform(HumanBodyBones.LeftHand).position - anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position;
+            float side = Mathf.Abs(Vector3.Dot(arm, model.transform.right));
+            Debug.Log($"SMOKE: {c} hand sideways {side:0.00} m");
+            Assert.Less(side, 0.35f, "animated (not stuck in the T-pose)");
+            p.TakeDamage(5f, Vector3.forward); // hit flash on the new renderers must not throw
+            yield return null;
+        }
+    }
+
     [UnityTest, Timeout(600000)]
     public IEnumerator CityAndObjectives()
     {
@@ -1422,6 +1455,26 @@ public class GameSmokeTest
         Debug.Log("CAPTURE: weak " + St());
         Shot(Path.Combine(dir, "boss_weak.png"));
         Debug.Log("CAPTURE: boss " + dir);
+    }
+
+    /// <summary>Close-ups of the playable characters (soldier, spec ops, firefighter) in game. CAPTURE_DIR, without -nographics.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureCharacters()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        Profile.Grant(100000, 1000, "test");
+        foreach (var c in new[] { CostumeId.Standard, CostumeId.SpecOps, CostumeId.Firefighter })
+        {
+            if (c != CostumeId.Standard) Profile.BuyCostume(c);
+            yield return LoadGame();
+            WaveDirector.I.enabled = false;
+            var p = GameManager.I.player;
+            Vector3 home = OpenArea(p);
+            yield return Wait(0.6f);
+            Vector3 pp = p.transform.position;
+            ShotFrom(Path.Combine(dir, $"char_{c}.png"), pp + p.transform.forward * 3.2f + Vector3.up * 1.6f + p.transform.right * 0.8f, pp + Vector3.up * 1f);
+        }
     }
 
     /// <summary>All four mutations side by side (close-up) + the leap telegraph. CAPTURE_DIR, without -nographics.</summary>

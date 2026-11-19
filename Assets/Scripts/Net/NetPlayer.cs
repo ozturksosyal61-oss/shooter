@@ -61,6 +61,8 @@ public class NetPlayer : NetworkBehaviour
     SoldierRig avatarRig;
     WeaponLoadout.Slot[] avatarSlots;
     Material[] avatarCostumes;
+    GameObject[] avatarModels;
+    GameObject avatarDefaultModel, avatarActiveModel;
     SkinnedMeshRenderer avatarBody;
     HitFlash avatarFlash;
     Transform avatarFlashT;
@@ -168,11 +170,16 @@ public class NetPlayer : NetworkBehaviour
         var go = Instantiate(avatarPrefab, State.Value.pos, Quaternion.Euler(0f, State.Value.yaw, 0f), holder.transform);
         go.name = "Teammate" + OwnerClientId;
         var loadout = go.GetComponent<WeaponLoadout>();
-        if (loadout) { avatarSlots = loadout.slots; avatarCostumes = loadout.costumeMaterials; avatarBody = loadout.body; DestroyImmediate(loadout); }
+        if (loadout)
+        {
+            avatarSlots = loadout.slots; avatarCostumes = loadout.costumeMaterials; avatarBody = loadout.body;
+            avatarModels = loadout.costumeModels; avatarDefaultModel = avatarActiveModel = loadout.defaultModel;
+            DestroyImmediate(loadout);
+        }
         foreach (var c in go.GetComponents<PlayerController>()) DestroyImmediate(c);
         foreach (var c in go.GetComponents<Weapon>()) DestroyImmediate(c);
         foreach (var c in go.GetComponents<CharacterController>()) DestroyImmediate(c);
-        avatarRig = go.GetComponentInChildren<SoldierRig>(true);
+        avatarRig = avatarDefaultModel ? avatarDefaultModel.GetComponent<SoldierRig>() : go.GetComponentInChildren<SoldierRig>(true);
         avatarFlash = go.GetComponent<HitFlash>();
         var member = go.GetComponent<SquadMember>() ?? go.AddComponent<SquadMember>();
         member.local = null;
@@ -208,6 +215,18 @@ public class NetPlayer : NetworkBehaviour
     void ShowCostume(CostumeId c)
     {
         shownCostume = (byte)c;
+        // Whole-character costume: swap the model, move the rig + weapon grips over.
+        var target = avatarModels != null && (int)c < avatarModels.Length && avatarModels[(int)c] ? avatarModels[(int)c] : avatarDefaultModel;
+        if (target && target != avatarActiveModel)
+        {
+            if (avatarModels != null) foreach (var mo in avatarModels) if (mo) mo.SetActive(mo == target);
+            if (avatarDefaultModel) avatarDefaultModel.SetActive(avatarDefaultModel == target);
+            avatarActiveModel = target;
+            avatarRig = target.GetComponent<SoldierRig>();
+            shownWeapon = 255; // re-bind the grips on the new rig
+            if (avatarFlash) avatarFlash.SetRenderers(target.GetComponentsInChildren<SkinnedMeshRenderer>(true));
+        }
+        if (target != avatarDefaultModel) return;
         if (avatarCostumes == null || (int)c >= avatarCostumes.Length || !avatarCostumes[(int)c]) return;
         if (avatarBody) avatarBody.sharedMaterial = avatarCostumes[(int)c];
         if (avatarFlash) avatarFlash.SetBaseMaterial(avatarCostumes[(int)c]);

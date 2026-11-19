@@ -19,6 +19,15 @@ public class HitFlash : MonoBehaviour
         for (int i = 0; i < renderers.Length; i++) originals[i] = renderers[i].sharedMaterial;
     }
 
+    /// <summary>Flashes a different set of renderers from now on (player character swap).</summary>
+    public void SetRenderers(Renderer[] rs)
+    {
+        if (on) ResetFlash();
+        renderers = rs;
+        originals = null;
+        Init();
+    }
+
     /// <summary>Changes the material restored after a flash (e.g. zombie variants).</summary>
     public void SetBaseMaterial(Material m)
     {

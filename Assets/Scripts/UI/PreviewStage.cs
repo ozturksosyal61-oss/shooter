@@ -9,6 +9,9 @@ public class PreviewStage : MonoBehaviour
     public Transform weaponPivot;
     public Transform[] weapons;          // indexed by WeaponId
     public Material[] costumeMaterials;  // indexed by CostumeId
+    [Tooltip("Whole-character costumes (indexed by CostumeId; null = the soldier with a costume texture).")]
+    public GameObject[] costumeModels;
+    public GameObject soldierModel;
     public float degreesPerSecond = 35f;
     public Vector3 soldierCamPos, soldierLook, weaponCamPos, weaponLook;
 
@@ -22,6 +25,9 @@ public class PreviewStage : MonoBehaviour
         cam.enabled = CanRender;
         soldierPivot.gameObject.SetActive(true);
         weaponPivot.gameObject.SetActive(false);
+        var model = costumeModels != null && (int)c < costumeModels.Length && costumeModels[(int)c] ? costumeModels[(int)c] : soldierModel;
+        if (costumeModels != null) foreach (var m in costumeModels) if (m) m.SetActive(m == model);
+        if (soldierModel) soldierModel.SetActive(model == soldierModel);
         if ((int)c < costumeMaterials.Length && costumeMaterials[(int)c]) soldierBody.sharedMaterial = costumeMaterials[(int)c];
         cam.transform.localPosition = soldierCamPos;
         cam.transform.LookAt(transform.TransformPoint(soldierLook));
