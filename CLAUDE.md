@@ -180,7 +180,7 @@ Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
 
 ## Faz 15 — iOS mağaza hazırlığı (kontrol listesi)
 - [x] ATT izni LevelPlay init'ten önce; Info.plist: `NSUserTrackingUsageDescription` (TR/EN), `ITSAppUsesNonExemptEncryption` false, `SKAdNetworkItems`
-- [x] IAP ürünleri App Store Connect'te (`StoreAssets/IAP`), mağaza ekran görüntüleri (`StoreAssets/Screenshots`)
+- [x] IAP ürünleri App Store Connect'te (`StoreAssets/IAP`), mağaza ekran görüntüleri (`StoreAssets/Screenshots`, iPhone + iPad 13" 2752×2064)
 - [x] Mağaza metinleri, App Privacy / yaş / inceleme notu (`StoreAssets/AppStore/`), destek / gizlilik / koşullar sayfaları (`StoreAssets/Web/holdout/` → siteye yüklenecek)
 - [x] TestFlight: cihaz testi tamam (2026-11-19)
 - [x] **LevelPlay test modunu kapat** (`AdConfig.TestMode = false`, `Assets/Scripts/Core/AdService.cs`)
