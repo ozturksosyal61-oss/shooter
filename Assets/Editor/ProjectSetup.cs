@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Android;
@@ -88,6 +89,33 @@ public static class ProjectSetup
             PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, kind, icons);
         }
         Debug.Log($"SETUP: icons ios={ios} android={android} kinds ios=[{string.Join(",", PlayerSettings.GetSupportedIconKinds(NamedBuildTarget.iOS).Select(k => k.ToString()))}] android=[{string.Join(",", PlayerSettings.GetSupportedIconKinds(NamedBuildTarget.Android).Select(k => k.ToString()))}]");
+    }
+
+    /// <summary>
+    /// Batch: side-loadable Android APK (IL2CPP, ARM64 + ARMv7, debug keystore — for friends / co-op tests, not the
+    /// Play Store, which needs an AAB signed with the upload key) → Builds/Android/Holdout_&lt;version&gt;_&lt;code&gt;.apk.
+    /// </summary>
+    public static void BuildAndroidApk()
+    {
+        Apply();
+        AssetDatabase.SaveAssets();
+        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
+            EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
+        PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
+        PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7;
+        PlayerSettings.Android.forceInternetPermission = true; // co-op (Relay), ads, IAP
+        PlayerSettings.Android.useCustomKeystore = false;
+        EditorUserBuildSettings.buildAppBundle = false;
+        Directory.CreateDirectory("Builds/Android");
+        string path = $"Builds/Android/Holdout_{Version}_{PlayerSettings.Android.bundleVersionCode}.apk";
+        var scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
+        var report = UnityEditor.BuildPipeline.BuildPlayer(new BuildPlayerOptions
+        {
+            scenes = scenes, locationPathName = path, target = BuildTarget.Android, options = BuildOptions.None,
+        });
+        var sum = report.summary;
+        Debug.Log($"BUILD Android: {sum.result} errors={sum.totalErrors} size={sum.totalSize / (1024 * 1024)}MB time={sum.totalTime.TotalSeconds:0}s → {path}");
+        if (sum.result != BuildResult.Succeeded) EditorApplication.Exit(1);
     }
 
     /// <summary>Batch: switch to iOS and export the Xcode project to Builds/iOS.</summary>

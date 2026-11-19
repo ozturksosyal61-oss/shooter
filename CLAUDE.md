@@ -12,6 +12,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 ## Yayın ayarları
 - `Assets/Editor/ProjectSetup.cs` (builder çağırır): ad "Holdout", bundle `com.oztdigital.holdout`, sürüm **0.1.0**, iOS build **7** (Android versionCode 7; her TestFlight yüklemesinde artır), minimum iOS **15.0**, yalnız yatay (sol/sağ).
 - **İkon:** `Assets/Art/Icon/AppIcon.png` (1024², opak RGB, kare; kaynak masaüstü `ikon.png`) → varsayılan + iOS tüm boyutlar + App Store marketing 1024; Android adaptive (`AppIcon_Foreground.png` şeffaf, %66 güvenli alan + `AppIcon_Background.png` düz #23261F); Unity 6.6'da round/legacy tipleri kaldırıldı → eski launcher'lar varsayılan ikonu kullanır.
+- Android APK (arkadaşa / co-op testi, Play Store değil): `-buildTarget Android -executeMethod ProjectSetup.BuildAndroidApk` → `Builds/Android/Holdout_<sürüm>_<versionCode>.apk` (IL2CPP, ARM64 + ARMv7, debug keystore). Mağaza için imzalı AAB ayrı.
 - `IosPostBuild` (her iOS build'de, Unity Cloud Build dahil; `[PostProcessBuild(1000)]`, LevelPlay'inkinden sonra): `CADisableMinimumFrameDurationOnPhone` (ProMotion), `CFBundleDisplayName` Holdout, `ITSAppUsesNonExemptEncryption` false, `NSUserTrackingUsageDescription` (temel EN "Used to show you more relevant ads.", `tr.lproj/InfoPlist.strings` TR "Sana daha uygun reklamlar göstermek için kullanılır."; `en.lproj` + `CFBundleLocalizations` en/tr; .lproj klasör referansı olarak eklenir), `SKAdNetworkItems` (LevelPlay'in önerdiği ironSource + Unity Ads listeleri, 82 kimlik koda gömülü, var olanlarla birleştirilir). ATT izni LevelPlay.Init'ten önce istenir (`LevelPlayAdBackend.Init`, Unity iOS Support).
 - iOS build: `Unity.exe -batchmode -nographics -projectPath . -buildTarget iOS -executeMethod ProjectSetup.BuildIos -quit -logFile <log>` → `Builds/iOS` (Xcode projesi), zip `Builds/Holdout_iOS_<sürüm>.zip`. `Builds/` git'e girmez.
 - Uzak depo: `https://github.com/ozturksosyal61-oss/shooter.git`, dal `main`.
@@ -162,6 +163,7 @@ Bundle id: `com.oztdigital.holdout` (henüz mağazaya yüklenmedi) · Sahneler: 
 
 ## Yol haritası
 Oyuncu incelemesi: `docs/playtest-01.md` (bot ile oynatma: `PlaytestBot`).
+- **Yayın sonrası ilk güncelleme:** `docs/playtest-02.md` — sağ üst HUD çakışması, dalga 6 boss + helikopter yığılması, zorluk eğrisi, bina altı görüş, doldurma sıklığı, kart çeşitliliği; istekler: rehber, dalga ödülü, kart sinerjileri, Game Center skor tablosu + başarımlar, haftalık etkinlik.
 - **F5 — Oyun döngüsü:** dalgalar + nefes arası, can yenilenmesi/paketi, kill bazlı kombo, 40'lık şarjör + elle/aktif reload, sıkı vault, zengin ölüm ekranı, ilk açılış ipucu, takılma düzeltmesi.
 - **F6 — Roguelite + okunabilirlik:** ✔ (2026-11-15)
 - **F7 — Özel zombiler:** ✔ Kalkanlı, Bombalı, Dilci (2026-11-15). Sonra: boss'lar (engel aşabilen).
