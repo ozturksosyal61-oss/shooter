@@ -17,7 +17,9 @@ public static partial class GameSceneBuilder
         public BossType type;
         public float radius, capHeight, ringScale;
         public Color ring, eye;
-        public AnimationClip idle, walk, run, roar, slam, punch, dying, throwClip;
+        public AnimationClip idle, walk, run, roar, slam, punch, dying, throwClip, leap;
+        /// <summary>Own Mixamo clips in Assets/Art/Characters/&lt;name&gt;/Anim (role → file, without .fbx); they replace the retargeted stand-ins when present.</summary>
+        public (string role, string file, bool loop)[] own = new (string, string, bool)[0];
         public (HumanBodyBones bone, Vector3 offset, float size)[] glows;
         public System.Action<ButcherZombie> tune;
     }
@@ -33,6 +35,7 @@ public static partial class GameSceneBuilder
                 idle = kasap.idle, walk = a.tSneak, run = a.bRun, roar = a.sRoar, slam = kasap.slam, punch = a.sPunch, dying = a.sDying,
                 // Toxic veins down the long legs.
                 glows = new[] { (HumanBodyBones.LeftLowerLeg, new Vector3(0f, 0f, 0.05f), 0.5f), (HumanBodyBones.RightLowerLeg, new Vector3(0f, 0f, 0.05f), 0.5f) },
+                own = new[] { ("walk", "crouched walking", true), ("idle", "mutant idle", true), ("leap", "mutant jumping", false), ("roar", "zombie scream", false) },
                 tune = k =>
                 {
                     k.canCharge = false; k.canThrow = false; k.canLeap = true;
@@ -54,6 +57,7 @@ public static partial class GameSceneBuilder
                     (HumanBodyBones.LeftShoulder, new Vector3(0f, 0.03f, -0.1f), 0.6f),
                     (HumanBodyBones.RightShoulder, new Vector3(0f, 0.03f, -0.1f), 0.6f),
                 },
+                own = new[] { ("walk", "injured walk", true), ("idle", "zombie idle", true), ("throw", "throw", false), ("punch", "swiping", false) },
                 tune = k =>
                 {
                     k.canCharge = false; k.canThrow = true; k.canBrood = true;
@@ -70,6 +74,7 @@ public static partial class GameSceneBuilder
                 idle = kasap.idle, walk = a.sWalk, run = kasap.run, roar = kasap.roar, slam = kasap.slam, punch = a.sPunch, dying = a.sDying,
                 // The chemical tank in its spine.
                 glows = new[] { (HumanBodyBones.Chest, new Vector3(0f, 0.04f, -0.15f), 1f) },
+                own = new[] { ("idle", "mutant breathing idle", true), ("run", "zombie running", true), ("punch", "mutant swiping", false) },
                 tune = k =>
                 {
                     k.canCharge = true; k.canThrow = true; k.crushWalk = true;
@@ -96,7 +101,26 @@ public static partial class GameSceneBuilder
         var ring = Mat("M_Ring_" + s.name, "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.ringTex); x.SetColor("_BaseColor", s.ring); x.SetFloat("_VertexColor", 0f); });
         var glow = Mat("M_Glow_" + s.name, "Game/FxAdditive", x => { x.SetTexture("_BaseMap", t.soft); x.SetColor("_BaseColor", s.eye); x.SetFloat("_VertexColor", 0f); });
 
-        var extras = s.throwClip ? new[] { ("Throw", s.throwClip, true) } : new (string, AnimationClip, bool)[0];
+        foreach (var o in s.own)
+        {
+            string path = $"{dir}/Anim/{o.file}.fbx";
+            if (!System.IO.File.Exists(path)) continue;
+            var clip = ConfigureClip(path, avatar, s.name + "_" + o.role, o.loop, !o.loop);
+            switch (o.role)
+            {
+                case "idle": s.idle = clip; break;
+                case "walk": s.walk = clip; break;
+                case "run": s.run = clip; break;
+                case "roar": s.roar = clip; break;
+                case "punch": s.punch = clip; break;
+                case "throw": s.throwClip = clip; break;
+                case "leap": s.leap = clip; break;
+            }
+        }
+        var extraList = new List<(string, AnimationClip, bool)>();
+        if (s.throwClip) extraList.Add(("Throw", s.throwClip, true));
+        if (s.leap) extraList.Add(("Leap", s.leap, true));
+        var extras = extraList.ToArray();
         var ctrl = BuildMonsterController(s.name, s.idle, s.walk, s.run, s.roar, s.slam, s.punch ? s.punch : s.slam, s.idle, s.dying, extras);
         float height = 1.8f * BossRules.TypeScale[(int)s.type];
         var k = MonsterPrefab<ButcherZombie>(s.name, Rigged(dir), m, body, ring, height, 1f, ctrl, s.radius, s.capHeight, out var go);
@@ -116,6 +140,7 @@ public static partial class GameSceneBuilder
         k.score = 400 + 150 * (int)s.type; k.xp = 0;
         k.aimBias = 3f + s.radius;
         k.slamImpactTime = s.slam.length * 0.5f;
+        if (s.leap) k.leapImpactTime = s.leap.length * 0.62f; // take-off → landing frame of the jump clip
         k.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         s.tune(k);
 
@@ -158,7 +183,7 @@ public static partial class GameSceneBuilder
             list.Add(q.transform);
         }
         k.eyes = list.ToArray();
-        Debug.Log($"BUILD: {s.name} h={height:0.0} m walk={k.walkClipSpeed:0.00} run={k.runClipSpeed:0.00} glows={list.Count} humanoid={(avatar && avatar.isHuman)}");
+        Debug.Log($"BUILD: {s.name} own clips={s.own.Length} leap={(s.leap ? s.leap.length.ToString("0.0") + "s" : "-")} h={height:0.0} m walk={k.walkClipSpeed:0.00} run={k.runClipSpeed:0.00} glows={list.Count} humanoid={(avatar && avatar.isHuman)}");
         SetLayer(go, GameLayers.Zombie);
         SavePrefab(go, $"{PrefabDir}/{s.name}.prefab");
     }

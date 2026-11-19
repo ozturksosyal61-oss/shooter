@@ -32,6 +32,8 @@ public class ButcherZombie : Zombie
     public float leapCooldown = 4.5f;
     public float leapHeight = 7f;
     public float leapWinded = 2.2f;
+    [Tooltip("Landing moment inside the own \"Leap\" clip (0 = use the slam clip timing).")]
+    public float leapImpactTime;
 
     [Header("Brood (Kovan Ana)")]
     public bool canBrood;
@@ -112,6 +114,7 @@ public class ButcherZombie : Zombie
     int leapInCombo;
     Vector3 leapFrom, leapTo;
     static readonly int ThrowAnim = Animator.StringToHash("Throw");
+    static readonly int LeapAnim = Animator.StringToHash("Leap");
     int chargeInCombo;
     Vector3 shockPos, lastPlayerPos, playerVel;
     Renderer zoneRenderer;
@@ -293,6 +296,7 @@ public class ButcherZombie : Zombie
             // Too close for anything else: a heavy shove.
             shoveCd = 1.5f;
             ShoveHits++;
+            if (bossType != BossType.Butcher) animator.CrossFadeInFixedTime(PunchState, 0.08f, 0);
             GameAudio.Play(SfxId.ZombieAttack, transform.position, 0.7f);
             player.TakeDamage(damage * shoveDamageMul, dir, 12f);
         }
@@ -581,9 +585,10 @@ public class ButcherZombie : Zombie
     {
         windTime = wind > 0f ? wind : leapTelegraph;
         leapTo = PickLeapTarget();
-        animator.CrossFadeInFixedTime(AttackState, 0.1f, 0);
+        bool own = leapImpactTime > 0f && animator.HasState(0, LeapAnim);
+        animator.CrossFadeInFixedTime(own ? LeapAnim : AttackState, 0.1f, 0);
         // The clip's impact frame lands with the boss.
-        animator.speed = Mathf.Clamp(slamImpactTime / (windTime + leapAirTime), 0.35f, 3f);
+        animator.speed = Mathf.Clamp((own ? leapImpactTime : slamImpactTime) / (windTime + leapAirTime), 0.35f, 3f);
         GameAudio.Play(SfxId.BossRoar, transform.position, 1.3f, 0.7f);
         GameManager.I.Shake(0.2f);
         SetPhase(Phase.LeapWind);

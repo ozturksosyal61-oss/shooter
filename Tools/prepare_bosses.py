@@ -1,4 +1,5 @@
-"""Copy the Mixamo-rigged F14 bosses into the Unity project and grade their base-colour textures.
+"""Copy the Mixamo-rigged F14 bosses (+ their extra animations, + the ordinary zombie scream) into the Unity project
+and grade their base-colour textures.
 
 Usage:  python Tools/prepare_bosses.py .
 
@@ -61,3 +62,20 @@ for folder, name in BOSSES:
     img.save(out, optimize=True)
     px = img.resize((1, 1), Image.BOX).getpixel((0, 0))
     print(f"BOSS {name}: fbx copied, texture graded -> {out} mean={px}")
+    # Animations (Mixamo "Without Skin", any character): every other FBX in the folder -> Anim/<lower name>.fbx
+    anim_dir = os.path.join(dst_dir, "Anim")
+    os.makedirs(anim_dir, exist_ok=True)
+    src_dir = os.path.dirname(src_fbx)
+    for f in sorted(os.listdir(src_dir)):
+        if not f.lower().endswith(".fbx") or f == name + ".fbx":
+            continue
+        clip = f.split("@")[-1].lower()
+        shutil.copyfile(os.path.join(src_dir, f), os.path.join(anim_dir, clip))
+        print(f"  anim {f} -> Anim/{clip}")
+
+# Ordinary zombies: Mixamo "Zombie Scream" replaces the agonizing stand-in when present.
+scream = os.path.join(ROOT, "_mixamo", "anim", "zombie", "Zombie Scream.fbx")
+if os.path.exists(scream):
+    dst = os.path.join(ROOT, "Assets", "Art", "Characters", "Zombie", "Anim", "zombie scream.fbx")
+    shutil.copyfile(scream, dst)
+    print("ZOMBIE scream ->", dst)

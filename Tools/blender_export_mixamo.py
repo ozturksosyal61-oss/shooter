@@ -12,6 +12,7 @@ keepuv       : no bake: weld (UVs are per corner, so they survive), collapse-dec
                the 2048 texture. Sharp texture, one connected mesh for Mixamo. Best quality for detailed generated
                models (bosses 2026-11-19: 95–133k → 30k tris, visually identical). Locking UV-seam vertices with a
                vertex group was tried: any weight > 0 freezes them and the collapse stalls at ~70%.
+rotz=<deg>   : rotate around the up axis first (model generated facing sideways), e.g. rotz=-90.
 seams        : with nobake, cut UV seams into mesh boundaries before collapsing. NOT for Mixamo: the mesh falls
                apart into islands along the seams and the auto-rigger shows torn shapes / shifted texture.
 Always: single mesh, transforms applied, normals recalculated outside, loose geometry removed.
@@ -85,6 +86,15 @@ for o in list(bpy.context.scene.objects):
     if o.type != 'MESH':
         bpy.data.objects.remove(o, do_unlink=True)
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+# rotz=<deg>: turn a model that was generated facing sideways so it faces front (-Y) for Mixamo.
+for f in flags:
+    if f.startswith("rotz="):
+        import math
+        obj.rotation_mode = "XYZ"  # glTF imports use quaternions
+        obj.rotation_euler = (0.0, 0.0, math.radians(float(f[5:])))
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+        print("MIXAMO: rotated", f)
 
 # Scale to target height, origin at bottom centre, placed at world origin.
 mn, mx = bounds(obj)
