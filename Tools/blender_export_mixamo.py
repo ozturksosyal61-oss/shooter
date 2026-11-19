@@ -8,6 +8,10 @@ tris > 0     : weld + collapse-decimate to about that many triangles, then (DEFA
                low-poly mesh and bake the original high-poly base colour onto it (Cycles, selected-to-active,
                1024 diffuse colour). This is the method that works in Mixamo: one connected mesh, no UV drift.
 nobake       : keep the original UVs instead of baking (only if the decimated texture still lines up).
+keepuv       : no bake: weld (UVs are per corner, so they survive), collapse-decimate and keep the ORIGINAL UVs +
+               the 2048 texture. Sharp texture, one connected mesh for Mixamo. Best quality for detailed generated
+               models (bosses 2026-11-19: 95–133k → 30k tris, visually identical). Locking UV-seam vertices with a
+               vertex group was tried: any weight > 0 freezes them and the collapse stalls at ~70%.
 seams        : with nobake, cut UV seams into mesh boundaries before collapsing. NOT for Mixamo: the mesh falls
                apart into islands along the seams and the auto-rigger shows torn shapes / shifted texture.
 Always: single mesh, transforms applied, normals recalculated outside, loose geometry removed.
@@ -27,9 +31,10 @@ src, tex_path, dst = argv[0], argv[1], os.path.abspath(argv[2])
 height = float(argv[3]) if len(argv) > 3 else 1.8
 target_tris = int(argv[4]) if len(argv) > 4 else 0
 flags = set(argv[5:])
-do_bake = target_tris > 0 and "nobake" not in flags and "seams" not in flags
+keep_uv = "keepuv" in flags
+do_bake = target_tris > 0 and "nobake" not in flags and "seams" not in flags and not keep_uv
 cut_seams = "seams" in flags and not do_bake
-TEX_SIZE = 1024
+TEX_SIZE = 2048 if keep_uv else 1024
 
 
 def tris_of(o):
@@ -146,7 +151,7 @@ def clean_mesh(o, weld):
     o.data.update()
 
 
-clean_mesh(obj, weld=do_bake)
+clean_mesh(obj, weld=do_bake or keep_uv)
 if high is not None:
     clean_mesh(high, weld=False)
 
