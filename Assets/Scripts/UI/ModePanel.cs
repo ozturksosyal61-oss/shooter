@@ -3,16 +3,17 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Game-mode screen (redesign, docs/ui-ref 02): Story / Endless / Hard cards with live data (chapter progress + stars,
-/// best wave, hard-mode tags); tapping a card selects it (yellow frame + primary button), BAŞLA starts that mode.
-/// Co-op (2–4 players) is reached from the header.
+/// Game-mode screen (redesign, docs/ui-ref 02), opened by OYNA: Story / Endless / Hard / Co-op cards with live data
+/// (chapter progress + stars, best wave, hard-mode tags, 2–4 players); tapping a card selects it (yellow frame +
+/// primary button), BAŞLA starts that mode (Co-op → room screen).
 /// </summary>
 public class ModePanel : MonoBehaviour
 {
     public GameObject root;
-    public Button back, coop;
+    public Button back;
     public TMP_Text gold, gems;
-    public Button[] cards;            // story, endless, hard
+    public const int Coop = 3;
+    public Button[] cards;            // story, endless, hard, co-op
     public Button[] starts;
     public GameObject[] selectedFrames;
     public TMP_Text storyProgress, storyStars, endlessRecord, hardRecord, storyTag;
@@ -23,7 +24,6 @@ public class ModePanel : MonoBehaviour
     void Awake()
     {
         back.onClick.AddListener(() => { Click(); root.SetActive(false); });
-        if (coop) coop.onClick.AddListener(() => { Click(); if (menu && menu.coopPanel) menu.coopPanel.Open(); });
         for (int i = 0; i < cards.Length; i++)
         {
             int m = i;
@@ -48,14 +48,15 @@ public class ModePanel : MonoBehaviour
     void Select(int m)
     {
         selected = m;
-        MainMenu.SetMode(m);
+        if (m != Coop) MainMenu.SetMode(m);
         Refresh();
     }
 
     void Start(int m)
     {
         if (!menu) return;
-        if (m == 0) { root.SetActive(false); menu.campaignPanel.Open(); }
+        if (m == Coop) { if (menu.coopPanel) menu.coopPanel.Open(); }
+        else if (m == 0) { root.SetActive(false); menu.campaignPanel.Open(); }
         else menu.StartMode(m == 2 ? RunMode.Hard : RunMode.Endless);
     }
 

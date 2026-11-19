@@ -102,12 +102,16 @@ public static class Profile
     public static bool Owns(CostumeId c) => E.costumes.Contains(c.ToString());
     public static CostumeId SelectedCostume => Enum.TryParse(E.costume, out CostumeId c) && Owns(c) ? c : CostumeId.Standard;
 
+    /// <summary>The soldier's skin to show / restore (even while another character is selected).</summary>
+    public static CostumeId SoldierSkin =>
+        Enum.TryParse(E.soldierSkin, out CostumeId c) && Owns(c) && !Economy.IsCharacter(c) ? c : CostumeId.Standard;
+
     public static bool BuyCostume(CostumeId c)
     {
         var def = Economy.Costume(c);
         if (Owns(c) || def.packOnly || !TrySpend(def.gold, def.gems)) return false;
         E.costumes.Add(c.ToString());
-        E.costume = c.ToString();
+        Select(c);
         Commit();
         return true;
     }
@@ -115,8 +119,17 @@ public static class Profile
     public static void SelectCostume(CostumeId c)
     {
         if (!Owns(c)) return;
-        E.costume = c.ToString();
+        Select(c);
         Commit();
+    }
+
+    /// <summary>Shop "Characters" tab: the soldier (with its last skin) or a whole other character.</summary>
+    public static void SelectCharacter(CostumeId c) => SelectCostume(Economy.IsCharacter(c) ? c : SoldierSkin);
+
+    static void Select(CostumeId c)
+    {
+        E.costume = c.ToString();
+        if (!Economy.IsCharacter(c)) E.soldierSkin = c.ToString();
     }
 
     // ------------------------------------------------------------------ bonuses

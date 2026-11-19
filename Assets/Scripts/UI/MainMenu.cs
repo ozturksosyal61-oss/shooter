@@ -4,8 +4,8 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Main menu (redesign, docs/ui-ref 01): HOLDOUT logo over the live city, quests / daily reward / shop list,
-/// the soldier (3D preview of the selected character) with its costume + weapon chips, the game-mode carousel
-/// (Story / Endless / Hard) and the big OYNA button; gold / gems pills, settings, a random tip. The OZT Digital splash
+/// the soldier (3D preview of the selected character, holding the selected weapon) with its costume + weapon chips and
+/// the big OYNA button, which opens the game-mode screen (Story / Endless / Hard / Co-op); gold / gems pills, settings, a random tip. The OZT Digital splash
 /// plays once per app session (after the Unity splash).
 /// </summary>
 public class MainMenu : MonoBehaviour
@@ -38,11 +38,6 @@ public class MainMenu : MonoBehaviour
     public GameObject questBadge, loginBadge;
     public TMP_Text questBadgeText, questSub, loginSub, loginTimer;
 
-    [Header("Mode carousel")]
-    public Button modePrev, modeNext, modeCard;
-    public TMP_Text modeTitle, modeSub;
-    public Image[] modeDots;
-
     [Header("Soldier")]
     public RawImage soldierPreview;
     public PreviewStage preview;
@@ -58,16 +53,13 @@ public class MainMenu : MonoBehaviour
 
     void Start()
     {
-        play.onClick.AddListener(() => { Click(); PlaySelected(); });
+        play.onClick.AddListener(() => { Click(); ShowPlay(true); });
         shop.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Weapons, (int)Profile.SelectedWeapon); });
         if (goldPlus) goldPlus.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Gems, 1 + Economy.Products.Length); });
         if (gemPlus) gemPlus.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Gems, 1); });
         if (questsButton) questsButton.onClick.AddListener(() => { Click(); quests.Open(); });
         if (loginButton) loginButton.onClick.AddListener(() => { Click(); login.Open(); });
         settings.onClick.AddListener(() => { Click(); settingsPanel.Open(); });
-        if (modePrev) modePrev.onClick.AddListener(() => { Click(); modeIndex = (modeIndex + 2) % 3; RefreshMode(); });
-        if (modeNext) modeNext.onClick.AddListener(() => { Click(); modeIndex = (modeIndex + 1) % 3; RefreshMode(); });
-        if (modeCard) modeCard.onClick.AddListener(() => { Click(); ShowPlay(true); });
         if (shopUI) shopUI.Closed += RefreshSoldier;
         Profile.Changed += Refresh;
         SaveSystem.Changed += Refresh;
@@ -113,22 +105,7 @@ public class MainMenu : MonoBehaviour
             int idx = next >= 0 ? next : (Profile.LoginStreakIndex + 1) % Economy.LoginRewards.Length;
             loginSub.text = Loc.F(next >= 0 ? "menu.login_today" : "menu.login_tomorrow", Economy.LoginRewards[idx].gold);
         }
-        RefreshMode();
         RefreshSoldier();
-    }
-
-    void RefreshMode()
-    {
-        string[] keys = { "menu.story", "menu.endless", "menu.hard" };
-        string[] subs = { "menu.story_card", "menu.endless_card", "menu.hard_card" };
-        if (modeTitle) modeTitle.text = Loc.T(keys[modeIndex]);
-        if (modeSub) modeSub.text = Loc.T(subs[modeIndex]);
-        if (modeDots != null)
-            for (int i = 0; i < modeDots.Length; i++)
-            {
-                modeDots[i].color = i == modeIndex ? UiKit.Hazard : UiKit.Line;
-                modeDots[i].rectTransform.sizeDelta = new Vector2(i == modeIndex ? 32f : 16f, 4f);
-            }
     }
 
     void RefreshSoldier()

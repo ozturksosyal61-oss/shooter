@@ -188,6 +188,22 @@ public static partial class GameSceneBuilder
             cm.SetActive(false);
             stage.costumeModels[(int)id] = cm;
         }
+        // The character holds the selected weapon (same aim pose + hand IK as in the game).
+        model.AddComponent<SoldierRig>();
+        foreach (var cm in stage.costumeModels) if (cm) cm.AddComponent<SoldierRig>();
+        var held = new PreviewStage.Held[System.Enum.GetValues(typeof(WeaponId)).Length];
+        var hr = BuildRifle(sp, m, out var hrg, out var hlg, out _, out var hfl);
+        Object.DestroyImmediate(hfl.gameObject);
+        held[(int)WeaponId.M4] = new PreviewStage.Held { root = hr, rightGrip = hrg, leftGrip = hlg };
+        Vector3 rifleGrip = RifleRootPos + RifleRightGrip * 1.1f;
+        foreach (var g in Guns)
+        {
+            var root = BuildGun(g, sp, m, out var r, out var l, out _, out _);
+            root.localPosition = rifleGrip - g.right * GunScale;
+            held[(int)g.id] = new PreviewStage.Held { root = root, rightGrip = r, leftGrip = l };
+        }
+        foreach (var h in held) if (h != null && h.root) h.root.gameObject.SetActive(false);
+        stage.heldWeapons = held;
         stage.soldierCamPos = new Vector3(0f, 1.25f, 4.2f);
         stage.soldierLook = new Vector3(0f, 0.95f, 0f);
 

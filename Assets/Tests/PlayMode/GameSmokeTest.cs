@@ -789,16 +789,18 @@ public class GameSmokeTest
         Assert.AreEqual(1, Profile.Level(WeaponId.Smg, WeaponStat.Damage));
 
         // Costume.
-        shop.Open(ShopUI.Tab.Characters, (int)CostumeId.Woodland);
+        shop.Open(ShopUI.Tab.Costumes, (int)CostumeId.Woodland);
         shop.ActNow();
         Assert.AreEqual(CostumeId.Woodland, Profile.SelectedCostume);
+        shop.Open(ShopUI.Tab.Characters, 0);
+        Assert.AreEqual(3, shop.ItemCount, "soldier + 2 characters");
 
         // Gems: fake store purchase.
         int gems0 = Profile.Gems;
         shop.Open(ShopUI.Tab.Gems, 1);
         shop.ActNow();
         yield return WaitUntil(() => Profile.Gems > gems0, 5f);
-        Assert.AreEqual(gems0 + 80, Profile.Gems, "fake IAP delivered");
+        Assert.AreEqual(gems0 + Economy.Products[0].gems, Profile.Gems, "fake IAP delivered");
         shop.Close();
 
         // Loadout → game: weapon + costume applied.
@@ -1632,6 +1634,7 @@ public class GameSmokeTest
         mm.StartMode(RunMode.Endless); yield return Wait(0.3f); S("ui03_loadout"); mm.loadout.root.SetActive(false);
         mm.shopUI.Open(ShopUI.Tab.Weapons, 0); yield return Wait(0.3f); S("ui04_shop_weapons");
         mm.shopUI.Open(ShopUI.Tab.Characters, 0); yield return Wait(0.3f); S("ui05_shop_characters");
+        mm.shopUI.Open(ShopUI.Tab.Costumes, 0); yield return Wait(0.3f); S("ui05b_shop_costumes");
         mm.shopUI.Open(ShopUI.Tab.Bonuses, 0); yield return null; S("ui06_shop_bonuses");
         mm.shopUI.Open(ShopUI.Tab.Gems, 0); yield return null; S("ui07_shop_gems");
         mm.shopUI.Close();

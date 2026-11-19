@@ -25,7 +25,8 @@ Kaynak: `Assets/Scripts/Core/Economy.cs` (saf kurallar, EditMode testli `Economy
 | Keskin nişancı | 1800 altın (~6–7 tur) |
 | Yükseltme (hasar +%8 / şarjör +%12 / reload −%7 seviye başına, 5 seviye) | taban hasar 160, şarjör/reload 120 × silah katsayısı (1.0–1.4) × 1.55^seviye |
 | M4 yükseltmeleri (tümü) | 5790 · SMG 6350 · Pompalı 6930 · Ağır 7500 · Keskin 8090 → **toplam 34 660** |
-| Kostümler | Orman 600, Çöl 800, Gece 1200, Kutup 1500 altın · Altın 300 elmas · Komando yalnız başlangıç paketinde |
+| Kostümler (asker derileri, mağazada "Kostümler") | Orman 600, Çöl 800, Gece 1200, Kutup 1500 altın · Altın 200 elmas · Komando yalnız başlangıç paketinde |
+| Karakterler (tam model, mağazada "Karakterler") | Özel Harekat 250 elmas · İtfaiyeci 250 elmas (`Economy.CharacterGems`; = 149,99 TL paketi) |
 | Başlangıç canı (+10 can/seviye, 3 seviye) | 800 / 1600 / 3200 |
 | Başlangıç kartı (1 tur, tüketilir) | 250 |
 | Altın takviyesi +%10 (kalıcı) | 4000 |
@@ -39,10 +40,13 @@ Kaynak: `Assets/Scripts/Core/Economy.cs` (saf kurallar, EditMode testli `Economy
 - Kalıcı güç küçük: tam yükseltilmiş silah +%40 hasar / +%60 şarjör / −%35 reload; tur içi kartlar (çift mermi, delici, kritik…) bunun çok üstünde kalır. Başlangıç canı en fazla +30.
 
 ## Mağaza ürünleri (IAP, `Economy.Products`)
-| ID | Tür | Fiyat (USD / TRY katmanı) | İçerik | TR ad | EN ad |
-|---|---|---|---|---|---|
-| `com.oztdigital.holdout.gems_small` | Consumable | 0.99 | 80 elmas | Avuç Dolusu Elmas | Handful of Gems |
-| `com.oztdigital.holdout.gems_medium` | Consumable | 4.99 | 450 elmas | Elmas Kesesi | Pouch of Gems |
-| `com.oztdigital.holdout.gems_large` | Consumable | 9.99 | 1000 elmas | Elmas Sandığı | Chest of Gems |
-| `com.oztdigital.holdout.starter_pack` | Non-Consumable | 2.99 | 150 elmas + 2000 altın + Komando kostümü (tek sefer) | Başlangıç Paketi | Starter Pack |
-| `com.oztdigital.holdout.vip` | Non-Consumable | 4.99 | Reklamsız ödüller + %25 altın | VIP | VIP |
+Fiyatlar TL (`ProductDef.tl`; mağaza bağlıyken `localizedPriceString` gelir, App Store Connect / Play Console'da aynı TRY fiyatlarını seç). Kartta "250 ELMAS" + buton "149,99 TL". Büyük paket lira başına daha çok elmas verir (EditMode testli); bir karakter ≈ 150 TL.
+
+| ID | Tür | Fiyat (TL) | İçerik | elmas/TL | TR ad | EN ad |
+|---|---|---|---|---|---|---|
+| `com.oztdigital.holdout.gems_small` | Consumable | 49,99 | 70 elmas | 1.40 | Avuç Dolusu Elmas | Handful of Gems |
+| `com.oztdigital.holdout.gems_medium` | Consumable | 99,99 | 150 elmas | 1.50 | Elmas Kesesi | Pouch of Gems |
+| `com.oztdigital.holdout.gems_large` | Consumable | 149,99 | 250 elmas (= 1 karakter, "1 KARAKTER" etiketi) | 1.67 | Elmas Sandığı | Chest of Gems |
+| `com.oztdigital.holdout.gems_huge` | Consumable | 299,99 | 550 elmas | 1.83 | Elmas Hazinesi | Gem Hoard |
+| `com.oztdigital.holdout.starter_pack` | Non-Consumable | 79,99 | 150 elmas + 2000 altın + Komando kostümü (tek sefer) | — | Başlangıç Paketi | Starter Pack |
+| `com.oztdigital.holdout.vip` | Non-Consumable | 199,99 | Reklamsız ödüller + %25 altın | — | VIP | VIP |

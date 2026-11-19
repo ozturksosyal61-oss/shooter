@@ -59,7 +59,8 @@ public struct ProductDef
     public int gems, gold;
     public CostumeId costume;
     public bool vip;
-    public string usd;   // suggested price tier
+    /// <summary>Catalogue price in TRY (shown until the store returns its localized price; set the same tier in App Store Connect / Play Console).</summary>
+    public string tl;
     public string Key => "iap." + id.Substring(id.LastIndexOf('.') + 1);
 }
 
@@ -77,6 +78,14 @@ public static class Economy
     public const float VipGoldBonus = 0.25f;
     public const float GoldBoostPerLevel = 0.10f;
     public const int StartHealthPerLevel = 10;
+    /// <summary>Whole new characters (F15): bought with gems; 250 gems = the 149,99 TL pack.</summary>
+    public const int CharacterGems = 250;
+
+    /// <summary>SpecOps / Firefighter: whole other characters (own model), not soldier skins.</summary>
+    public static bool IsCharacter(CostumeId c) => c == CostumeId.SpecOps || c == CostumeId.Firefighter;
+
+    /// <summary>Catalogue price label, e.g. "99,99 TL".</summary>
+    public static string PriceLabel(ProductDef p) => p.tl + " TL";
 
     public static readonly WeaponDef[] Weapons =
     {
@@ -94,10 +103,10 @@ public static class Economy
         new CostumeDef { id = CostumeId.Desert, gold = 800 },
         new CostumeDef { id = CostumeId.Night, gold = 1200 },
         new CostumeDef { id = CostumeId.Arctic, gold = 1500 },
-        new CostumeDef { id = CostumeId.Gold, gems = 300 },
+        new CostumeDef { id = CostumeId.Gold, gems = 200 },
         new CostumeDef { id = CostumeId.Commando, packOnly = true },
-        new CostumeDef { id = CostumeId.SpecOps, gold = 4000 },
-        new CostumeDef { id = CostumeId.Firefighter, gems = 250 },
+        new CostumeDef { id = CostumeId.SpecOps, gems = CharacterGems },
+        new CostumeDef { id = CostumeId.Firefighter, gems = CharacterGems },
     };
 
     public static readonly BonusDef[] Bonuses =
@@ -110,11 +119,12 @@ public static class Economy
     public const string ProductPrefix = "com.oztdigital.holdout.";
     public static readonly ProductDef[] Products =
     {
-        new ProductDef { id = ProductPrefix + "gems_small", kind = ProductKind.Consumable, gems = 80, usd = "0.99" },
-        new ProductDef { id = ProductPrefix + "gems_medium", kind = ProductKind.Consumable, gems = 450, usd = "4.99" },
-        new ProductDef { id = ProductPrefix + "gems_large", kind = ProductKind.Consumable, gems = 1000, usd = "9.99" },
-        new ProductDef { id = ProductPrefix + "starter_pack", kind = ProductKind.NonConsumable, gems = 150, gold = 2000, costume = CostumeId.Commando, usd = "2.99" },
-        new ProductDef { id = ProductPrefix + "vip", kind = ProductKind.NonConsumable, vip = true, usd = "4.99" },
+        new ProductDef { id = ProductPrefix + "gems_small", kind = ProductKind.Consumable, gems = 70, tl = "49,99" },
+        new ProductDef { id = ProductPrefix + "gems_medium", kind = ProductKind.Consumable, gems = 150, tl = "99,99" },
+        new ProductDef { id = ProductPrefix + "gems_large", kind = ProductKind.Consumable, gems = 250, tl = "149,99" },
+        new ProductDef { id = ProductPrefix + "gems_huge", kind = ProductKind.Consumable, gems = 550, tl = "299,99" },
+        new ProductDef { id = ProductPrefix + "starter_pack", kind = ProductKind.NonConsumable, gems = 150, gold = 2000, costume = CostumeId.Commando, tl = "79,99" },
+        new ProductDef { id = ProductPrefix + "vip", kind = ProductKind.NonConsumable, vip = true, tl = "199,99" },
     };
 
     /// <summary>Gems → gold exchange offers in the gem tab.</summary>

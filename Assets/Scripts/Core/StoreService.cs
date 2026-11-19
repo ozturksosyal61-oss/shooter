@@ -56,7 +56,7 @@ public class FakeStoreBackend : IStoreBackend
     public string PriceOf(string id)
     {
         var p = Economy.Product(id);
-        return p != null ? "$" + p.Value.usd : "-";
+        return p != null ? Economy.PriceLabel(p.Value) : "-";
     }
 
     public void Buy(string id, Action<bool> done)
@@ -112,7 +112,7 @@ public class UnityIapBackend : IStoreBackend
         var p = controller?.GetProductById(id);
         if (p != null && p.metadata != null && !string.IsNullOrEmpty(p.metadata.localizedPriceString)) return p.metadata.localizedPriceString;
         var d = Economy.Product(id);
-        return d != null ? "$" + d.Value.usd : "-";
+        return d != null ? Economy.PriceLabel(d.Value) : "-";
     }
 
     public void Buy(string id, Action<bool> done)

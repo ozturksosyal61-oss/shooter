@@ -175,23 +175,7 @@ public static partial class GameSceneBuilder
         mm.weaponChip = Chip("Weapon", kit.crosshair);
         mm.weaponChip.color = UiKit.Hazard;
 
-        // Mode carousel + OYNA.
-        var mode = KCard("Mode", main, 20, UiKit.Hex(0x10140E, 0.94f), UiKit.Line);
-        TR(mode, Safe, 337f, 360f, 110f);
-        mm.modeCard = CardButton(mode);
-        var mlab = KCaps("Label", mode.transform, 12f, UiKit.Hazard, "menu.mode_label", TextAlignmentOptions.Center); In(mlab, 70f, 14f, 220f, 18f);
-        mm.modeTitle = KTxt("Title", mode.transform, F.Display, 30f, UiKit.Text, TextAlignmentOptions.Center); In(mm.modeTitle, 60f, 30f, 240f, 38f);
-        mm.modeSub = KTxt("Sub", mode.transform, F.Semi, 15f, UiKit.Secondary, TextAlignmentOptions.Center); In(mm.modeSub, 50f, 68f, 260f, 20f);
-        mm.modeDots = new Image[3];
-        for (int i = 0; i < 3; i++)
-        {
-            var d = KImg("Dot" + i, mode.transform, kit.r12, UiKit.Line, true, 8f);
-            var r = d.rectTransform; r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f); r.sizeDelta = new Vector2(16f, 4f);
-            r.anchoredPosition = new Vector2((i - 1) * 24f, -96f);
-            mm.modeDots[i] = d;
-        }
-        mm.modePrev = KIconButton("Prev", mode.transform, kit.arrowL, 44f); In(mm.modePrev, 14f, 33f, 44f, 44f);
-        mm.modeNext = KIconButton("Next", mode.transform, kit.arrowR, 44f); InR(mm.modeNext, 14f, 33f, 44f, 44f);
+        // OYNA → game-mode screen (Story / Endless / Hard / Co-op).
         mm.play = KButton("Play", main, UiStyle.Yellow, "menu.play", 360f, 90f, 44f, kit.play, true, 20);
         TR(mm.play, Safe, 466f, 360f, 90f);
 
@@ -243,18 +227,18 @@ public static partial class GameSceneBuilder
         mp.root = page.gameObject; mp.menu = mm;
         mp.back = KHeader(page.transform, "mode.title", "mode.sub", out _, out _);
         Pills(page.transform, false, 28f, 44f, 104f, out mp.gold, out mp.gems, out _, out _);
-        mp.coop = KButton("Coop", page.transform, UiStyle.Dark, "menu.coop", 120f, 44f, 17f, kit.user);
-        TR(mp.coop, Safe + 232f, 28f, 120f, 44f);
         var body = BodyRect(page.transform, 108f, 38f);
-        string[] titles = { "menu.story", "menu.endless", "menu.hard" };
-        string[] descs = { "mode.story_desc", "mode.endless_desc", "mode.hard_desc" };
-        Color[] tints = { UiKit.Hazard, UiKit.Success, UiKit.Danger };
-        Sprite[] icons = { kit.map, kit.infinity, kit.flame };
-        mp.cards = new Button[3]; mp.starts = new Button[3]; mp.selectedFrames = new GameObject[3];
-        for (int i = 0; i < 3; i++)
+        string[] titles = { "menu.story", "menu.endless", "menu.hard", "menu.coop" };
+        string[] descs = { "mode.story_desc", "mode.endless_desc", "mode.hard_desc", "mode.coop_desc" };
+        Color[] tints = { UiKit.Hazard, UiKit.Success, UiKit.Danger, UiKit.Gem };
+        Sprite[] icons = { kit.map, kit.infinity, kit.flame, kit.user };
+        const int NC = 4;
+        const float CW = 274f, CG = 24f; // 4 × 274 + 3 × 24 = 1168
+        mp.cards = new Button[NC]; mp.starts = new Button[NC]; mp.selectedFrames = new GameObject[NC];
+        for (int i = 0; i < NC; i++)
         {
             var card = KCard("Card" + i, body, 20, UiKit.Card, UiKit.Line);
-            Prop(card, 1168f, 32f + i * 376f, 32f + i * 376f + 352f, 0f, 444f);
+            Prop(card, 1168f, i * (CW + CG), i * (CW + CG) + CW, 0f, 444f);
             mp.cards[i] = CardButton(card);
             var art = KImg("Art", card.transform, kit.r20, new Color(tints[i].r * 0.13f, tints[i].g * 0.13f, tints[i].b * 0.1f, 1f), true);
             Margins(art, 1.5f, 1.5f, 1.5f, 0f); art.rectTransform.anchorMin = new Vector2(0f, 1f); art.rectTransform.sizeDelta = new Vector2(-3f, 170f);
@@ -269,10 +253,10 @@ public static partial class GameSceneBuilder
             cover.rectTransform.pivot = new Vector2(0.5f, 1f); cover.rectTransform.sizeDelta = new Vector2(-3f, 22f); cover.rectTransform.anchoredPosition = new Vector2(0f, -150f);
             var ic = KIcon("Icon", card.transform, icons[i], tints[i], 64f);
             var ir = ic.rectTransform; ir.anchorMin = ir.anchorMax = new Vector2(0.5f, 1f); ir.anchoredPosition = new Vector2(0f, -76f);
-            var title = KTxt("Title", card.transform, F.Display, 30f, UiKit.Text, TextAlignmentOptions.Left, titles[i]); Prop(title, 352f, 22f, 330f, 176f, 38f);
-            var desc = KPara("Desc", card.transform, 16f, UiKit.Secondary, descs[i]); Prop(desc, 352f, 22f, 330f, 220f, 90f);
+            var title = KTxt("Title", card.transform, F.Display, 30f, UiKit.Text, TextAlignmentOptions.Left, titles[i]); Prop(title, CW, 22f, CW - 22f, 176f, 38f);
+            var desc = KPara("Desc", card.transform, 16f, UiKit.Secondary, descs[i]); Prop(desc, CW, 22f, CW - 22f, 220f, 90f);
             var start = KButton("Start", card.transform, i == 1 ? UiStyle.Yellow : UiStyle.Dark, "mode.start", 300f, 54f, 18f);
-            Prop(start, 352f, 22f, 330f, 372f, 54f);
+            Prop(start, CW, 22f, CW - 22f, 372f, 54f);
             mp.starts[i] = start;
             var sel = SelectedFrame(card.transform, 20);
             mp.selectedFrames[i] = sel.gameObject;
@@ -281,8 +265,8 @@ public static partial class GameSceneBuilder
             {
                 mp.storyTag = KChip("Tag", card.transform, null, UiKit.Hex(0x0B0D09, 0.85f), UiKit.Hazard);
                 In(mp.storyTag.transform.parent.GetComponent<Image>(), 16f, 16f, 80f, 22f);
-                mp.storyProgress = KTxt("Progress", card.transform, F.Bold, 16f, UiKit.Text); Prop(mp.storyProgress, 352f, 22f, 200f, 338f, 24f);
-                mp.storyStars = KTxt("Stars", card.transform, F.Bold, 16f, UiKit.Text, TextAlignmentOptions.Right); Prop(mp.storyStars, 352f, 200f, 330f, 338f, 24f);
+                mp.storyProgress = KTxt("Progress", card.transform, F.Bold, 16f, UiKit.Text); Prop(mp.storyProgress, CW, 22f, CW * 0.6f, 338f, 24f);
+                mp.storyStars = KTxt("Stars", card.transform, F.Bold, 16f, UiKit.Text, TextAlignmentOptions.Right); Prop(mp.storyStars, CW, CW * 0.6f, CW - 22f, 338f, 24f);
                 var st = KIcon("Star", card.transform, kit.star, UiKit.Gold, 18f);
                 var sr = st.rectTransform; sr.anchorMin = sr.anchorMax = new Vector2(1f, 1f); sr.anchoredPosition = new Vector2(-72f, -350f);
             }
@@ -291,14 +275,27 @@ public static partial class GameSceneBuilder
                 var tag = KChip("Tag", card.transform, "mode.selected", UiKit.Hazard, UiKit.Ink);
                 In(tag.transform.parent.GetComponent<Image>(), 16f, 16f, 70f, 22f);
                 tag.transform.parent.SetParent(sel.transform, true);
-                var rec = KTxt("RecordLabel", card.transform, F.Bold, 16f, UiKit.Text, TextAlignmentOptions.Left, "mode.record"); Prop(rec, 352f, 22f, 200f, 338f, 24f);
-                mp.endlessRecord = KTxt("Record", card.transform, F.Bold, 16f, UiKit.Success, TextAlignmentOptions.Right); Prop(mp.endlessRecord, 352f, 150f, 330f, 338f, 24f);
+                var rec = KTxt("RecordLabel", card.transform, F.Bold, 16f, UiKit.Text, TextAlignmentOptions.Left, "mode.record"); Prop(rec, CW, 22f, CW * 0.55f, 338f, 24f);
+                mp.endlessRecord = KTxt("Record", card.transform, F.Bold, 16f, UiKit.Success, TextAlignmentOptions.Right); Prop(mp.endlessRecord, CW, CW * 0.4f, CW - 22f, 338f, 24f);
+            }
+            else if (i == ModePanel.Coop)
+            {
+                var tag = KChip("Tag", card.transform, "mode.coop_tag", UiKit.Hex(0x0B0D09, 0.85f), UiKit.Gem);
+                In(tag.transform.parent.GetComponent<Image>(), 16f, 16f, 90f, 22f);
+                var tags = Rect("Tags", card.transform); Prop(tags, CW, 22f, CW - 22f, 332f, 30f);
+                var hl = tags.gameObject.AddComponent<HorizontalLayoutGroup>();
+                hl.spacing = 8f; hl.childControlWidth = true; hl.childControlHeight = true; hl.childForceExpandWidth = false; hl.childAlignment = TextAnchor.MiddleLeft;
+                foreach (var k in new[] { "mode.tag_code", "mode.tag_online" })
+                {
+                    var tt = KChip("T", tags, k, UiKit.Hex(0x0E1A22), UiKit.Gem, 30f, 13f);
+                    tt.font = UiFonts.Bold; tt.characterSpacing = 0f;
+                }
             }
             else
             {
                 var tag = KChip("Tag", card.transform, "mode.hard_tag", UiKit.Hex(0x0B0D09, 0.85f), UiKit.DangerAlt);
                 In(tag.transform.parent.GetComponent<Image>(), 16f, 16f, 90f, 22f);
-                var tags = Rect("Tags", card.transform); Prop(tags, 352f, 22f, 330f, 332f, 30f);
+                var tags = Rect("Tags", card.transform); Prop(tags, CW, 22f, CW - 22f, 332f, 30f);
                 var hl = tags.gameObject.AddComponent<HorizontalLayoutGroup>();
                 hl.spacing = 8f; hl.childControlWidth = true; hl.childControlHeight = true; hl.childForceExpandWidth = false; hl.childAlignment = TextAnchor.MiddleLeft;
                 foreach (var k in new[] { "mode.tag_ammo", "mode.tag_strong" })
@@ -306,7 +303,7 @@ public static partial class GameSceneBuilder
                     var tt = KChip("T", tags, k, UiKit.Hex(0x3A1512), UiKit.DangerAlt, 30f, 13f);
                     tt.font = UiFonts.Bold; tt.characterSpacing = 0f;
                 }
-                mp.hardRecord = KTxt("Record", card.transform, F.Bold, 15f, UiKit.DangerAlt, TextAlignmentOptions.Right); Prop(mp.hardRecord, 352f, 200f, 330f, 306f, 22f);
+                mp.hardRecord = KTxt("Record", card.transform, F.Bold, 15f, UiKit.DangerAlt, TextAlignmentOptions.Right); Prop(mp.hardRecord, CW, CW * 0.5f, CW - 22f, 306f, 22f);
             }
         }
         return mp;
@@ -393,10 +390,10 @@ public static partial class GameSceneBuilder
         Pills(page.transform, true, 26f, 44f, 144f, out shop.gold, out shop.gems, out shop.goldPlus, out shop.gemPlus);
 
         // Sidebar.
-        string[] tabKeys = { "shop.tab.weapons", "shop.tab.characters", "shop.tab.bonuses", "shop.tab.gems" };
-        Sprite[] tabIcons = { kit.crosshair, kit.shirt, kit.bolt, kit.gemLine };
-        shop.tabButtons = new Button[4];
-        for (int i = 0; i < 4; i++)
+        string[] tabKeys = { "shop.tab.weapons", "shop.tab.characters", "shop.tab.costumes", "shop.tab.bonuses", "shop.tab.gems" };
+        Sprite[] tabIcons = { kit.crosshair, kit.user, kit.shirt, kit.bolt, kit.gemLine };
+        shop.tabButtons = new Button[5];
+        for (int i = 0; i < 5; i++)
         {
             var b = KButton("Tab" + i, page.transform, i == 0 ? UiStyle.Yellow : UiStyle.Ghost, tabKeys[i], 200f, 54f, 19f, tabIcons[i]);
             var hl = b.transform.Find("Face/Content").GetComponent<HorizontalLayoutGroup>();
@@ -404,15 +401,21 @@ public static partial class GameSceneBuilder
             TL(b, Safe, 92f + i * 64f, 200f, 54f);
             shop.tabButtons[i] = b;
         }
-        var free = KChip("Free", shop.tabButtons[3].transform, "shop.free", UiKit.Success, UiKit.Ink, 20f, 11f);
+        var free = KChip("Free", shop.tabButtons[(int)ShopUI.Tab.Gems].transform, "shop.free", UiKit.Success, UiKit.Ink, 20f, 11f);
         var fr = (RectTransform)free.transform.parent; fr.anchorMin = fr.anchorMax = new Vector2(1f, 0.5f); fr.pivot = new Vector2(1f, 0.5f); fr.anchoredPosition = new Vector2(-12f, 0f);
         shop.freeChip = fr.gameObject;
         shop.close = KButton("Menu", page.transform, UiStyle.Dark, "shop.menu", 200f, 52f, 19f, kit.back);
         BL(shop.close, Safe, 38f, 200f, 52f);
 
         var content = Margins(Rect("Content", page.transform), 284f, 92f, Safe, 38f);
-        shop.panes = new GameObject[4];
-        for (int i = 0; i < 4; i++) { var p = Rect("Pane" + i, content); Fill(p); shop.panes[i] = p.gameObject; }
+        // Characters + Costumes share the card pane (each tab fills it with its own cards).
+        shop.panes = new GameObject[5];
+        for (int i = 0; i < 5; i++)
+        {
+            if (i == (int)ShopUI.Tab.Costumes) continue;
+            var p = Rect("Pane" + i, content); Fill(p); shop.panes[i] = p.gameObject;
+        }
+        shop.panes[(int)ShopUI.Tab.Costumes] = shop.panes[(int)ShopUI.Tab.Characters];
 
         // ---- Weapons: list + detail.
         var wp = shop.panes[0].transform;
@@ -487,7 +490,7 @@ public static partial class GameSceneBuilder
         shop.characterTemplate = CharacterCard(ccontent, rt);
 
         // ---- Bonuses.
-        var bp = shop.panes[2].transform;
+        var bp = shop.panes[(int)ShopUI.Tab.Bonuses].transform;
         var bsub = KTxt("Sub", bp, F.Semi, 16f, UiKit.Secondary, TextAlignmentOptions.Left, "shop.bonus_sub"); In(bsub, 0f, 0f, 700f, 22f);
         int nb = Economy.Bonuses.Length;
         shop.bonusRows = new ShopUI.Card[nb]; shop.bonusPips = new Image[nb * 3]; shop.bonusNext = new TMP_Text[nb]; shop.bonusMissing = new TMP_Text[nb];
@@ -518,7 +521,7 @@ public static partial class GameSceneBuilder
         }
 
         // ---- Gems: free banner + packs.
-        var gp = shop.panes[3].transform;
+        var gp = shop.panes[(int)ShopUI.Tab.Gems].transform;
         var banner = KCard("Free", gp, 20, UiKit.Hex(0x111C0C), UiKit.Hex(0x4F7A0C));
         var br = Margins(banner, 0f, 0f, 0f, 0f); br.anchorMin = new Vector2(0f, 1f); br.pivot = new Vector2(0.5f, 1f); br.sizeDelta = new Vector2(0f, 168f); br.anchoredPosition = Vector2.zero;
         var bglow = KImg("Glow", banner.transform, kit.soft, new Color(UiKit.Success.r, UiKit.Success.g, UiKit.Success.b, 0.08f)); Fill(bglow, -30f);
@@ -533,7 +536,8 @@ public static partial class GameSceneBuilder
         shop.freeButton = KButton("Watch", banner.transform, UiStyle.Green, "shop.watch_ad", 220f, 64f, 22f, kit.film);
         InR(shop.freeButton, 28f, 52f, 220f, 64f);
         var pl = KCaps("PacksLabel", gp, 13f, UiKit.Hazard, "shop.packs"); In(pl, 0f, 190f, 400f, 20f);
-        var note = KTxt("Note", gp, F.Semi, 13f, UiKit.Secondary, TextAlignmentOptions.Right, "shop.price_note"); InR(note, 0f, 190f, 420f, 20f);
+        var note = KTxt("Note", gp, F.Semi, 13f, UiKit.Secondary, TextAlignmentOptions.Right); InR(note, 0f, 190f, 520f, 20f);
+        shop.priceNote = note;
         var gs = HScroll(gp, out var gcontent, 18f);
         var gsr = Margins(gs, 0f, 218f, 0f, 0f);
         shop.productContent = gcontent;
@@ -597,14 +601,16 @@ public static partial class GameSceneBuilder
         var c = new ShopUI.Card { button = CardButton(body), frame = body };
         var art = KCard("Art", body.transform, 20, UiKit.Hex(0x0E151A), null); In(art, 14f, 14f, 196f, 132f);
         var glow = KImg("Glow", art.transform, kit.soft, new Color(UiKit.Gem.r, UiKit.Gem.g, UiKit.Gem.b, 0.16f)); Fill(glow, -10f);
-        c.icon = KIcon("Icon", art.transform, kit.gem, Color.white, 56f); In(c.icon, 70f, 38f, 56f, 56f);
+        c.icon = KIcon("Icon", art.transform, kit.gem, Color.white, 52f); In(c.icon, 72f, 24f, 52f, 52f);
+        // What the pack gives ("150 ELMAS"), big under the icon; the buy button shows the TRY price.
+        c.sub = KTxt("Amount", art.transform, F.Display, 24f, UiKit.Gem, TextAlignmentOptions.Center); In(c.sub, 6f, 84f, 184f, 34f);
+        c.sub.enableAutoSizing = true; c.sub.fontSizeMin = 12f; c.sub.fontSizeMax = 24f;
         c.title = KTxt("Name", body.transform, F.Bold, 20f, UiKit.Text, TextAlignmentOptions.Center); In(c.title, 8f, 152f, 208f, 28f);
         c.title.enableAutoSizing = true; c.title.fontSizeMin = 13f; c.title.fontSizeMax = 20f;
-        c.sub = KTxt("Desc", body.transform, F.Semi, 1f, new Color(0f, 0f, 0f, 0f)); In(c.sub, 0f, 0f, 1f, 1f);
         c.action = KButton("Buy", body.transform, UiStyle.Yellow, null, 196f, 46f, 19f, kit.gem);
         KeepIcon(c.action);
         In(c.action, 14f, 186f, 196f, 46f);
-        var pop = KChip("Popular", body.transform, "shop.popular", UiKit.Hazard, UiKit.Ink, 22f, 11f);
+        var pop = KChip("Popular", body.transform, "shop.char_pack", UiKit.Hazard, UiKit.Ink, 22f, 11f);
         c.tagBg = pop.transform.parent.GetComponent<Image>();
         var pr = c.tagBg.rectTransform; pr.anchorMin = pr.anchorMax = new Vector2(0.5f, 1f); pr.pivot = new Vector2(0.5f, 0.5f); pr.anchoredPosition = new Vector2(0f, -16f);
         c.selected = SelectedFrame(body.transform, 20);

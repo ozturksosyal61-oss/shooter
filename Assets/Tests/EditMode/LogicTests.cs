@@ -665,6 +665,18 @@ public class EconomyTests
         Assert.LessOrEqual(Economy.GoldMultiplier(true, 1), 1.36f);
         Assert.AreEqual(30, Economy.StartHealthBonus(9), "start health capped at +30");
         foreach (var p in Economy.Products) StringAssert.StartsWith("com.oztdigital.holdout.", p.id);
+        // TRY packs: more gems per lira for bigger packs; one pack buys exactly one character.
+        float prev = 0f; bool character = false;
+        foreach (var p in Economy.Products)
+        {
+            if (p.kind != ProductKind.Consumable) continue;
+            float tl = float.Parse(p.tl.Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Greater(p.gems / tl, prev, p.id + " better value");
+            prev = p.gems / tl;
+            if (p.gems == Economy.CharacterGems) { character = true; Assert.That(tl, Is.InRange(140f, 160f), "character ≈ 150 TL"); }
+        }
+        Assert.IsTrue(character, "a pack matches the character price");
+        Assert.AreEqual("99,99 TL", Economy.PriceLabel(Economy.Product(Economy.ProductPrefix + "gems_medium").Value));
     }
 
     [Test]
@@ -736,7 +748,17 @@ public class EconomyTests
         Assert.AreEqual(1, Profile.Level(WeaponId.Smg, WeaponStat.Damage));
         Assert.AreEqual(g - Economy.UpgradeCost(WeaponId.Smg, WeaponStat.Damage, 0), Profile.Gold);
         Assert.IsTrue(Profile.BuyCostume(CostumeId.Gold), "gems costume");
-        Assert.AreEqual(100, Profile.Gems);
+        Assert.AreEqual(400 - Economy.Costume(CostumeId.Gold).gems, Profile.Gems);
+        // Characters cost gems; picking the soldier again restores its last skin.
+        Assert.AreEqual(0, Economy.Costume(CostumeId.SpecOps).gold);
+        Assert.AreEqual(Economy.CharacterGems, Economy.Costume(CostumeId.SpecOps).gems);
+        Assert.AreEqual(CostumeId.Gold, Profile.SoldierSkin);
+        Profile.Grant(0, Economy.CharacterGems, "test");
+        Assert.IsTrue(Profile.BuyCostume(CostumeId.SpecOps));
+        Assert.AreEqual(CostumeId.SpecOps, Profile.SelectedCostume);
+        Assert.AreEqual(CostumeId.Gold, Profile.SoldierSkin, "skin kept");
+        Profile.SelectCharacter(CostumeId.Standard);
+        Assert.AreEqual(CostumeId.Gold, Profile.SelectedCostume, "soldier with its skin");
         Assert.IsFalse(Profile.BuyCostume(CostumeId.Commando), "starter-pack only");
         Assert.IsTrue(Profile.BuyBonus(BonusId.StartCard));
         Assert.IsTrue(Profile.ConsumeStartCard());
@@ -749,13 +771,13 @@ public class EconomyTests
         string small = Economy.ProductPrefix + "gems_small", starter = Economy.ProductPrefix + "starter_pack", vip = Economy.ProductPrefix + "vip";
         Assert.IsTrue(Profile.Deliver(small, "t1", false));
         Assert.IsFalse(Profile.Deliver(small, "t1", false), "same transaction twice");
-        Assert.AreEqual(80, Profile.Gems);
+        Assert.AreEqual(70, Profile.Gems);
         Assert.IsTrue(Profile.Deliver(starter, "t2", false));
-        Assert.AreEqual(230, Profile.Gems);
+        Assert.AreEqual(220, Profile.Gems);
         Assert.AreEqual(2000, Profile.Gold);
         Assert.IsTrue(Profile.Owns(CostumeId.Commando));
         Assert.IsTrue(Profile.Deliver(starter, null, true), "restore");
-        Assert.AreEqual(230, Profile.Gems, "restore never pays currency again");
+        Assert.AreEqual(220, Profile.Gems, "restore never pays currency again");
         Assert.IsTrue(Profile.Deliver(vip, "t3", false));
         Assert.IsTrue(Profile.Vip);
         Assert.AreEqual(1.25f, Profile.GoldMultiplier, 1e-4f);

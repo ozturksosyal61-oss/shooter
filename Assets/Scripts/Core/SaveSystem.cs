@@ -58,6 +58,8 @@ public class EconomyData
     public string weapon = nameof(WeaponId.M4);
     public List<string> costumes = new List<string> { nameof(CostumeId.Standard) };
     public string costume = nameof(CostumeId.Standard);
+    /// <summary>Last soldier skin (Standard..Commando): picking the soldier character again restores it.</summary>
+    public string soldierSkin = nameof(CostumeId.Standard);
     public int startHealth, goldBoost, startCards;
     public bool vip, starterPack;
     public int loginDay = -1, loginIndex = -1;
