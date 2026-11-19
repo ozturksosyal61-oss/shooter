@@ -8,13 +8,13 @@ using Unity.Advertisement.IosSupport;
 
 public enum AdPlacement { DoubleGold, Continue, FreeGems }
 
-/// <summary>Unity LevelPlay keys (dashboard). Replace before release; test mode on until then.</summary>
+/// <summary>Unity LevelPlay keys (dashboard, app "Holdout"). Test mode on until the store release (turn off then).</summary>
 public static class AdConfig
 {
-    public const string IosAppKey = "REPLACE_IOS_APP_KEY";
-    public const string AndroidAppKey = "REPLACE_ANDROID_APP_KEY";
-    public const string IosRewardedUnit = "REPLACE_IOS_REWARDED_AD_UNIT";
-    public const string AndroidRewardedUnit = "REPLACE_ANDROID_REWARDED_AD_UNIT";
+    public const string IosAppKey = "29b3d33ed";
+    public const string AndroidAppKey = "29b3e5395";
+    public const string IosRewardedUnit = "zo4omkyj6tja4e71";
+    public const string AndroidRewardedUnit = "08q0pyan2usynqfd";
     public const bool TestMode = true;
 }
 
@@ -107,27 +107,50 @@ public class LevelPlayAdBackend : IAdBackend
         LevelPlay.OnInitSuccess += _ =>
         {
             initDone = true;
+            if (AdConfig.TestMode) LevelPlay.ValidateIntegration();
             rewarded = new LevelPlayRewardedAd(Unit);
-            rewarded.OnAdRewarded += (info, reward) => rewardedFlag = true;
-            rewarded.OnAdClosed += _ => Complete();
-            rewarded.OnAdDisplayFailed += (info, err) => { rewardedFlag = false; Complete(); };
-            rewarded.OnAdLoadFailed += err => Debug.LogWarning("Ads: load failed " + err);
+            rewarded.OnAdRewarded += (info, reward) => { rewardedFlag = true; if (closed) Complete(); };
+            rewarded.OnAdClosed += _ => { closed = true; ServiceRunner.Run(CompleteSoon()); };
+            rewarded.OnAdDisplayFailed += (info, err) => { Debug.LogWarning("Ads: display failed " + err); rewardedFlag = false; closed = true; Complete(); };
+            rewarded.OnAdLoaded += _ => loadRetry = 0;
+            rewarded.OnAdLoadFailed += err => { Debug.LogWarning("Ads: load failed " + err); ServiceRunner.Run(RetryLoad()); };
             rewarded.LoadAd();
         };
         LevelPlay.OnInitFailed += e => Debug.LogWarning("Ads: init failed " + e);
         LevelPlay.Init(AppKey);
     }
 
+    bool closed;
+    int loadRetry;
+
     public void Show(AdPlacement placement, Action<bool> done)
     {
-        if (!Ready) { done?.Invoke(false); return; }
+        if (!Ready) { done?.Invoke(false); rewarded?.LoadAd(); return; }
         pending = done;
         rewardedFlag = false;
-        rewarded.ShowAd(placement.ToString());
+        closed = false;
+        // Default placement (no dashboard placements needed); our placement goes to the log for reporting.
+        Debug.Log("Ads: rewarded for " + placement);
+        rewarded.ShowAd();
+    }
+
+    // Some networks send the reward just after the close: give it a moment before deciding.
+    IEnumerator CompleteSoon()
+    {
+        yield return new WaitForSecondsRealtime(0.6f);
+        Complete();
+    }
+
+    IEnumerator RetryLoad()
+    {
+        loadRetry = Mathf.Min(loadRetry + 1, 6);
+        yield return new WaitForSecondsRealtime(Mathf.Pow(2f, loadRetry)); // 2, 4, 8 … 64 s
+        if (rewarded != null && !rewarded.IsAdReady()) rewarded.LoadAd();
     }
 
     void Complete()
     {
+        if (pending == null) return;
         var cb = pending;
         pending = null;
         cb?.Invoke(rewardedFlag);
