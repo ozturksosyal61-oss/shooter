@@ -1749,6 +1749,217 @@ public class GameSmokeTest
         Debug.Log("CAPTURE: store " + dir);
     }
 
+    /// <summary>
+    /// [Explicit] Instagram reel: portrait (9:16) gameplay segments without UI, recorded frame by frame at 30 fps
+    /// (Time.captureFramerate) + the game's own audio mix (AudioRenderer). CAPTURE_DIR, without -nographics.
+    /// Writes reel/NNNNN.jpg, reel/audio.wav and reel/segments.txt (name start end); Tools/make_instagram.py adds text + encodes.
+    /// </summary>
+    [UnityTest, Explicit, Timeout(900000)]
+    public IEnumerator CaptureReel()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
+        dir = Path.Combine(dir, "reel");
+        Directory.CreateDirectory(dir);
+        const int W = 1440, H = 2560, FPS = 30;
+        SaveSystem.Store = new MemorySaveStore();
+        SaveSystem.Data.tutorialDone = true;
+        SaveSystem.Data.settings.lang = "tr";
+        GameManager.TimeScale = 1f;
+        Settings.Apply();
+
+        yield return LoadGame();
+        var gm = GameManager.I;
+        var p = gm.player;
+        var cam = Camera.main;
+        cam.aspect = W / (float)H; // spawns + culling follow the portrait view
+        var rig = cam.GetComponentInParent<CameraRig>();
+        float baseDist = rig ? rig.distance : 0f;
+        if (rig) rig.distance = baseDist * 0.86f;
+        foreach (var c in new[] { CardId.DoubleShot, CardId.FireRate, CardId.Pierce }) Upgrades.I.Take(c);
+        var spawner = Object.FindAnyObjectByType<ZombieSpawner>();
+
+        void Aim()
+        {
+            p.Regen(1000f);
+            var z = Zombie.FindNearest(p.transform.position, 20f);
+            if (z) InputSystem.QueueStateEvent(mouse, new MouseState { position = (Vector2)cam.WorldToScreenPoint(z.AimPoint) }.WithButton(MouseButton.Right, true));
+            else InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * 0.75f, Screen.height * 0.5f) });
+        }
+        IEnumerator Fight(float seconds)
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < seconds) { Aim(); yield return null; }
+        }
+
+        var rt = new RenderTexture(W, H, 24) { antiAliasing = 4 };
+        var tex = new Texture2D(W, H, TextureFormat.RGB24, false);
+        int frame = 0;
+        var seg = new System.Text.StringBuilder();
+        var audio = new System.Collections.Generic.List<float>(48000 * 2 * 40);
+        int channels = AudioSettings.speakerMode == AudioSpeakerMode.Mono ? 1 : 2;
+        IEnumerator Seg(string name, float seconds, System.Action<float> at = null)
+        {
+            int start = frame;
+            Time.captureFramerate = FPS;
+            AudioRenderer.Start();
+            int n = Mathf.RoundToInt(seconds * FPS);
+            for (int i = 0; i < n; i++)
+            {
+                at?.Invoke(i / (float)FPS);
+                Aim();
+                if (i % 15 == 0)
+                {
+                    var bz = BossDirector.I ? BossDirector.I.Boss : null;
+                    Debug.Log($"REEL {name} {i} player={p.transform.position} boss={(bz ? bz.transform.position.ToString() : "-")} active={(bz ? bz.gameObject.activeInHierarchy : false)} vp={(bz ? cam.WorldToViewportPoint(bz.transform.position + Vector3.up * 2f).ToString() : "-")} aspect={cam.aspect:0.00} zombies={Zombie.Active.Count}");
+                }
+                yield return null;
+                if (TouchControls.I && TouchControls.I.joyGroup) TouchControls.I.joyGroup.alpha = 0f;
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+                tex.Apply();
+                cam.targetTexture = null;
+                RenderTexture.active = null;
+                File.WriteAllBytes(Path.Combine(dir, $"{frame:00000}.jpg"), tex.EncodeToJPG(92));
+                frame++;
+                int count = AudioRenderer.GetSampleCountForCaptureFrame() * channels;
+                if (count > 0)
+                {
+                    using (var buf = new Unity.Collections.NativeArray<float>(count, Unity.Collections.Allocator.Temp))
+                    {
+                        AudioRenderer.Render(buf);
+                        for (int k = 0; k < count; k++) audio.Add(buf[k]);
+                    }
+                }
+            }
+            AudioRenderer.Stop();
+            Time.captureFramerate = 0;
+            seg.AppendLine($"{name} {start} {frame}");
+        }
+
+        // 1) Wave 5 crowd.
+        WaveDirector.I.JumpToBreakBefore(5);
+        yield return Fight(34f);
+        yield return Seg("action", 3.5f);
+        yield return Seg("action2", 3f);
+
+        // 2) Specials up close.
+        WaveDirector.I.enabled = false;
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        Vector3 home = OpenAreaNear(p);
+        yield return null;
+        var wp = Difficulty.ForWave(6);
+        spawner.TrySpawnSpecial(ZombieKind.Shield, home + new Vector3(-2.5f, 0f, 4.5f), wp);
+        spawner.TrySpawnSpecial(ZombieKind.Bomb, home + new Vector3(1f, 0f, 5f), wp);
+        spawner.TrySpawnSpecial(ZombieKind.Tongue, home + new Vector3(2.5f, 0f, 6.5f), wp);
+        for (int i = 0; i < 8; i++) spawner.SpawnMinion(home + new Vector3(-3f + i * 0.8f, 0f, 7f + (i % 2) * 0.8f), wp);
+        yield return Fight(0.2f);
+        yield return Seg("specials", 3.2f);
+
+        // 3) Barrel blast in a crowd.
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        ExplosiveBarrel barrel = null;
+        Vector3 stand = p.transform.position;
+        for (int tries = 0; tries < 14 && barrel == null; tries++)
+        {
+            foreach (var b in ExplosiveBarrel.Active)
+                if (!b.Exploded && b.gameObject.activeInHierarchy && SouthSpot(b.transform.position, 3.6f, out stand)) { barrel = b; break; }
+            if (barrel == null) { Teleport(p, p.transform.position + new Vector3(60f, 0f, 0f)); yield return null; yield return null; }
+        }
+        if (barrel)
+        {
+            Teleport(p, stand);
+            yield return null;
+            Vector3 bp = barrel.transform.position;
+            Debug.Log($"REEL barrel at {bp} stand {stand}");
+            for (int i = 0; i < 9; i++)
+            {
+                float a2 = i / 9f * Mathf.PI * 2f;
+                spawner.SpawnMinion(bp + new Vector3(Mathf.Cos(a2), 0f, Mathf.Sin(a2)) * 2f, wp);
+            }
+            spawner.TrySpawnSpecial(ZombieKind.Bomb, bp + new Vector3(0.5f, 0f, 2.4f), wp);
+            yield return Wait(0.8f);
+            bool blown = false;
+            yield return Seg("barrel", 3f, t => { if (!blown && t >= 0.8f && barrel) { blown = true; barrel.Hit(9999f); } });
+        }
+
+        // 4) Kasap: camera intro + charge.
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        home = OpenAreaNear(p);
+        yield return Wait(0.5f);
+        if (rig) rig.distance = baseDist * 1.3f; // big bosses: pull back so the whole body fits the portrait frame
+        var kasap = BossDirector.I.Spawn(6, home + new Vector3(1.5f, 0f, 5.5f)) as ButcherZombie;
+        yield return WaitUntil(() => kasap.IsWalking && kasap.CurrentPhase == ButcherZombie.Phase.Walk, 12f);
+        yield return Fight(0.5f);
+        bool charged = false;
+        yield return Seg("boss", 5.2f, t => { if (!charged && t >= 1.3f) { charged = true; kasap.ForceCharge(p.transform.position); } });
+        kasap.Despawn();
+        yield return Wait(0.4f);
+
+        // 5) Sıçrayan leap.
+        for (int i = Zombie.Active.Count - 1; i >= 0; i--) Zombie.Active[i].Despawn();
+        var leaper = BossDirector.I.Spawn(11, home + new Vector3(-2f, 0f, 8f), BossType.Leaper) as ButcherZombie;
+        yield return WaitUntil(() => leaper.IsWalking, 10f);
+        yield return Fight(2.6f);
+        bool leapt = false;
+        yield return Seg("leaper", 3.6f, t => { if (!leapt && t >= 0.3f) { leapt = true; leaper.ForceLeap(); } });
+        leaper.Despawn();
+        if (rig) rig.distance = baseDist;
+
+        File.WriteAllText(Path.Combine(dir, "segments.txt"), seg.ToString());
+        WriteWav(Path.Combine(dir, "audio.wav"), audio, channels, AudioSettings.outputSampleRate);
+        cam.ResetAspect();
+        Object.Destroy(rt);
+        Object.Destroy(tex);
+        Debug.Log($"CAPTURE: reel {frame} frames, audio {audio.Count / channels} samples @ {AudioSettings.outputSampleRate} -> {dir}");
+    }
+
+    /// <summary>A clear spot south of <paramref name="from"/> (±30°), so the target sits in the upper half of the portrait view.</summary>
+    /// <summary>An open spot (≥ 5 m clear) within 25 m of the player, i.e. inside the loaded chunks.</summary>
+    static Vector3 OpenAreaNear(PlayerController p)
+    {
+        Vector3 o = p.transform.position;
+        for (int k = 0; k < 60; k++)
+        {
+            Vector3 c = o + new Vector3(Random.Range(-25f, 25f), 0f, Random.Range(-25f, 25f));
+            c.y = 0f;
+            if (Physics.CheckSphere(c + Vector3.up * 1f, 5f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) continue;
+            Teleport(p, c);
+            return c;
+        }
+        return o;
+    }
+
+    static bool SouthSpot(Vector3 from, float dist, out Vector3 spot)
+    {
+        foreach (float a in new[] { 180f, 165f, 195f, 150f, 210f })
+        {
+            Vector3 d = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+            Vector3 p = from + d * dist;
+            if (Physics.CheckSphere(p + Vector3.up * 1f, 1.2f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) continue;
+            if (Physics.SphereCast(from + Vector3.up * 1f, 0.5f, d, out _, dist, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) continue;
+            spot = p;
+            return true;
+        }
+        spot = from;
+        return false;
+    }
+
+    static void WriteWav(string path, System.Collections.Generic.List<float> s, int channels, int rate)
+    {
+        using (var w = new BinaryWriter(File.Create(path)))
+        {
+            int bytes = s.Count * 2;
+            w.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); w.Write(36 + bytes);
+            w.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); w.Write(16); w.Write((short)1); w.Write((short)channels);
+            w.Write(rate); w.Write(rate * channels * 2); w.Write((short)(channels * 2)); w.Write((short)16);
+            w.Write(System.Text.Encoding.ASCII.GetBytes("data")); w.Write(bytes);
+            foreach (float f in s) w.Write((short)Mathf.Clamp(Mathf.RoundToInt(f * 32767f), -32768, 32767));
+        }
+    }
+
     /// <summary>[Explicit] Kasap: close-up (feet/eyes), charge telegraph in game view, winded tint. CAPTURE_DIR.</summary>
     [UnityTest, Explicit]
     public IEnumerator CaptureBoss()
