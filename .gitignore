@@ -51,3 +51,6 @@ Thumbs.db
 # Store art (large PNGs, regenerate with Tools/make_store_art.py)
 StoreAssets/Screenshots/**/*.png
 StoreAssets/VideoStills/
+
+# Unity build tool temp
+.utmp/
