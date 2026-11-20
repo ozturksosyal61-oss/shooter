@@ -81,6 +81,7 @@ public class MainMenu : MonoBehaviour
 
     void AfterSplash()
     {
+        Ads.Warm(); // ATT prompt + SDK init + first rewarded load now, so ads are ready by the first death / shop visit
         var o = OpenOnStart;
         OpenOnStart = Open.None;
         if (o == Open.Loadout && loadout) { loadout.Open(); return; }

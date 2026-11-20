@@ -8,7 +8,7 @@ using Unity.Advertisement.IosSupport;
 
 public enum AdPlacement { DoubleGold, Continue, FreeGems }
 
-/// <summary>Unity LevelPlay keys (dashboard, app "Holdout"). Test mode on until the store release (turn off then).</summary>
+/// <summary>Unity LevelPlay keys (dashboard, app "Holdout"). Live: TestMode stays false in store builds (true only for a local test-suite build).</summary>
 public static class AdConfig
 {
     public const string IosAppKey = "29b3d33ed";
@@ -49,6 +49,9 @@ public static class Ads
     }
 
     public static bool Available => Profile.Vip || Backend.Ready;
+
+    /// <summary>Starts the SDK (iOS: ATT prompt first) and loads the first rewarded ad. Called from the main menu after the splash.</summary>
+    public static void Warm() { var _ = Backend; }
 
     public static void ShowRewarded(AdPlacement p, Action<bool> done)
     {
@@ -107,6 +110,7 @@ public class LevelPlayAdBackend : IAdBackend
         LevelPlay.OnInitSuccess += _ =>
         {
             initDone = true;
+            LevelPlay.SetPauseGame(true); // iOS: Unity (game audio, timers) pauses while a full-screen ad is up
             if (AdConfig.TestMode) LevelPlay.ValidateIntegration();
             rewarded = new LevelPlayRewardedAd(Unit);
             rewarded.OnAdRewarded += (info, reward) => { rewardedFlag = true; if (closed) Complete(); };

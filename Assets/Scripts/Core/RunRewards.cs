@@ -113,6 +113,7 @@ public class RunRewards : MonoBehaviour
         if (continueAdLabel) continueAdLabel.text = Loc.T(vip ? "rew.continue_vip" : "rew.continue_ad");
         if (continueGemLabel) continueGemLabel.text = Loc.F("rew.continue_gems", Economy.ContinueGems);
         if (message) message.text = "";
+        lastAdReady = Ads.Available;
     }
 
     public void DoubleGold()
@@ -145,8 +146,12 @@ public class RunRewards : MonoBehaviour
         else if (message) message.text = Loc.T("shop.no_gems");
     }
 
+    bool lastAdReady;
+
     void Update()
     {
+        // An ad that finishes loading while the revive / result screen is open shows its button right away.
+        if (root && root.activeSelf && !busy && Ads.Available != lastAdReady) Refresh();
         if (ReviveOpen && !busy)
         {
             reviveT -= Time.unscaledDeltaTime;
