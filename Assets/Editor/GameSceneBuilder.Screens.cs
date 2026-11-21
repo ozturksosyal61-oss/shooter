@@ -395,15 +395,17 @@ public static partial class GameSceneBuilder
         Pills(page.transform, true, 26f, 44f, 144f, out shop.gold, out shop.gems, out shop.goldPlus, out shop.gemPlus);
 
         // Sidebar.
-        string[] tabKeys = { "shop.tab.weapons", "shop.tab.characters", "shop.tab.costumes", "shop.tab.bonuses", "shop.tab.gems" };
-        Sprite[] tabIcons = { kit.crosshair, kit.user, kit.shirt, kit.bolt, kit.gemLine };
-        shop.tabButtons = new Button[5];
-        for (int i = 0; i < 5; i++)
+        // ShopUI.Tab order: weapons, finishes, tracers, characters, costumes, bonuses, gems (7 tabs fit above MENU).
+        string[] tabKeys = { "shop.tab.weapons", "shop.tab.skins", "shop.tab.tracers", "shop.tab.characters", "shop.tab.costumes", "shop.tab.bonuses", "shop.tab.gems" };
+        Sprite[] tabIcons = { kit.crosshair, kit.starLine, kit.bullet, kit.user, kit.shirt, kit.bolt, kit.gemLine };
+        int tabN = tabKeys.Length;
+        shop.tabButtons = new Button[tabN];
+        for (int i = 0; i < tabN; i++)
         {
-            var b = KButton("Tab" + i, page.transform, i == 0 ? UiStyle.Yellow : UiStyle.Ghost, tabKeys[i], 200f, 54f, 19f, tabIcons[i]);
+            var b = KButton("Tab" + i, page.transform, i == 0 ? UiStyle.Yellow : UiStyle.Ghost, tabKeys[i], 200f, 46f, 17f, tabIcons[i]);
             var hl = b.transform.Find("Face/Content").GetComponent<HorizontalLayoutGroup>();
             hl.childAlignment = TextAnchor.MiddleLeft; hl.padding = new RectOffset(18, 12, 0, 0); hl.spacing = 12f;
-            TL(b, Safe, 92f + i * 64f, 200f, 54f);
+            TL(b, Safe, 88f + i * 52f, 200f, 46f);
             shop.tabButtons[i] = b;
         }
         var free = KChip("Free", shop.tabButtons[(int)ShopUI.Tab.Gems].transform, "shop.free", UiKit.Success, UiKit.Ink, 20f, 11f);
@@ -414,16 +416,19 @@ public static partial class GameSceneBuilder
 
         var content = Margins(Rect("Content", page.transform), 284f, 92f, Safe, 38f);
         // Characters + Costumes share the card pane (each tab fills it with its own cards).
-        shop.panes = new GameObject[5];
-        for (int i = 0; i < 5; i++)
+        // Characters + Costumes + Finishes + Tracers share the card pane (each tab fills it with its own cards).
+        shop.panes = new GameObject[tabN];
+        for (int i = 0; i < tabN; i++)
         {
-            if (i == (int)ShopUI.Tab.Costumes) continue;
+            if (i == (int)ShopUI.Tab.Costumes || i == (int)ShopUI.Tab.Skins || i == (int)ShopUI.Tab.Tracers) continue;
             var p = Rect("Pane" + i, content); Fill(p); shop.panes[i] = p.gameObject;
         }
         shop.panes[(int)ShopUI.Tab.Costumes] = shop.panes[(int)ShopUI.Tab.Characters];
+        shop.panes[(int)ShopUI.Tab.Skins] = shop.panes[(int)ShopUI.Tab.Characters];
+        shop.panes[(int)ShopUI.Tab.Tracers] = shop.panes[(int)ShopUI.Tab.Characters];
 
         // ---- Weapons: list + detail.
-        var wp = shop.panes[0].transform;
+        var wp = shop.panes[(int)ShopUI.Tab.Weapons].transform;
         int n = System.Enum.GetValues(typeof(WeaponId)).Length;
         shop.weaponRows = new ShopUI.Card[n];
         for (int i = 0; i < n; i++)
@@ -488,7 +493,7 @@ public static partial class GameSceneBuilder
         }
 
         // ---- Characters: horizontal cards.
-        var cp = shop.panes[1].transform;
+        var cp = shop.panes[(int)ShopUI.Tab.Characters].transform;
         var scroll = HScroll(cp, out var ccontent, 18f);
         Fill(scroll);
         shop.characterContent = ccontent;

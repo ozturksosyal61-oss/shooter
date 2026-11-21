@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd034b14deece9c49bb72b56511644ab, type: 3}
+  m_Name: Cosmetics
+  m_EditorClassIdentifier: Game::CosmeticLibrary
+  skinMats:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 2100000, guid: 63ecccfbe34f16a4d86f9352aa50bdf2, type: 2}
+  - {fileID: 2100000, guid: 42a6da2801f9d0a46adf6e8a6159c766, type: 2}
+  - {fileID: 2100000, guid: 2adad2e23c27a3b47af2b0ad8864b7a9, type: 2}
+  - {fileID: 2100000, guid: ad47fcc19585e2e4e8ff6df4d45ed254, type: 2}
+  - {fileID: 2100000, guid: 16a7409dc2ac9814890fdf2662e432f4, type: 2}
+  - {fileID: 2100000, guid: abeccada36f96eb488e4e5f20cfbb9f0, type: 2}
+  - {fileID: 2100000, guid: 100ea1c00c20cd6438b7ebd14b678f12, type: 2}
+  - {fileID: 2100000, guid: 76e3af9cb889fec47b192927a8ba92b8, type: 2}
+  - {fileID: 2100000, guid: f592f1e2a27e66d468d77e7d2501a3d9, type: 2}
+  - {fileID: 2100000, guid: 742ef2006708dd94c93b5f90a2b9288a, type: 2}
+  - {fileID: 2100000, guid: 59c86efbf64e6174da00d33980191f9e, type: 2}
+  - {fileID: 2100000, guid: 9765eb6caed17c5438108dc8b101feb7, type: 2}
+  - {fileID: 2100000, guid: 206e59b603c77d543bde13f056efd8cb, type: 2}
+  - {fileID: 2100000, guid: 6fdbfcf290853d3459a393eea5599d40, type: 2}
+  - {fileID: 2100000, guid: 03c6122620483e94da105c04a64db706, type: 2}
+  - {fileID: 2100000, guid: 1efb32ac3fb02a341bfe739eb1dfa279, type: 2}
+  - {fileID: 2100000, guid: a5404b2dc42014541a47b34a677f0dbb, type: 2}
+  - {fileID: 2100000, guid: 9c6f55be8a84c4246ba476ce2b8a43ff, type: 2}
+  - {fileID: 2100000, guid: 27c8c2f778fab6f4087e1fa26f3dab1c, type: 2}
+  - {fileID: 2100000, guid: a898080d57ca702419abb1746f3fd4b5, type: 2}
+  - {fileID: 2100000, guid: 00fb5b853ff63b74b89662082a3e0826, type: 2}
+  - {fileID: 2100000, guid: bf8ab357e642ea54ba4cd17a72ecf7da, type: 2}
+  - {fileID: 2100000, guid: e62f74380eff0f841925868c87df7721, type: 2}
+  - {fileID: 2100000, guid: 5229c8bca3da51a4c8f895cc2f4bfc9a, type: 2}
+  - {fileID: 2100000, guid: 8e447282f8b615c469e97d9d0346ee99, type: 2}
+  - {fileID: 2100000, guid: e77e80a649b3e184cab84b2778900177, type: 2}
+  - {fileID: 2100000, guid: 49b9e10e0ea476d4394ae2c04fec8e78, type: 2}
+  - {fileID: 2100000, guid: d254d6bb9c8b4294598578bb71f322f7, type: 2}
+  - {fileID: 2100000, guid: dc84c1ed87c3b6548ba6f368f3219487, type: 2}
+  - {fileID: 2100000, guid: a5b7cde01e9b641428a839fd0c4255a3, type: 2}
+  - {fileID: 2100000, guid: 706e540b7bb50114ca2657ccd7feac07, type: 2}
+  - {fileID: 2100000, guid: 709f9143673b18c45b14bb1e3906a452, type: 2}
+  - {fileID: 2100000, guid: c002cde433d7db3419c8cc043e371eee, type: 2}
+  - {fileID: 2100000, guid: 4df67f68b483b394facafc624964ef6c, type: 2}
+  - {fileID: 2100000, guid: 1ec0a918a4ced6d409b742c1bd7b1bee, type: 2}
+  - {fileID: 2100000, guid: 248ee01cd0f727240ad55da209abc030, type: 2}
+  tracerMats:
+  - {fileID: 2100000, guid: cb88c2bda972bf64e944dccb3dcb2cff, type: 2}
+  - {fileID: 2100000, guid: 4b62f3bb9dec458479258b2f3875a748, type: 2}
+  - {fileID: 2100000, guid: a4602510f01c31a4f899ec8f0d126ac0, type: 2}
+  - {fileID: 2100000, guid: 85238d4e5802cfb45a7bb9e01a2d60f1, type: 2}
+  - {fileID: 2100000, guid: 9b8a08126ba59894aa8bfb1ec7fc1c45, type: 2}
+  - {fileID: 2100000, guid: 7f0353a52a1900d43a75407500ea2d95, type: 2}
+  - {fileID: 2100000, guid: c070673b6b9278c40b5a66af4c9e7ff8, type: 2}
+  - {fileID: 2100000, guid: 3a47c1e9664f5e64189f77a48c34c500, type: 2}
+  - {fileID: 2100000, guid: a466ceb4a214ff643b716369f4c60b20, type: 2}
+  rainbowMats:
+  - {fileID: 2100000, guid: 4db542066fb6cf7459c965f6c588f62c, type: 2}
+  - {fileID: 2100000, guid: 475c7b0ab8a2ad144956db6fa8dfcd10, type: 2}
+  - {fileID: 2100000, guid: 71e4a9e2c03bedf4497eda66a25c360c, type: 2}
+  - {fileID: 2100000, guid: e83aaa256550e354ea5f0135aecf369a, type: 2}
+  - {fileID: 2100000, guid: a54e2d195433e5f4999295ed95c6534c, type: 2}
+  - {fileID: 2100000, guid: 9df557d11bbc76745b410177ccdb481e, type: 2}
+  tracerWidth:
+  - 1
+  - 1.05
+  - 1.05
+  - 1.05
+  - 1.1
+  - 1.45
+  - 1.8
+  - 1.5
+  - 1.25
+  tracerFlicker: 000000000001000000y
+  tracerColors:
+  - {r: 1, g: 0.85, b: 0.45, a: 1}
+  - {r: 1, g: 0.25, b: 0.2, a: 1}
+  - {r: 0.4, g: 1, b: 0.3, a: 1}
+  - {r: 0.3, g: 0.65, b: 1, a: 1}
+  - {r: 0.8, g: 0.4, b: 1, a: 1}
+  - {r: 1, g: 0.5, b: 0.12, a: 1}
+  - {r: 0.45, g: 0.95, b: 1, a: 1}
+  - {r: 1, g: 0.82, b: 0.3, a: 1}
+  - {r: 0.88000005, g: 0.39999998, b: 1, a: 1}
+  skinColors:
+  - {r: 0.22, g: 0.23, b: 0.25, a: 1}
+  - {r: 0.66, g: 0.55, b: 0.38, a: 1}
+  - {r: 0.26, g: 0.33, b: 0.17, a: 1}
+  - {r: 0.86, g: 0.88, b: 0.9, a: 1}
+  - {r: 0.6, g: 0.08, b: 0.07, a: 1}
+  - {r: 0.1, g: 0.3, b: 0.58, a: 1}
+  - {r: 0.07, g: 0.07, b: 0.08, a: 1}
+  - {r: 0.18, g: 0.62, b: 0.12, a: 1}
+  - {r: 0.72, g: 0.74, b: 0.78, a: 1}
+  - {r: 0.86, g: 0.65, b: 0.18, a: 1}

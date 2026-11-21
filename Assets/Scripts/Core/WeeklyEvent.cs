@@ -8,7 +8,7 @@ public static class WeeklyEvent
 {
     static readonly DateTime Epoch = new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc); // a Monday
 
-    public static readonly WeaponId[] Rotation = { WeaponId.Shotgun, WeaponId.Sniper, WeaponId.Smg, WeaponId.Hmg, WeaponId.M4 };
+    public static readonly WeaponId[] Rotation = { WeaponId.Shotgun, WeaponId.Uzi, WeaponId.Smg, WeaponId.Hmg, WeaponId.M4 };
 
     public static int Week(DateTime utc) => (int)Math.Floor((utc - Epoch).TotalDays / 7.0);
     public static int CurrentWeek => Week(DateTime.UtcNow);

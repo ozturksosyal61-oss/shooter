@@ -202,7 +202,9 @@ public class NetZombies : MonoBehaviour
             return;
         }
         z.PendingHitter = sender;
+        Zombie.HitFrost = (kind >> 2) & 3; // 1.1.0 Frost card level of the teammate's bullet
         z.TakeHit(amount, crit, dir, point, (kind & NetPlayer.HitExplosive) != 0);
+        Zombie.HitFrost = 0;
         z.PendingHitter = null;
     }
 

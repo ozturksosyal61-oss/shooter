@@ -171,3 +171,15 @@ Değişiklikler: ilk 6 dalga `Difficulty.EarlyDensity` {0.7, 1.4, 1.8, 2.1, 2.5,
 | human | 308 sn | 7 | 267 | %82 | Kasap'ı 51 sn'de yendi; önceki 321 sn / dalga 6 |
 | kite | 469 sn | 10 | 1617 | — | helikopter 1, Kasap 23 sn; önceki 355 sn / dalga 8 |
 | explore (tek başına, 150 sn tavan) | 159 sn | 4 | 140 | %55 | aynı oturumda kite'tan sonra koşunca spawn olmuyor (bot oturum sızıntısı, oyunla ilgisi yok) |
+
+## 1.1.0 — 7 yeni kart (2026-11-22)
+Havuz 15 → 22 kart. İlk koşuda kite her seed'de ilk Kasap'ta öldü (252–275 sn): Hasar ailesi 4 → 7 kart olunca Çift Mermi'nin teklif payı %7.4 → %4.5'e düştü, Drone boss'a ~30 DPS kaldı. Düzeltme: Adrenalin Yardımcı ailesine, hasar güvencesi ilk 3 seçim (önce 2), Drone 15/19/23 hasar × 3.5–5.5 atış/sn, Mayın 100+40, Şok normal isabette de %6/seviye.
+
+| bot | seed | süre | dalga | boss |
+|---|---|---|---|---|
+| human | varsayılan | 269 sn | 6 | Kasap %34'te |
+| human | 21 | 338 sn | 7 | Kasap yenildi |
+| kite | varsayılan | 294 sn | 7 | Kasap yenildi |
+| kite | 21 | 609 sn (tavan) | 12 | 2/2 |
+
+Bant: human 190–400 (değişmedi), kite 294–609 (önce 355–600; kart çeşitliliği varyansı büyüttü).

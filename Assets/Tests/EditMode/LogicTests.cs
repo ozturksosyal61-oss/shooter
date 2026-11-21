@@ -163,7 +163,7 @@ public class CardTests
     public void TableMatchesEnum()
     {
         var ids = (CardId[])Enum.GetValues(typeof(CardId));
-        Assert.AreEqual(15, ids.Length);
+        Assert.AreEqual(22, ids.Length, "15 + 7 new in 1.1.0");
         Assert.AreEqual(ids.Length, Upgrades.Cards.Length);
         for (int i = 0; i < ids.Length; i++)
         {
@@ -253,7 +253,7 @@ public class CardTests
         foreach (var id in Upgrades.DamageCards) levels[(int)id] = 3;
         Upgrades.Offer(levels, 3, r, into, scratch, true);
         Assert.AreEqual(3, into.Count);
-        Assert.AreEqual(2, Upgrades.GuaranteedDamagePicks);
+        Assert.AreEqual(3, Upgrades.GuaranteedDamagePicks);
     }
 
     [Test]
@@ -723,6 +723,59 @@ public class EconomyTests
     }
 
     [Test]
+    public void Cosmetics110PricesAndOwnership()
+    {
+        // Cheapest gem item fits the smallest pack (70); every gold look costs at least a day of play.
+        int minGem = int.MaxValue;
+        foreach (var d in Economy.GunSkins) { if (d.gems > 0) minGem = Mathf.Min(minGem, d.gems); if (d.gold > 0) Assert.GreaterOrEqual(d.gold, 1000); }
+        foreach (var d in Economy.Tracers) { if (d.gems > 0) minGem = Mathf.Min(minGem, d.gems); if (d.gold > 0) Assert.GreaterOrEqual(d.gold, 1000); }
+        Assert.LessOrEqual(minGem, Economy.Products[0].gems);
+        Assert.IsTrue(Economy.GunSkin(GunSkinId.Standard).Free);
+        Assert.IsTrue(Economy.Tracer(TracerId.Standard).Free);
+        for (int i = 0; i < Economy.GunSkins.Length; i++) { Assert.AreEqual(i, Economy.GunSkins[i].id); Assert.IsTrue(Loc.Has(Economy.GunSkins[i].key + ".desc")); }
+        for (int i = 0; i < Economy.Tracers.Length; i++) { Assert.AreEqual(i, Economy.Tracers[i].id); Assert.IsTrue(Loc.Has(Economy.Tracers[i].key + ".desc")); }
+
+        Assert.AreEqual(GunSkinId.Standard, Profile.SkinOf(WeaponId.M4));
+        Assert.IsFalse(Profile.BuyGunSkin(GunSkinId.Carbon, WeaponId.M4), "no gems");
+        Profile.Grant(5000, 200, "test");
+        Assert.IsTrue(Profile.BuyGunSkin(GunSkinId.Carbon, WeaponId.M4));
+        Assert.AreEqual(140, Profile.Gems);
+        Assert.AreEqual(GunSkinId.Carbon, Profile.SkinOf(WeaponId.M4), "bought = worn by that gun");
+        Assert.AreEqual(GunSkinId.Standard, Profile.SkinOf(WeaponId.Smg), "per weapon");
+        Profile.SelectGunSkin(WeaponId.Smg, GunSkinId.Carbon);
+        Assert.AreEqual(GunSkinId.Carbon, Profile.SkinOf(WeaponId.Smg), "owned once, usable on every gun");
+        Profile.SelectGunSkin(WeaponId.Smg, GunSkinId.Gold);
+        Assert.AreEqual(GunSkinId.Carbon, Profile.SkinOf(WeaponId.Smg), "unowned finish can't be chosen");
+        Assert.IsTrue(Profile.BuyTracer(TracerId.Red));
+        Assert.AreEqual(TracerId.Red, Profile.SelectedTracer);
+        Assert.IsFalse(Profile.BuyTracer(TracerId.Red), "already owned");
+        Profile.SelectTracer(TracerId.Standard);
+        Assert.AreEqual(TracerId.Standard, Profile.SelectedTracer);
+    }
+
+    [Test]
+    public void SniperBecomesUziOnLoad()
+    {
+        // A signed v2 save (1.0.x) that owns the sniper with upgrades and has it selected.
+        var v2 = new SaveData { version = 2 };
+        v2.economy.weapons.Add("Sniper");
+        v2.economy.weapon = "Sniper";
+        v2.economy.levels.Add(new WeaponLevels { id = "Sniper", damage = 2 });
+        v2.economy.gunSkins = null; v2.economy.tracers = null; v2.economy.tracer = null;
+        var old = SaveSystem.Deserialize(SaveSystem.Serialize(v2));
+        Assert.NotNull(old);
+        Assert.AreEqual(SaveSystem.CurrentVersion, old.version);
+        CollectionAssert.Contains(old.economy.weapons, nameof(WeaponId.Uzi));
+        CollectionAssert.DoesNotContain(old.economy.weapons, "Sniper");
+        Assert.AreEqual(nameof(WeaponId.Uzi), old.economy.weapon);
+        Assert.AreEqual(nameof(WeaponId.Uzi), old.economy.levels[0].id);
+        Assert.AreEqual(2, old.economy.levels[0].damage, "upgrades kept");
+        CollectionAssert.Contains(old.economy.gunSkins, nameof(GunSkinId.Standard));
+        Assert.AreEqual(nameof(TracerId.Standard), old.economy.tracer);
+        Assert.AreEqual(4, (int)WeaponId.Uzi, "same slot as the sniper");
+    }
+
+    [Test]
     public void PricesAndUpgradeCurve()
     {
         Assert.AreEqual(0, Economy.Weapon(WeaponId.M4).price, "M4 is the starter");
@@ -815,7 +868,7 @@ public class EconomyTests
         Assert.IsFalse(Profile.BuyWeapon(WeaponId.Smg), "already owned");
         Profile.SelectWeapon(WeaponId.Smg);
         Assert.AreEqual(WeaponId.Smg, Profile.SelectedWeapon);
-        Profile.SelectWeapon(WeaponId.Sniper);
+        Profile.SelectWeapon(WeaponId.Uzi);
         Assert.AreEqual(WeaponId.Smg, Profile.SelectedWeapon, "cannot select a locked weapon");
         int g = Profile.Gold;
         Assert.IsTrue(Profile.BuyUpgrade(WeaponId.Smg, WeaponStat.Damage));
@@ -871,7 +924,7 @@ public class EconomyTests
         Assert.IsNull(SaveSystem.Deserialize(bad), "tampered save rejected");
         // v1 (plain JSON, before F13) migrates to v2 with the starter items.
         var v1 = SaveSystem.Deserialize("{\"version\":1,\"wallet\":{\"gold\":50}}");
-        Assert.AreEqual(2, v1.version);
+        Assert.AreEqual(SaveSystem.CurrentVersion, v1.version);
         Assert.AreEqual(50, v1.wallet.gold);
         Assert.IsTrue(v1.economy.weapons.Contains("M4"));
         Assert.IsTrue(v1.economy.costumes.Contains("Standard"));
@@ -1240,5 +1293,58 @@ public class PerformanceTests
         Assert.Greater(PerfGovernor.ThermalScale(2), PerfGovernor.ThermalScale(3));
         Assert.Greater(PerfGovernor.LoadScale(0), PerfGovernor.LoadScale(1));
         Assert.Greater(PerfGovernor.LoadScale(1), PerfGovernor.LoadScale(2));
+    }
+}
+
+public class Cards110Tests
+{
+    [Test]
+    public void NewCardsFormulasGroupsAndText()
+    {
+        Assert.AreEqual(22, Upgrades.Cards.Length);
+        for (int i = 0; i < Upgrades.Cards.Length; i++) Assert.AreEqual((CardId)i, Upgrades.Cards[i].id, "Cards[] in CardId order");
+        foreach (var c in Upgrades.Cards)
+        {
+            Assert.IsTrue(Loc.Has("card." + c.id + ".title"), c.id + " title");
+            for (int l = 1; l <= c.maxLevel; l++) Assert.IsTrue(Loc.Has("card." + c.id + "." + l), c.id + " level " + l);
+        }
+        foreach (Synergy sy in Enum.GetValues(typeof(Synergy)))
+        {
+            Assert.IsTrue(Loc.Has("syn." + sy) && Loc.Has("syn." + sy + ".desc"), sy.ToString());
+            Assert.AreEqual(1, Array.FindAll(Upgrades.SynergyPairs, x => x.s == sy).Length, "one pair per synergy");
+        }
+        Assert.AreEqual(Upgrades.Group.Build, Upgrades.GroupOf(CardId.Mines));
+        Assert.AreEqual(Upgrades.Group.Build, Upgrades.GroupOf(CardId.Drone));
+        Assert.AreEqual(Upgrades.Group.Damage, Upgrades.GroupOf(CardId.Shock));
+        Assert.AreEqual(Upgrades.Group.Utility, Upgrades.GroupOf(CardId.Frost));
+        Assert.AreEqual(Upgrades.Group.Utility, Upgrades.GroupOf(CardId.Armor));
+        Assert.IsTrue(Upgrades.IsDamageCard(CardId.Ricochet));
+
+        for (int l = 1; l < 3; l++)
+        {
+            Assert.Greater(Upgrades.RicochetDamageMul(l + 1), Upgrades.RicochetDamageMul(l));
+            Assert.Greater(Upgrades.ShockTargets(l + 1), Upgrades.ShockTargets(l));
+            Assert.Less(Upgrades.FrostSlow(l + 1), Upgrades.FrostSlow(l), "more frost = slower");
+            Assert.Greater(Upgrades.MaxMines(l + 1), Upgrades.MaxMines(l));
+            Assert.Greater(Upgrades.DroneRate(l + 1), Upgrades.DroneRate(l));
+            Assert.Greater(Upgrades.AdrenalineRate(l + 1), Upgrades.AdrenalineRate(l));
+            Assert.AreEqual(l, Upgrades.ArmorCharges(l));
+        }
+        Assert.AreEqual(1f, Upgrades.FrostSlow(0));
+        Assert.Greater(Upgrades.FrostSlow(3), 0.4f, "never a full freeze");
+        Assert.AreEqual(2, Upgrades.DroneCount(3));
+
+        // Offers still mix families: three distinct cards, never all from one family more than rarely.
+        var levels = new int[Upgrades.Cards.Length];
+        var into = new List<CardId>(); var scratch = new List<int>();
+        var rng = new System.Random(3);
+        int sameFamily = 0;
+        for (int k = 0; k < 400; k++)
+        {
+            Upgrades.Offer(levels, 3, () => (float)rng.NextDouble(), into, scratch);
+            Assert.AreEqual(3, into.Count);
+            if (Upgrades.GroupOf(into[0]) == Upgrades.GroupOf(into[1]) && Upgrades.GroupOf(into[1]) == Upgrades.GroupOf(into[2])) sameFamily++;
+        }
+        Assert.Less(sameFamily, 20);
     }
 }

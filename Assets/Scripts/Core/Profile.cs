@@ -98,6 +98,54 @@ public static class Profile
         return true;
     }
 
+    // ------------------------------------------------------------------ gun finishes + tracers (1.1.0)
+    public static bool Owns(GunSkinId k) => E.gunSkins.Contains(k.ToString());
+    public static bool Owns(TracerId k) => E.tracers.Contains(k.ToString());
+
+    /// <summary>The finish shown on <paramref name="w"/> (standard when not owned any more / never chosen).</summary>
+    public static GunSkinId SkinOf(WeaponId w)
+    {
+        var l = Levels(w, false);
+        return l != null && Enum.TryParse(l.skin, out GunSkinId k) && Owns(k) ? k : GunSkinId.Standard;
+    }
+
+    public static TracerId SelectedTracer => Enum.TryParse(E.tracer, out TracerId t) && Owns(t) ? t : TracerId.Standard;
+
+    /// <summary>Buys a finish and puts it on <paramref name="on"/> right away.</summary>
+    public static bool BuyGunSkin(GunSkinId k, WeaponId on)
+    {
+        var d = Economy.GunSkin(k);
+        if (Owns(k) || !TrySpend(d.gold, d.gems)) return false;
+        E.gunSkins.Add(k.ToString());
+        Levels(on, true).skin = k.ToString();
+        Commit();
+        return true;
+    }
+
+    public static void SelectGunSkin(WeaponId w, GunSkinId k)
+    {
+        if (!Owns(k)) return;
+        Levels(w, true).skin = k.ToString();
+        Commit();
+    }
+
+    public static bool BuyTracer(TracerId t)
+    {
+        var d = Economy.Tracer(t);
+        if (Owns(t) || !TrySpend(d.gold, d.gems)) return false;
+        E.tracers.Add(t.ToString());
+        E.tracer = t.ToString();
+        Commit();
+        return true;
+    }
+
+    public static void SelectTracer(TracerId t)
+    {
+        if (!Owns(t)) return;
+        E.tracer = t.ToString();
+        Commit();
+    }
+
     // ------------------------------------------------------------------ costumes
     public static bool Owns(CostumeId c) => E.costumes.Contains(c.ToString());
     public static CostumeId SelectedCostume => Enum.TryParse(E.costume, out CostumeId c) && Owns(c) ? c : CostumeId.Standard;

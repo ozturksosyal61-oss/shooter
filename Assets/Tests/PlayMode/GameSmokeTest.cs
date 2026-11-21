@@ -333,6 +333,115 @@ public class GameSmokeTest
         Debug.Log($"SMOKE: wave 2 started, hp={gm.player.Health:0}");
     }
 
+    /// <summary>1.1.0 cards: frost, shock, ricochet, mines, drone, adrenaline, armour; Uzi in the old sniper slot.</summary>
+    [UnityTest]
+    public IEnumerator NewCards110()
+    {
+        yield return LoadGame();
+        var gm = GameManager.I;
+        WaveDirector.I.enabled = false;
+        var p = gm.player;
+        var w = p.weapon;
+        var up = Upgrades.I;
+        var sp = Object.FindAnyObjectByType<ZombieSpawner>();
+        var wp = Difficulty.ForWave(1);
+        var heard = new System.Collections.Generic.List<SfxId>();
+        System.Action<SfxId, Vector3> h = (id, pos) => heard.Add(id);
+        GameAudio.OnSfx += h;
+        try
+        {
+            Vector3 home = ClearSpot(p.transform.position, 0f);
+            Teleport(p, home);
+            yield return null;
+
+            // Frost: the gun's bullets carry it; a chilled zombie moves slower.
+            up.Take(CardId.Frost);
+            Assert.AreEqual(1, w.frost);
+            var zf = sp.SpawnMinion(ClearSpot(home, 7f), wp);
+            yield return WaitUntil(() => zf.Targetable, 8f);
+            Zombie.HitFrost = 1;
+            zf.TakeHit(1f, false, Vector3.forward, zf.transform.position);
+            Zombie.HitFrost = 0;
+            Assert.IsTrue(zf.Chilled, "frost hit slows");
+            zf.Despawn();
+
+            // Shock: a crit arcs to the zombie next to it.
+            up.Take(CardId.Shock);
+            Vector3 s1 = ClearSpot(home, 8f);
+            var za = sp.SpawnMinion(s1, wp);
+            var zb = sp.SpawnMinion(s1 + new Vector3(1.5f, 0f, 0f), wp);
+            yield return WaitUntil(() => za.Targetable && zb.Targetable, 8f);
+            float hb = zb.Health;
+            up.Shock(za, 40f, za.transform.position, 1);
+            Assert.Less(zb.Health, hb, "shock arc hurts the neighbour");
+
+            // Ricochet: a kill sends a bounce bullet to the next zombie.
+            up.Take(CardId.Ricochet);
+            Assert.AreEqual(1, w.ricochet);
+            float hb2 = zb.Health;
+            za.TakeHit(9999f, false, Vector3.forward, za.transform.position);
+            up.Ricochet(za, za.transform.position, 30f, 0, 0, 0);
+            yield return WaitUntil(() => zb.Health < hb2 || !zb.Damageable, 3f);
+            Assert.IsTrue(zb.Health < hb2 || !zb.Damageable, "bounce bullet hit the next zombie");
+            if (zb.Damageable) zb.Despawn();
+
+            // Mines: a reload drops one; a zombie stepping on it sets it off.
+            up.Take(CardId.Mines);
+            Teleport(p, home);
+            yield return null;
+            w.SetAmmo(1, w.Reserve);
+            w.StartReload();
+            yield return null;
+            yield return null;
+            var mines = GameObject.Find("Mines");
+            Assert.NotNull(mines, "a mine was dropped on reload");
+            Transform mine = null;
+            foreach (Transform m in mines.transform) if (m.gameObject.activeSelf) mine = m;
+            Assert.NotNull(mine);
+            Teleport(p, ClearSpot(home, 9f));
+            yield return Wait(1f); // armed
+            heard.Clear();
+            var zm = sp.SpawnMinion(mine.position + new Vector3(0.6f, 0f, 0f), wp);
+            yield return WaitUntil(() => !mine.gameObject.activeSelf, 8f);
+            Assert.IsFalse(mine.gameObject.activeSelf, "mine went off");
+            Assert.IsTrue(heard.Contains(SfxId.Explosion));
+            if (zm.Damageable) zm.Despawn();
+
+            // Drone: orbits above the soldier and shoots.
+            up.Take(CardId.Drone);
+            yield return null;
+            var drone = GameObject.Find("Drone(Clone)");
+            Assert.NotNull(drone, "drone out");
+            Assert.Greater(drone.transform.position.y, 1.5f, "flies above the soldier");
+            var zd = sp.SpawnMinion(ClearSpot(p.transform.position, 6f), wp);
+            yield return WaitUntil(() => zd.Targetable, 8f);
+            float hd = zd.MaxHealth;
+            yield return WaitUntil(() => !zd.Damageable || zd.Health < hd, 6f);
+            Assert.IsTrue(!zd.Damageable || zd.Health < hd, "drone hits zombies");
+            if (zd.Damageable) zd.Despawn();
+
+            // Adrenaline: low health → faster fire.
+            up.Take(CardId.Adrenaline);
+            float rate = w.fireRate;
+            p.TakeDamage(p.Health - p.maxHealth * 0.3f, Vector3.forward);
+            yield return null;
+            Assert.Greater(w.fireRate, rate, "adrenaline kicks in below 40 %");
+
+            // Armour plate: the next hit is soaked whole.
+            up.Take(CardId.Armor);
+            Assert.AreEqual(1, up.ArmorLeft);
+            yield return Wait(1.2f); // past the invulnerability window
+            float hp = p.Health;
+            p.TakeDamage(10f, Vector3.forward);
+            Assert.AreEqual(hp, p.Health, 0.01f, "armour soaks the hit");
+            Assert.AreEqual(0, up.ArmorLeft);
+
+            Assert.AreEqual(4, (int)WeaponId.Uzi);
+            Assert.AreEqual(SfxId.ShootUzi, Economy.Weapon(WeaponId.Uzi).sfx);
+        }
+        finally { GameAudio.OnSfx -= h; }
+    }
+
     [UnityTest]
     public IEnumerator AudioHooks()
     {
@@ -813,6 +922,17 @@ public class GameSmokeTest
         shop.Open(ShopUI.Tab.Characters, 0);
         Assert.AreEqual(3, shop.ItemCount, "soldier + 2 characters");
 
+        // 1.1.0: gun finish (on the selected SMG) with gold, tracer with gems.
+        shop.Open(ShopUI.Tab.Skins, (int)GunSkinId.Desert);
+        Assert.AreEqual(Economy.GunSkins.Length, shop.ItemCount);
+        shop.ActNow();
+        Assert.IsTrue(Profile.Owns(GunSkinId.Desert));
+        Assert.AreEqual(GunSkinId.Desert, Profile.SkinOf(WeaponId.Smg), "bought finish goes on the selected gun");
+        shop.Open(ShopUI.Tab.Tracers, (int)TracerId.Fire);
+        Assert.AreEqual(Economy.Tracers.Length, shop.ItemCount);
+        shop.ActNow();
+        Assert.AreEqual(TracerId.Fire, Profile.SelectedTracer, "gem tracer bought + equipped");
+
         // Gems: fake store purchase.
         int gems0 = Profile.Gems;
         shop.Open(ShopUI.Tab.Gems, 1);
@@ -833,6 +953,12 @@ public class GameSmokeTest
         Assert.AreEqual(Economy.Magazine(Economy.Weapon(WeaponId.Smg), 0), p.weapon.magazineSize);
         Assert.AreEqual(SfxId.ShootSmg, p.weapon.shootSfx);
         Assert.AreEqual(CostumeId.Woodland, lo.Costume);
+        Assert.AreEqual(GunSkinId.Desert, lo.GunSkin);
+        Assert.AreEqual(TracerId.Fire, p.weapon.tracer);
+        var gsk = lo.slots[(int)WeaponId.Smg].root.GetComponent<GunSkin>();
+        Assert.NotNull(gsk, "every gun has a GunSkin");
+        Assert.AreEqual(GunSkinId.Desert, gsk.Current);
+        StringAssert.Contains("M_GunSkin_Desert", gsk.renderers[0].sharedMaterials[0].name, "finish materials on the model");
         yield return Wait(0.5f);
 
         // Death → gold, continue with gems, second death → no second continue, 2x gold with a (fake) ad.
@@ -2162,6 +2288,12 @@ public class GameSmokeTest
         mm.shopUI.Open(ShopUI.Tab.Weapons, 0); yield return Wait(0.3f); S("ui04_shop_weapons");
         mm.shopUI.Open(ShopUI.Tab.Characters, 0); yield return Wait(0.3f); S("ui05_shop_characters");
         mm.shopUI.Open(ShopUI.Tab.Costumes, 0); yield return Wait(0.3f); S("ui05b_shop_costumes");
+        // 1.1.0: Uzi held + finishes + tracers.
+        Profile.Grant(1800, 0, "test"); Profile.BuyWeapon(WeaponId.Uzi); Profile.SelectWeapon(WeaponId.Uzi);
+        mm.shopUI.Open(ShopUI.Tab.Weapons, (int)WeaponId.Uzi); yield return Wait(0.3f); S("ui04b_shop_uzi");
+        mm.shopUI.Open(ShopUI.Tab.Skins, (int)GunSkinId.Gold); yield return Wait(0.4f); S("ui05c_shop_skins");
+        mm.shopUI.Open(ShopUI.Tab.Tracers, (int)TracerId.Rainbow); yield return Wait(0.4f); S("ui05d_shop_tracers");
+        mm.shopUI.Open(ShopUI.Tab.Characters, 0); yield return Wait(0.3f); S("ui05e_shop_uzi_held");
         mm.shopUI.Open(ShopUI.Tab.Bonuses, 0); yield return null; S("ui06_shop_bonuses");
         mm.shopUI.Open(ShopUI.Tab.Gems, 0); yield return null; S("ui07_shop_gems");
         {

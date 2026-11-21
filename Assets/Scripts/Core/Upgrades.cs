@@ -6,11 +6,13 @@ public enum CardId
 {
     Pierce, FireRate, BigMag, FastReload, DoubleShot, Crit, KillBlast, MaxHealth,
     Lifesteal, MoveSpeed, Magnet, Shotgun, Turret, Grenade, BreatherHeal,
+    // 1.1.0
+    Ricochet, Shock, Frost, Mines, Drone, Adrenaline, Armor,
 }
 
 public enum Rarity { Common, Rare, Epic }
 
-public enum Synergy { FlameShot, TurretMaster, Demolition, IronBlood, Deadeye }
+public enum Synergy { FlameShot, TurretMaster, Demolition, IronBlood, Deadeye, Storm, Minefield, SkyGuard }
 
 public struct CardDef
 {
@@ -51,6 +53,13 @@ public class Upgrades : MonoBehaviour
         Def(CardId.Turret, "TRT", Rarity.Epic, 3),
         Def(CardId.Grenade, "o", Rarity.Rare, 3),
         Def(CardId.BreatherHeal, "+", Rarity.Rare, 3),
+        Def(CardId.Ricochet, "<>", Rarity.Rare, 3),
+        Def(CardId.Shock, "~", Rarity.Epic, 3),
+        Def(CardId.Frost, "*", Rarity.Rare, 3),
+        Def(CardId.Mines, "M", Rarity.Rare, 3),
+        Def(CardId.Drone, "D", Rarity.Epic, 3),
+        Def(CardId.Adrenaline, "A", Rarity.Common, 3),
+        Def(CardId.Armor, "Z", Rarity.Rare, 3),
     };
 
     static CardDef Def(CardId id, string icon, Rarity r, int max) =>
@@ -74,8 +83,9 @@ public class Upgrades : MonoBehaviour
     public Sprite IconOf(CardId id) => cardSprites != null && (int)id < cardSprites.Length ? cardSprites[(int)id] : null;
 
     /// <summary>Cards that raise damage output; the first <see cref="GuaranteedDamagePicks"/> offers always contain one.</summary>
-    public static readonly CardId[] DamageCards = { CardId.Pierce, CardId.FireRate, CardId.DoubleShot, CardId.Crit, CardId.KillBlast, CardId.Shotgun };
-    public const int GuaranteedDamagePicks = 2;
+    public static readonly CardId[] DamageCards = { CardId.Pierce, CardId.FireRate, CardId.DoubleShot, CardId.Crit, CardId.KillBlast, CardId.Shotgun, CardId.Ricochet, CardId.Shock };
+    /// <summary>3 since 1.1.0: the 22-card pool (7 new) thinned the damage cards in the first offers.</summary>
+    public const int GuaranteedDamagePicks = 3;
     public static bool IsDamageCard(CardId id) => Array.IndexOf(DamageCards, id) >= 0;
 
     // ---------------------------------------------------------------- hidden synergies (pure, unit-tested)
@@ -87,6 +97,9 @@ public class Upgrades : MonoBehaviour
         (Synergy.Demolition, CardId.Grenade, CardId.KillBlast),   // grenades more often, bigger kill blasts
         (Synergy.IronBlood, CardId.Lifesteal, CardId.MaxHealth),  // double lifesteal
         (Synergy.Deadeye, CardId.Crit, CardId.DoubleShot),        // +10 % crit chance
+        (Synergy.Storm, CardId.Shock, CardId.Ricochet),           // every bounce shocks, +1 shock target
+        (Synergy.Minefield, CardId.Mines, CardId.KillBlast),      // +2 mines, bigger blasts
+        (Synergy.SkyGuard, CardId.Drone, CardId.FireRate),        // drones fire faster + pierce
     };
     public static bool HasSynergy(int[] levels, Synergy s)
     {
@@ -94,7 +107,9 @@ public class Upgrades : MonoBehaviour
         return false;
     }
     public const float FlameShotDamageMul = 1.4f, TurretMasterRateMul = 1.4f, DemolitionGrenadeMul = 0.7f,
-        DemolitionBlastMul = 1.3f, IronBloodLifestealMul = 2f, DeadeyeCrit = 0.1f;
+        DemolitionBlastMul = 1.3f, IronBloodLifestealMul = 2f, DeadeyeCrit = 0.1f,
+        MinefieldRadiusMul = 1.4f, SkyGuardRateMul = 1.5f;
+    public const int MinefieldExtraMines = 2, StormExtraTargets = 1;
     public bool Has(Synergy s) => HasSynergy(levels, s);
     public event Action<Synergy> SynergyUnlocked;
 
@@ -113,6 +128,13 @@ public class Upgrades : MonoBehaviour
     public float grenadeRadius = 3.2f;
     public float grenadeRange = 12f;
     public float killBlastRadius = 2.6f;
+    [Header("1.1.0 cards")]
+    public GameObject minePrefab;
+    public GameObject dronePrefab;
+    public float ricochetRange = 7f;
+    public float shockRange = 4.5f;
+    public float mineTrigger = 1.3f, mineRadius = 2.6f;
+    public float droneRange = 9f, droneOrbit = 1.6f, droneHeight = 2.3f;
 
     public event Action<CardId, int> Changed;
     public int Picks { get; private set; }
@@ -264,8 +286,10 @@ public class Upgrades : MonoBehaviour
     {
         switch (id)
         {
-            case CardId.Pierce: case CardId.FireRate: case CardId.DoubleShot: case CardId.Crit: return Group.Damage;
-            case CardId.KillBlast: case CardId.Shotgun: case CardId.Turret: case CardId.Grenade: return Group.Build;
+            case CardId.Pierce: case CardId.FireRate: case CardId.DoubleShot: case CardId.Crit:
+            case CardId.Ricochet: case CardId.Shock: return Group.Damage;
+            case CardId.KillBlast: case CardId.Shotgun: case CardId.Turret: case CardId.Grenade:
+            case CardId.Mines: case CardId.Drone: return Group.Build;
             default: return Group.Utility;
         }
     }
@@ -316,6 +340,26 @@ public class Upgrades : MonoBehaviour
     public static float ShotgunInterval(int l) => l == 1 ? 1.6f : l == 2 ? 1.25f : 0.95f;
     /// <summary>At most one turret at a time; two with the card at level 3.</summary>
     public static int MaxTurrets(int l) => l >= 3 ? 2 : l > 0 ? 1 : 0;
+    // 1.1.0
+    /// <summary>Ricochet: bounces per kill chain = level; each bounce keeps this share of the damage.</summary>
+    public static float RicochetDamageMul(int l) => 0.5f + 0.1f * l;
+    /// <summary>Shock: crits arc to this many nearby zombies for <see cref="ShockDamageMul"/> of the hit.</summary>
+    public static int ShockTargets(int l) => l > 0 ? 1 + l : 0;
+    public const float ShockDamageMul = 0.45f;
+    /// <summary>Shock also fires on this share of ordinary (non-crit) hits.</summary>
+    public static float ShockChance(int l) => 0.06f * l;
+    /// <summary>Frost: speed multiplier while chilled (bosses get half the slow).</summary>
+    public static float FrostSlow(int l) => l <= 0 ? 1f : 0.85f - 0.1f * l;
+    public const float FrostSeconds = 1.6f;
+    public static int MaxMines(int l) => l > 0 ? 1 + l : 0;
+    public static float MineDamage(int l) => 100f + 40f * (l - 1);
+    public static int DroneCount(int l) => l >= 3 ? 2 : l > 0 ? 1 : 0;
+    public static float DroneRate(int l) => 2.5f + 1f * l;
+    public static float DroneDamage(int l) => 15f + 4f * (l - 1);
+    /// <summary>Adrenaline: below <see cref="AdrenalineHp"/> of max health, fire rate × this and move ×1.15.</summary>
+    public static float AdrenalineRate(int l) => 1.1f + 0.15f * l;
+    public const float AdrenalineHp = 0.4f, AdrenalineMove = 1.15f;
+    public static int ArmorCharges(int l) => l;
 
     int DeployedTurrets()
     {
@@ -339,6 +383,7 @@ public class Upgrades : MonoBehaviour
             case CardId.Turret: DeployTurret(); break;
             case CardId.Shotgun: shotgunT = 0.3f; break;
             case CardId.Grenade: grenadeT = 1f; break;
+            case CardId.Armor: armorCharges = ArmorCharges(l); break;
         }
         Changed?.Invoke(id, l);
         foreach (var sp in SynergyPairs)
@@ -347,14 +392,19 @@ public class Upgrades : MonoBehaviour
 
     void Recompute()
     {
-        weapon.fireRate = baseFireRate * FireRateMul(Level(CardId.FireRate));
+        int ad = Level(CardId.Adrenaline);
+        float adrRate = adrenaline ? AdrenalineRate(ad) : 1f;
+        weapon.fireRate = baseFireRate * FireRateMul(Level(CardId.FireRate)) * adrRate;
+        weapon.ricochet = Level(CardId.Ricochet);
+        weapon.frost = Level(CardId.Frost);
+        weapon.shock = Level(CardId.Shock);
         weapon.reloadTime = baseReload * ReloadMul(Level(CardId.FastReload));
         weapon.critChance = Mathf.Min(0.9f, CritChance(baseCrit, Level(CardId.Crit)) + (Has(Synergy.Deadeye) ? DeadeyeCrit : 0f));
         weapon.magazineSize = MagazineSize(baseMag, Level(CardId.BigMag));
         weapon.pierce = Level(CardId.Pierce);
         weapon.extraBullets = Level(CardId.DoubleShot);
         player.maxHealth = MaxHealth(baseMaxHealth, Level(CardId.MaxHealth));
-        player.moveSpeed = baseMove * MoveMul(Level(CardId.MoveSpeed));
+        player.moveSpeed = baseMove * MoveMul(Level(CardId.MoveSpeed)) * (adrenaline ? AdrenalineMove : 1f);
         if (Pickups.I) Pickups.I.magnetRadius = baseMagnet * MagnetMul(Level(CardId.Magnet));
     }
 
@@ -371,6 +421,7 @@ public class Upgrades : MonoBehaviour
     void OnWaveCleared(int wave)
     {
         if (Level(CardId.BreatherHeal) > 0 && !player.IsDead) player.Heal(player.maxHealth);
+        armorCharges = ArmorCharges(Level(CardId.Armor));
     }
 
     // ---------------------------------------------------------------- active cards
@@ -401,6 +452,248 @@ public class Upgrades : MonoBehaviour
             else grenadeT = 0.3f;
         }
         UpdateGrenades();
+
+        // 1.1.0
+        int ad = Level(CardId.Adrenaline);
+        bool adr = ad > 0 && player.Health < player.maxHealth * AdrenalineHp;
+        if (adr != adrenaline) { adrenaline = adr; Recompute(); }
+        UpdateMines(dt);
+        UpdateDrones(dt);
+        UpdateZaps(dt);
+    }
+
+    // ---------------------------------------------------------------- 1.1.0 cards
+    bool adrenaline;
+    int armorCharges;
+    public int ArmorLeft => armorCharges;
+
+    /// <summary>Armour plate: soaks one whole hit per charge (charges refill every wave). True = absorbed.</summary>
+    public bool AbsorbHit(Vector3 at, Vector3 fromDir)
+    {
+        if (armorCharges <= 0) return false;
+        armorCharges--;
+        if (Fx.I) Fx.I.Spark(at, -fromDir.normalized);
+        GameAudio.Play(SfxId.HitMetal, at, 0.8f, 1.2f);
+        if (player && player.flash) player.flash.Flash(0.06f);
+        GameManager.I.Shake(0.12f);
+        return true;
+    }
+
+    /// <summary>Ricochet: a kill sends a bounce bullet to the nearest other zombie in range.</summary>
+    public void Ricochet(Zombie from, Vector3 point, float damage, int bouncesLeft, int frostLevel, int shockLevel)
+    {
+        var next = NearestOther(point, ricochetRange, from);
+        if (!next) return;
+        Vector3 start = new Vector3(point.x, 1.15f, point.z);
+        Vector3 d = next.AimPoint - start; d.y = 0f;
+        if (d.sqrMagnitude < 0.01f) return;
+        weapon.SpawnBounce(start, d.normalized, damage * RicochetDamageMul(Level(CardId.Ricochet)), bouncesLeft, frostLevel, shockLevel);
+    }
+
+    static Zombie NearestOther(Vector3 p, float range, Zombie except)
+    {
+        Zombie best = null; float bd = range * range;
+        for (int i = 0; i < Zombie.Active.Count; i++)
+        {
+            var z = Zombie.Active[i];
+            if (z == except || !z.Targetable) continue;
+            Vector3 d = z.transform.position - p; d.y = 0f;
+            float m = d.sqrMagnitude;
+            if (m < bd) { bd = m; best = z; }
+        }
+        return best;
+    }
+
+    readonly Zombie[] shockBuf = new Zombie[8];
+
+    /// <summary>Shock: arcs from <paramref name="from"/> to the nearest zombies around it (no further chains).</summary>
+    public void Shock(Zombie from, float damage, Vector3 point, int level)
+    {
+        int n = ShockTargets(level) + (Has(Synergy.Storm) ? StormExtraTargets : 0);
+        n = Mathf.Min(n, shockBuf.Length);
+        int found = 0;
+        float r2 = shockRange * shockRange;
+        for (int k = 0; k < n; k++)
+        {
+            Zombie best = null; float bd = r2;
+            for (int i = 0; i < Zombie.Active.Count; i++)
+            {
+                var z = Zombie.Active[i];
+                if (z == from || !z.Targetable || System.Array.IndexOf(shockBuf, z, 0, found) >= 0) continue;
+                Vector3 d = z.transform.position - point; d.y = 0f;
+                float m = d.sqrMagnitude;
+                if (m < bd) { bd = m; best = z; }
+            }
+            if (!best) break;
+            shockBuf[found++] = best;
+        }
+        Vector3 a = new Vector3(point.x, 1.1f, point.z);
+        for (int k = 0; k < found; k++)
+        {
+            var z = shockBuf[k];
+            Vector3 b = z.AimPoint;
+            Vector3 dir = b - a; dir.y = 0f;
+            Zap(a, b);
+            z.TakeHit(damage * ShockDamageMul, false, dir.sqrMagnitude > 0.001f ? dir.normalized : Vector3.forward, b);
+            a = b;
+        }
+        for (int k = 0; k < found; k++) shockBuf[k] = null;
+        if (found > 0) GameAudio.Play(SfxId.HitMetal, point, 1.6f, 0.5f);
+    }
+
+    // Shock visuals: a few pooled jagged lines that fade out.
+    LineRenderer[] zaps;
+    float[] zapT;
+    int nextZap;
+    const float ZapLife = 0.14f;
+
+    void Zap(Vector3 a, Vector3 b)
+    {
+        if (zaps == null)
+        {
+            zaps = new LineRenderer[6]; zapT = new float[6];
+            var lib = CosmeticLibrary.I;
+            var mat = lib ? lib.TracerMat(TracerId.Plasma, 0) : null;
+            var root = new GameObject("ShockZaps").transform;
+            for (int i = 0; i < zaps.Length; i++)
+            {
+                var lr = new GameObject("Zap" + i).AddComponent<LineRenderer>();
+                lr.transform.SetParent(root, false);
+                lr.positionCount = 5; lr.useWorldSpace = true; lr.sharedMaterial = mat;
+                lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; lr.receiveShadows = false;
+                lr.numCapVertices = 0; lr.textureMode = LineTextureMode.Stretch;
+                lr.enabled = false;
+                zaps[i] = lr;
+            }
+        }
+        var l = zaps[nextZap]; zapT[nextZap] = ZapLife; nextZap = (nextZap + 1) % zaps.Length;
+        Vector3 side = Vector3.Cross((b - a).normalized, Vector3.up);
+        for (int i = 0; i < 5; i++)
+        {
+            float t = i / 4f;
+            Vector3 p = Vector3.Lerp(a, b, t);
+            if (i > 0 && i < 4) p += side * UnityEngine.Random.Range(-0.35f, 0.35f) + Vector3.up * UnityEngine.Random.Range(-0.2f, 0.2f);
+            l.SetPosition(i, p);
+        }
+        l.enabled = true;
+    }
+
+    void UpdateZaps(float dt)
+    {
+        if (zaps == null) return;
+        for (int i = 0; i < zaps.Length; i++)
+        {
+            if (zapT[i] <= 0f) continue;
+            zapT[i] -= dt;
+            float w = Mathf.Max(0f, zapT[i] / ZapLife) * 0.16f;
+            zaps[i].startWidth = zaps[i].endWidth = w;
+            if (zapT[i] <= 0f) zaps[i].enabled = false;
+        }
+    }
+
+    // Mines: one drops at your feet when a reload starts; armed after a moment, a zombie stepping close sets it off.
+    Transform[] mines;
+    float[] mineArm;
+    int mineNext;
+    bool wasReloading;
+    float mineCheckT;
+
+    int MineCap => MaxMines(Level(CardId.Mines)) + (Has(Synergy.Minefield) ? MinefieldExtraMines : 0);
+
+    void UpdateMines(float dt)
+    {
+        int l = Level(CardId.Mines);
+        bool rl = weapon.IsReloading;
+        if (l > 0 && rl && !wasReloading) DropMine();
+        wasReloading = rl;
+        if (mines == null) return;
+        mineCheckT -= dt;
+        bool check = mineCheckT <= 0f;
+        if (check) mineCheckT = 0.08f;
+        float trig2 = mineTrigger * mineTrigger;
+        for (int i = 0; i < mines.Length; i++)
+        {
+            var m = mines[i];
+            if (!m.gameObject.activeSelf) continue;
+            mineArm[i] -= dt;
+            // Blink: the red light flashes faster once armed.
+            var lt = m.childCount > 1 ? m.GetChild(1) : null;
+            if (lt) lt.gameObject.SetActive(Mathf.Repeat(Time.time * (mineArm[i] > 0f ? 2f : 4f), 1f) < 0.5f);
+            if (!check || mineArm[i] > 0f) continue;
+            Vector3 mp = m.position;
+            for (int k = 0; k < Zombie.Active.Count; k++)
+            {
+                var z = Zombie.Active[k];
+                if (!z.Targetable) continue;
+                Vector3 d = z.transform.position - mp; d.y = 0f;
+                if (d.sqrMagnitude > trig2) continue;
+                m.gameObject.SetActive(false);
+                float r = mineRadius * (Has(Synergy.Minefield) ? MinefieldRadiusMul : 1f);
+                Explosions.Explode(mp, r, MineDamage(l) * weapon.DamageScale, 0f, SfxId.Explosion, 0.3f, null, false);
+                break;
+            }
+        }
+    }
+
+    void DropMine()
+    {
+        if (!minePrefab) return;
+        if (mines == null)
+        {
+            mines = new Transform[MaxMines(3) + MinefieldExtraMines]; mineArm = new float[mines.Length];
+            var root = new GameObject("Mines").transform;
+            for (int i = 0; i < mines.Length; i++) { mines[i] = Instantiate(minePrefab, root).transform; mines[i].gameObject.SetActive(false); }
+        }
+        int cap = Mathf.Min(MineCap, mines.Length);
+        int slot = -1;
+        for (int i = 0; i < cap; i++) if (!mines[i].gameObject.activeSelf) { slot = i; break; }
+        if (slot < 0) { slot = mineNext % cap; mineNext++; } // all out: the oldest moves
+        Vector3 p = player.transform.position; p.y = 0f;
+        mines[slot].position = p;
+        mines[slot].gameObject.SetActive(true);
+        mineArm[slot] = 0.7f;
+        GameAudio.Play(SfxId.GrenadeThrow, p, 0.7f, 0.6f);
+    }
+
+    // Drones: orbit the soldier and shoot the nearest zombie.
+    Transform[] drones;
+    float[] droneT;
+    float droneAngle;
+
+    void UpdateDrones(float dt)
+    {
+        int l = Level(CardId.Drone);
+        if (l <= 0 || !dronePrefab) return;
+        if (drones == null)
+        {
+            drones = new Transform[2]; droneT = new float[2];
+            for (int i = 0; i < 2; i++) { drones[i] = Instantiate(dronePrefab).transform; drones[i].gameObject.SetActive(false); }
+        }
+        int count = DroneCount(l);
+        droneAngle += 100f * dt;
+        Vector3 c = player.transform.position;
+        bool sky = Has(Synergy.SkyGuard);
+        float rate = DroneRate(l) * (sky ? SkyGuardRateMul : 1f);
+        for (int i = 0; i < drones.Length; i++)
+        {
+            var d = drones[i];
+            bool on = i < count;
+            if (d.gameObject.activeSelf != on) d.gameObject.SetActive(on);
+            if (!on) continue;
+            float a = (droneAngle + i * 180f) * Mathf.Deg2Rad;
+            Vector3 pos = c + new Vector3(Mathf.Cos(a) * droneOrbit, droneHeight + Mathf.Sin(Time.time * 3f + i) * 0.12f, Mathf.Sin(a) * droneOrbit);
+            d.position = pos;
+            if (d.childCount > 0) d.GetChild(0).Rotate(0f, 1440f * dt, 0f, Space.Self);
+            droneT[i] -= dt;
+            if (droneT[i] > 0f) continue;
+            var z = Zombie.FindNearest(pos, droneRange);
+            if (!z) { droneT[i] = 0.15f; continue; }
+            droneT[i] = 1f / rate;
+            Vector3 aim = z.AimPoint - pos;
+            d.rotation = Quaternion.LookRotation(new Vector3(aim.x, 0f, aim.z));
+            weapon.SpawnBullet(pos, pos, aim.normalized, 52f, DroneDamage(l) * weapon.DamageScale, UnityEngine.Random.value < weapon.critChance * 0.5f, 0.3f, sky ? 1 : 0);
+            GameAudio.Play(SfxId.ShootSmg, pos, 1.35f, 0.3f);
+        }
     }
 
     void FireShotgun(Zombie target)

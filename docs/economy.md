@@ -22,11 +22,13 @@ Kaynak: `Assets/Scripts/Core/Economy.cs` (saf kurallar, EditMode testli `Economy
 | SMG | 900 altın (~3–4 tur) |
 | Pompalı | 1200 altın (~4–5 tur) |
 | Ağır makineli | 1500 altın (~5–6 tur) |
-| Keskin nişancı | 1800 altın (~6–7 tur) |
+| Uzi (1.1.0, keskin nişancının yerine — sahipleri Uzi'yi + yükseltmelerini alır) | 1800 altın (~6–7 tur) |
 | Yükseltme (hasar +%8 / şarjör +%12 / reload −%7 seviye başına, 5 seviye) | taban hasar 160, şarjör/reload 120 × silah katsayısı (1.0–1.4) × 1.55^seviye |
-| M4 yükseltmeleri (tümü) | 5790 · SMG 6350 · Pompalı 6930 · Ağır 7500 · Keskin 8090 → **toplam 34 660** |
+| M4 yükseltmeleri (tümü) | 5790 · SMG 6350 · Pompalı 6930 · Ağır 7500 · Uzi 8090 → **toplam 34 660** |
 | Kostümler (asker derileri, mağazada "Kostümler") | Orman 600, Çöl 800, Gece 1200, Kutup 1500 altın · Altın 200 elmas · Komando yalnız başlangıç paketinde |
 | Karakterler (tam model, mağazada "Karakterler") | Özel Harekat 250 elmas · İtfaiyeci 250 elmas (`Economy.CharacterGems`; = 149,99 TL paketi) |
+| Silah kaplaması (1.1.0, bir kez alınır, her silaha ayrı takılır) | Çöl 1500 · Orman 1500 · Kutup 2000 · Kızıl 2500 · Okyanus 2500 altın · Karbon 60💎 · Zehir 90💎 · Krom 120💎 · Altın Kaplama 180💎 |
+| Mermi izi (1.1.0, co-op'ta arkadaşlar da görür) | Kırmızı 1200 · Yeşil 1200 · Mavi 1500 · Mor 2000 altın · Alev 70💎 · Plazma 100💎 · Altın Işık 130💎 · Gökkuşağı 160💎 |
 | Başlangıç canı (+10 can/seviye, 3 seviye) | 800 / 1600 / 3200 |
 | Başlangıç kartı (1 tur, tüketilir) | 250 |
 | Altın takviyesi +%10 (kalıcı) | 4000 |
@@ -34,6 +36,8 @@ Kaynak: `Assets/Scripts/Core/Economy.cs` (saf kurallar, EditMode testli `Economy
 | Elmas → altın | 40💎 → 1000, 100💎 → 3000 |
 
 **Toplam altın hedefi:** silahlar 5400 + yükseltmeler 34 660 + bonuslar 9600 + kostümler 4100 ≈ 54 000 → günde ~1800 ile **~4 hafta** (yalnız silah + yükseltme ≈ 3 hafta). VIP / takviye ile ~%25–35 kısalır.
+
+**Elmas teşviki (1.1.0):** sade görünümler altınla (≈1–1.5 gün), gösterişli olanlar (parlayan, animasyonlu) yalnız elmasla. En ucuz elmas ürünü (60–70) en küçük pakete (70 💎 / 49,99 TL) sığar; en iyiler (Gökkuşağı 160, Altın Kaplama 180) 150 / 250'lik paketleri hedefler. Kaplama tüm silahlarda kullanıldığı için bir elmas kaplama kostümden değerli. Elmas yetmezse kart doğrudan Elmas sekmesini açar.
 
 ## Pay-to-win sınırı
 - Gerçek parayla güç satılmaz: elmas yalnız kostüm, devam, altın takası; altın takası günlük kazancın ~1–1.5 günü kadar.

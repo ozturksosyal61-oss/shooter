@@ -20,6 +20,13 @@ public class PreviewStage : MonoBehaviour
     [Tooltip("Weapons the character holds (indexed by WeaponId), children of the soldier pivot.")]
     public Held[] heldWeapons;
     public float degreesPerSecond = 35f;
+    [Tooltip("1.1.0 tracer preview: quads streaming out of the shown gun's muzzle (children of the stage).")]
+    public Renderer[] tracerQuads;
+    TracerId shownTracer;
+    bool tracerMode;
+    float tracerT;
+    Vector3 tracerFrom, pivotHome;
+    bool pivotHomeSet;
     public Vector3 soldierCamPos, soldierLook, weaponCamPos, weaponLook;
 
     // -nographics (tests, bots): no GPU → a render-texture camera would only log errors.
@@ -53,6 +60,8 @@ public class PreviewStage : MonoBehaviour
                 if (i == (int)held) h = hw;
             }
         if (activeRig && h != null) { activeRig.weaponRoot = h.root; activeRig.rightGrip = h.rightGrip; activeRig.leftGrip = h.leftGrip; }
+        if (h != null) GunSkin.ApplyTo(h.root, Profile.SkinOf(held));
+        SetTracers(false);
         cam.transform.localPosition = soldierCamPos;
         cam.transform.LookAt(transform.TransformPoint(soldierLook));
     }
@@ -83,8 +92,15 @@ public class PreviewStage : MonoBehaviour
         return true;
     }
 
-    public void ShowWeapon(WeaponId w)
+    public void ShowWeapon(WeaponId w) => ShowWeapon(w, Profile.SkinOf(w));
+
+    /// <summary>The gun alone in finish <paramref name="skin"/> (shop: weapon detail + finish cards).</summary>
+    public void ShowWeapon(WeaponId w, GunSkinId skin)
     {
+        SetTracers(false);
+        if (!pivotHomeSet) { pivotHome = weaponPivot.localPosition; pivotHomeSet = true; }
+        weaponPivot.localPosition = pivotHome;
+        if ((int)w < weapons.Length) GunSkin.ApplyTo(weapons[(int)w], skin);
         cam.enabled = CanRender;
         soldierPivot.gameObject.SetActive(false);
         weaponPivot.gameObject.SetActive(true);
@@ -93,8 +109,80 @@ public class PreviewStage : MonoBehaviour
         cam.transform.LookAt(transform.TransformPoint(weaponLook));
     }
 
+    /// <summary>Tracer card: the selected gun side-on, bullets of look <paramref name="t"/> streaming from its muzzle.</summary>
+    public void ShowTracer(TracerId t, WeaponId w)
+    {
+        ShowWeapon(w, Profile.SkinOf(w));
+        // Barrel to -X = screen right (the camera looks down -Z); bullets fly further right.
+        weaponPivot.localRotation = Quaternion.Euler(0f, -90f, 0f);
+        weaponPivot.localPosition = pivotHome + new Vector3(0.22f, 0f, 0f); // gun to the left of a narrow card, room for the bullets
+        var mz = (int)w < weapons.Length && weapons[(int)w] ? weapons[(int)w].Find("Muzzle") : null;
+        tracerFrom = mz ? transform.InverseTransformPoint(mz.position) : weaponLook;
+        shownTracer = t;
+        SetTracers(true);
+        var lib = CosmeticLibrary.I;
+        if (tracerQuads != null && lib)
+            for (int i = 0; i < tracerQuads.Length; i++) if (tracerQuads[i]) tracerQuads[i].sharedMaterial = lib.TracerMat(t, i);
+        tracerT = 0f;
+    }
+
+    void SetTracers(bool on)
+    {
+        tracerMode = on;
+        if (tracerQuads != null) foreach (var q in tracerQuads) if (q) q.gameObject.SetActive(on);
+    }
+
+    /// <summary>One still of the gun in a finish (finish cards), like <see cref="Snapshot"/>.</summary>
+    public bool SnapshotWeapon(WeaponId w, GunSkinId skin, RenderTexture rt)
+    {
+        if (!CanRender || !cam || !rt) return false;
+        var rot = weaponPivot.localRotation;
+        ShowWeapon(w, skin);
+        weaponPivot.localRotation = Quaternion.Euler(0f, 62f, 0f);
+        var prev = cam.targetTexture;
+        cam.targetTexture = rt;
+        cam.Render();
+        cam.targetTexture = prev;
+        weaponPivot.localRotation = rot;
+        return true;
+    }
+
+    /// <summary>One still of a tracer look (tracer cards).</summary>
+    public bool SnapshotTracer(TracerId t, WeaponId w, RenderTexture rt)
+    {
+        if (!CanRender || !cam || !rt) return false;
+        ShowTracer(t, w);
+        tracerT = 0.25f;
+        PlaceTracers();
+        var prev = cam.targetTexture;
+        cam.targetTexture = rt;
+        cam.Render();
+        cam.targetTexture = prev;
+        return true;
+    }
+
+    void PlaceTracers()
+    {
+        if (tracerQuads == null) return;
+        var lib = CosmeticLibrary.I;
+        float wmul = lib ? lib.Width(shownTracer) : 1f;
+        bool flick = lib && lib.Flicker(shownTracer);
+        for (int i = 0; i < tracerQuads.Length; i++)
+        {
+            var q = tracerQuads[i];
+            if (!q) continue;
+            // Three bullets in flight, evenly spaced, looping 0 → 1.2 m past the muzzle (inside the card's frame).
+            float d = Mathf.Repeat(tracerT * 2f + i * 0.25f, 0.75f);
+            float len = Mathf.Min(d, 0.3f) + 0.05f;
+            float w = 0.07f * wmul * (flick ? 0.75f + 0.5f * Mathf.PerlinNoise(i * 3.1f, tracerT * 30f) : 1f);
+            q.transform.localPosition = tracerFrom + new Vector3(-(d + 0.03f - len * 0.5f), (i - 1) * 0.02f, 0f);
+            q.transform.localScale = new Vector3(w, len, 1f);
+        }
+    }
+
     public void ShowNone()
     {
+        SetTracers(false);
         if (cam) cam.enabled = false;
         if (soldierPivot) soldierPivot.gameObject.SetActive(false);
         if (weaponPivot) weaponPivot.gameObject.SetActive(false);
@@ -106,6 +194,7 @@ public class PreviewStage : MonoBehaviour
         if (soldierPivot) soldierPivot.Rotate(0f, d, 0f, Space.World);
         // Idle with the weapon up: aim layer on, hands on the grips (the rig reads the pivot's facing).
         if (activeRig && soldierPivot && soldierPivot.gameObject.activeInHierarchy) activeRig.Tick(Time.unscaledDeltaTime, Vector3.zero, 0f, true, false);
-        if (weaponPivot) weaponPivot.Rotate(0f, d * 1.3f, 0f, Space.World);
+        if (tracerMode) { tracerT += Time.unscaledDeltaTime; PlaceTracers(); }
+        else if (weaponPivot) weaponPivot.Rotate(0f, d * 1.3f, 0f, Space.World);
     }
 }

@@ -2,7 +2,12 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum WeaponId { M4, Smg, Shotgun, Hmg, Sniper }
+/// <summary>Uzi (1.1.0) took the sniper's slot (index 4): owners keep their purchase + upgrades (save v3 renames it).</summary>
+public enum WeaponId { M4, Smg, Shotgun, Hmg, Uzi }
+/// <summary>Weapon finishes (1.1.0, looks only): owned once, chosen per weapon. Order = shop order.</summary>
+public enum GunSkinId { Standard, Desert, Woodland, Arctic, Crimson, Ocean, Carbon, Toxic, Chrome, Gold }
+/// <summary>Bullet tracers (1.1.0, looks only; teammates see them too). Order = shop order.</summary>
+public enum TracerId { Standard, Red, Green, Blue, Purple, Fire, Plasma, Golden, Rainbow }
 public enum WeaponStat { Damage, Magazine, Reload }
 /// <summary>Standard..Commando: soldier textures. SpecOps / Firefighter (F15): whole other characters (own model, same animations).</summary>
 public enum CostumeId { Standard, Woodland, Desert, Night, Arctic, Gold, Commando, SpecOps, Firefighter }
@@ -30,6 +35,16 @@ public struct CostumeDef
     /// <summary>Only from the starter pack (IAP).</summary>
     public bool packOnly;
     public string Key => "costume." + id;
+}
+
+/// <summary>A cosmetic priced in gold or gems (gun finishes, tracers).</summary>
+[Serializable]
+public struct CosmeticDef
+{
+    public int id;
+    public int gold, gems;
+    public string key;
+    public bool Free => gold == 0 && gems == 0;
 }
 
 [Serializable]
@@ -93,7 +108,8 @@ public static class Economy
         new WeaponDef { id = WeaponId.Smg, price = 900, damage = 15f, fireRate = 17f, magazine = 50, reloadTime = 1.2f, spread = 6f, bulletSpeed = 50f, range = 0.45f, crit = 0.1f, pellets = 1, kick = 0.07f, shake = 0.012f, moveMul = 1.06f, sfx = SfxId.ShootSmg },
         new WeaponDef { id = WeaponId.Shotgun, price = 1200, damage = 17f, fireRate = 1.6f, magazine = 8, reloadTime = 1.9f, spread = 2f, bulletSpeed = 48f, range = 0.22f, crit = 0.08f, pellets = 7, pelletSpread = 6f, kick = 0.45f, shake = 0.14f, moveMul = 1f, sfx = SfxId.Shotgun },
         new WeaponDef { id = WeaponId.Hmg, price = 1500, damage = 22f, fireRate = 12f, magazine = 120, reloadTime = 3.2f, spread = 5f, bulletSpeed = 55f, range = 0.65f, crit = 0.1f, pellets = 1, kick = 0.16f, shake = 0.035f, moveMul = 0.9f, sfx = SfxId.ShootHmg },
-        new WeaponDef { id = WeaponId.Sniper, price = 1800, damage = 120f, fireRate = 1.4f, magazine = 6, reloadTime = 2.2f, spread = 0.5f, bulletSpeed = 90f, range = 0.9f, crit = 0.25f, pellets = 1, pierce = 4, kick = 0.6f, shake = 0.12f, moveMul = 0.97f, sfx = SfxId.ShootSniper },
+        // Uzi: the fastest gun and the lightest soldier — tiny magazine, near-instant reload, wide spray, short reach.
+        new WeaponDef { id = WeaponId.Uzi, price = 1800, damage = 14f, fireRate = 22f, magazine = 36, reloadTime = 0.75f, spread = 8f, bulletSpeed = 50f, range = 0.38f, crit = 0.1f, pellets = 1, kick = 0.05f, shake = 0.01f, moveMul = 1.12f, sfx = SfxId.ShootUzi },
     };
 
     public static readonly CostumeDef[] Costumes =
@@ -108,6 +124,39 @@ public static class Economy
         new CostumeDef { id = CostumeId.SpecOps, gems = CharacterGems },
         new CostumeDef { id = CostumeId.Firefighter, gems = CharacterGems },
     };
+
+    // Pricing (1.1.0, docs/economy.md): plain looks in gold (1–2 days of play), the showy ones only in gems — the
+    // cheapest gem item fits the smallest pack (70), the best ones ask for the 150 / 250 packs. Finishes are owned
+    // once and work on every weapon, so one gem finish is worth more than a costume.
+    public static readonly CosmeticDef[] GunSkins =
+    {
+        new CosmeticDef { id = (int)GunSkinId.Standard, key = "skin.Standard" },
+        new CosmeticDef { id = (int)GunSkinId.Desert, gold = 1500, key = "skin.Desert" },
+        new CosmeticDef { id = (int)GunSkinId.Woodland, gold = 1500, key = "skin.Woodland" },
+        new CosmeticDef { id = (int)GunSkinId.Arctic, gold = 2000, key = "skin.Arctic" },
+        new CosmeticDef { id = (int)GunSkinId.Crimson, gold = 2500, key = "skin.Crimson" },
+        new CosmeticDef { id = (int)GunSkinId.Ocean, gold = 2500, key = "skin.Ocean" },
+        new CosmeticDef { id = (int)GunSkinId.Carbon, gems = 60, key = "skin.Carbon" },
+        new CosmeticDef { id = (int)GunSkinId.Toxic, gems = 90, key = "skin.Toxic" },
+        new CosmeticDef { id = (int)GunSkinId.Chrome, gems = 120, key = "skin.Chrome" },
+        new CosmeticDef { id = (int)GunSkinId.Gold, gems = 180, key = "skin.Gold" },
+    };
+
+    public static readonly CosmeticDef[] Tracers =
+    {
+        new CosmeticDef { id = (int)TracerId.Standard, key = "tracer.Standard" },
+        new CosmeticDef { id = (int)TracerId.Red, gold = 1200, key = "tracer.Red" },
+        new CosmeticDef { id = (int)TracerId.Green, gold = 1200, key = "tracer.Green" },
+        new CosmeticDef { id = (int)TracerId.Blue, gold = 1500, key = "tracer.Blue" },
+        new CosmeticDef { id = (int)TracerId.Purple, gold = 2000, key = "tracer.Purple" },
+        new CosmeticDef { id = (int)TracerId.Fire, gems = 70, key = "tracer.Fire" },
+        new CosmeticDef { id = (int)TracerId.Plasma, gems = 100, key = "tracer.Plasma" },
+        new CosmeticDef { id = (int)TracerId.Golden, gems = 130, key = "tracer.Golden" },
+        new CosmeticDef { id = (int)TracerId.Rainbow, gems = 160, key = "tracer.Rainbow" },
+    };
+
+    public static CosmeticDef GunSkin(GunSkinId id) => GunSkins[(int)id];
+    public static CosmeticDef Tracer(TracerId id) => Tracers[(int)id];
 
     public static readonly BonusDef[] Bonuses =
     {

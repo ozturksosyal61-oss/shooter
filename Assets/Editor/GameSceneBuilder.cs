@@ -46,11 +46,14 @@ public static partial class GameSceneBuilder
         ConfigureAudioImports();
         var anims = ImportCharacterAnimations();
         BuildBulletPrefab(m);
+        BuildCosmetics(m);
         BuildSplatPrefab(m);
         BuildHealthPackPrefab(m, t);
         BuildAmmoBoxPrefab(t);
         BuildTurretPrefab(m);
         BuildGrenadePrefab(m);
+        BuildMinePrefab(m);
+        BuildDronePrefab(m);
         BuildZombiePrefab(m, anims);
         BuildSpecialZombiePrefabs(m, anims);
         var env = BuildEnvironmentPrefabs(m);
@@ -543,6 +546,47 @@ public static partial class GameSceneBuilder
         SavePrefab(root, $"{PrefabDir}/Grenade.prefab");
     }
 
+    /// <summary>1.1.0 Mines card: flat olive mine, red blinking light (child 1, toggled by Upgrades), orange ground glow.</summary>
+    static void BuildMinePrefab(Mats m)
+    {
+        var root = new GameObject("Mine");
+        var olive = Mat("M_Mine", "Universal Render Pipeline/Simple Lit", x => { x.SetTexture("_BaseMap", null); x.SetColor("_BaseColor", new Color(0.25f, 0.28f, 0.17f)); });
+        var body = Prim(PrimitiveType.Cylinder, "Body", root.transform, new Vector3(0f, 0.06f, 0f), new Vector3(0.55f, 0.06f, 0.55f), olive);
+        Prim(PrimitiveType.Cylinder, "Cap", body.transform, new Vector3(0f, 1.2f, 0f), new Vector3(0.4f, 0.8f, 0.4f), m.turretDark);
+        var red = Mat("M_MineLight", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", m.muzzle.GetTexture("_BaseMap")); x.SetColor("_BaseColor", new Color(1f, 0.12f, 0.08f, 1f)); x.SetFloat("_VertexColor", 0f); });
+        var light = Quad("Light", root.transform, red);
+        light.transform.localPosition = new Vector3(0f, 0.2f, 0f);
+        light.transform.localScale = Vector3.one * 0.45f;
+        var glow = Quad("Glow", root.transform, m.muzzle);
+        glow.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+        glow.transform.localScale = Vector3.one * 1.1f;
+        SavePrefab(root, $"{PrefabDir}/Mine.prefab");
+    }
+
+    /// <summary>1.1.0 Drone card: small quad-copter (child 0 = rotors, spun by Upgrades), cyan belly light.</summary>
+    static void BuildDronePrefab(Mats m)
+    {
+        var root = new GameObject("Drone");
+        var rotors = new GameObject("Rotors").transform; rotors.SetParent(root.transform, false); rotors.localPosition = new Vector3(0f, 0.08f, 0f);
+        var blade = Mat("M_DroneBlade", "Game/FxAlpha", x => { x.SetTexture("_BaseMap", m.muzzle.GetTexture("_BaseMap")); x.SetColor("_BaseColor", new Color(0.8f, 0.85f, 0.9f, 0.55f)); });
+        for (int i = 0; i < 4; i++)
+        {
+            float a = (45f + i * 90f) * Mathf.Deg2Rad;
+            var arm = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * 0.28f;
+            Prim(PrimitiveType.Cube, "Arm" + i, root.transform, arm * 0.5f, new Vector3(0.05f, 0.04f, 0.3f), m.turretDark, new Vector3(0f, 90f - (45f + i * 90f), 0f));
+            var q = Quad("Blade" + i, rotors, blade);
+            q.transform.localPosition = arm;
+            q.transform.localScale = Vector3.one * 0.3f;
+        }
+        Prim(PrimitiveType.Cube, "Body", root.transform, Vector3.zero, new Vector3(0.22f, 0.1f, 0.3f), m.turretBody);
+        Prim(PrimitiveType.Cube, "Gun", root.transform, new Vector3(0f, -0.06f, 0.18f), new Vector3(0.05f, 0.05f, 0.16f), m.turretDark);
+        var cyan = Mat("M_DroneLight", "Game/FxAdditive", x => { x.SetTexture("_BaseMap", m.muzzle.GetTexture("_BaseMap")); x.SetColor("_BaseColor", new Color(0.3f, 0.9f, 1f, 1f)); x.SetFloat("_VertexColor", 0f); });
+        var l = Quad("Light", root.transform, cyan);
+        l.transform.localPosition = new Vector3(0f, -0.07f, 0f);
+        l.transform.localScale = Vector3.one * 0.35f;
+        SavePrefab(root, $"{PrefabDir}/Drone.prefab");
+    }
+
     static void BuildSplatPrefab(Mats m)
     {
         var go = new GameObject("GooSplat");
@@ -831,6 +875,8 @@ public static partial class GameSceneBuilder
         var upgrades = new GameObject("Upgrades").AddComponent<Upgrades>();
         upgrades.turretPrefab = Load<Turret>("Turret");
         upgrades.grenadePrefab = LoadGo($"{PrefabDir}/Grenade.prefab");
+        upgrades.minePrefab = LoadGo($"{PrefabDir}/Mine.prefab");
+        upgrades.dronePrefab = LoadGo($"{PrefabDir}/Drone.prefab");
         upgrades.cardSprites = ui.cards;
 
         BuildObjectiveScene(cm);

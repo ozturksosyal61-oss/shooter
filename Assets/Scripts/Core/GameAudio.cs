@@ -18,7 +18,7 @@ public enum SfxId
     // F9 — boss
     BossRoar, BossStep, BossCharge, BossSlam,
     // F13 — weapons / economy
-    ShootSmg, ShootHmg, ShootSniper, Coin, Purchase,
+    ShootSmg, ShootHmg, ShootUzi, Coin, Purchase,
 }
 
 [Serializable]

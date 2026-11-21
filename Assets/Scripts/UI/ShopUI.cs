@@ -13,8 +13,9 @@ using UnityEngine.UI;
 /// </summary>
 public class ShopUI : MonoBehaviour
 {
-    public enum Tab { Weapons, Characters, Costumes, Bonuses, Gems }
-    enum Kind { Weapon, Costume, Bonus, Product, GoldOffer, FreeGems }
+    /// <summary>Sidebar order. Characters / Costumes / Skins / Tracers share the card pane.</summary>
+    public enum Tab { Weapons, Skins, Tracers, Characters, Costumes, Bonuses, Gems }
+    enum Kind { Weapon, Costume, Bonus, Product, GoldOffer, FreeGems, GunSkin, Tracer }
 
     struct Item { public Kind kind; public int index; public string product; public bool character; }
 
@@ -101,7 +102,8 @@ public class ShopUI : MonoBehaviour
 
         // Character / costume cards (pool; each tab shows its own subset).
         characterTemplate.button.gameObject.SetActive(false);
-        for (int i = 0; i < Economy.Costumes.Length; i++)
+        int cardCount = Mathf.Max(Economy.Costumes.Length, Mathf.Max(Economy.GunSkins.Length, Economy.Tracers.Length));
+        for (int i = 0; i < cardCount; i++)
         {
             var c = Clone(characterTemplate, characterContent);
             int idx = i;
@@ -137,6 +139,9 @@ public class ShopUI : MonoBehaviour
     /// <summary>Thumbnail key + what it shows (the soldier card follows its current skin).</summary>
     static int ThumbKey(Item it, out CostumeId shown)
     {
+        shown = CostumeId.Standard;
+        if (it.kind == Kind.GunSkin) return 300 + it.index;
+        if (it.kind == Kind.Tracer) return 400 + it.index;
         var c = (CostumeId)it.index;
         if (it.character && !Economy.IsCharacter(c)) { shown = Profile.SoldierSkin; return 200 + (int)shown; }
         shown = c;
@@ -151,15 +156,26 @@ public class ShopUI : MonoBehaviour
         bool redo = w != thumbWeapon, any = false;
         foreach (var it in items)
         {
-            if (it.kind != Kind.Costume) continue;
+            if (it.kind != Kind.Costume && it.kind != Kind.GunSkin && it.kind != Kind.Tracer) continue;
             int key = ThumbKey(it, out var c);
             if (thumbs.TryGetValue(key, out var rt) && rt && !redo) continue;
             if (!rt) { rt = new RenderTexture(252, 300, 24) { name = "Thumb" + key }; thumbs[key] = rt; }
-            any |= preview.Snapshot(c, w, rt);
+            if (it.kind == Kind.GunSkin) any |= preview.SnapshotWeapon(w, (GunSkinId)it.index, rt);
+            else if (it.kind == Kind.Tracer) any |= preview.SnapshotTracer((TracerId)it.index, w, rt);
+            else any |= preview.Snapshot(c, w, rt);
         }
         thumbWeapon = w;
         if (!any) return;
-        if (selected >= 0 && selected < items.Count) { ThumbKey(items[selected], out var sc); preview.ShowCostume(sc); }
+        if (selected >= 0 && selected < items.Count) ShowLive(items[selected]);
+    }
+
+    /// <summary>The live (turning) preview of the selected card.</summary>
+    void ShowLive(Item it)
+    {
+        var w = Profile.SelectedWeapon;
+        if (it.kind == Kind.GunSkin) preview.ShowWeapon(w, (GunSkinId)it.index);
+        else if (it.kind == Kind.Tracer) preview.ShowTracer((TracerId)it.index, w);
+        else { ThumbKey(it, out var sc); preview.ShowCostume(sc); }
     }
 
     RenderTexture ThumbOf(Item it) => thumbs.TryGetValue(ThumbKey(it, out _), out var rt) ? rt : null;
@@ -208,15 +224,25 @@ public class ShopUI : MonoBehaviour
                 for (int i = 0; i < Economy.Costumes.Length; i++)
                     if (!Economy.IsCharacter((CostumeId)i)) items.Add(new Item { kind = Kind.Costume, index = i });
                 break;
+            case Tab.Skins: for (int i = 0; i < Economy.GunSkins.Length; i++) items.Add(new Item { kind = Kind.GunSkin, index = i }); break;
+            case Tab.Tracers: for (int i = 0; i < Economy.Tracers.Length; i++) items.Add(new Item { kind = Kind.Tracer, index = i }); break;
             case Tab.Bonuses: for (int i = 0; i < Economy.Bonuses.Length; i++) items.Add(new Item { kind = Kind.Bonus, index = i }); break;
             case Tab.Gems:
                 items.Add(new Item { kind = Kind.FreeGems });
                 items.AddRange(productItems);
                 break;
         }
-        if (tab != Tab.Weapons && tab != Tab.Characters && tab != Tab.Costumes && preview) preview.ShowNone();
+        if (tab != Tab.Weapons && !CardTab(tab) && preview) preview.ShowNone();
+        // Equip on a finish = the selected weapon: say which one.
+        if (tab == Tab.Skins) Message(Loc.F("shop.skin.sub", Loc.T(Economy.Weapon(Profile.SelectedWeapon).Key)), 4f);
+        else if (tab == Tab.Tracers) Message(Loc.T("shop.tracer.sub"), 4f);
+        else if (messageT > 2f) { message.text = ""; messageT = 0f; } // a tab hint doesn't follow you to the next tab
+        if (select == 0 && tab == Tab.Skins) select = (int)Profile.SkinOf(Profile.SelectedWeapon);
+        if (select == 0 && tab == Tab.Tracers) select = (int)Profile.SelectedTracer;
         Select(Mathf.Clamp(select, 0, items.Count - 1));
     }
+
+    static bool CardTab(Tab t) => t == Tab.Characters || t == Tab.Costumes || t == Tab.Skins || t == Tab.Tracers;
 
     public void Close()
     {
@@ -259,6 +285,8 @@ public class ShopUI : MonoBehaviour
             case Kind.Weapon: return Loc.T(Economy.Weapons[it.index].Key);
             case Kind.Costume: return Loc.T(it.character && !Economy.IsCharacter((CostumeId)it.index) ? "menu.soldier_name" : Economy.Costumes[it.index].Key);
             case Kind.Bonus: return Loc.T(Economy.Bonuses[it.index].Key);
+            case Kind.GunSkin: return Loc.T(Economy.GunSkins[it.index].key);
+            case Kind.Tracer: return Loc.T(Economy.Tracers[it.index].key);
             case Kind.Product: return Loc.T(Economy.Product(it.product).Value.Key);
             case Kind.GoldOffer: return Loc.F("shop.gold_offer", Economy.GoldOffers[it.index].gold);
             default: return Loc.T("shop.free_gems");
@@ -277,6 +305,8 @@ public class ShopUI : MonoBehaviour
             case Tab.Weapons: RefreshWeapons(); break;
             case Tab.Characters:
             case Tab.Costumes: RefreshCharacters(); break;
+            case Tab.Skins:
+            case Tab.Tracers: RefreshLooks(); break;
             case Tab.Bonuses: RefreshBonuses(); break;
             default: RefreshGems(); break;
         }
@@ -376,6 +406,53 @@ public class ShopUI : MonoBehaviour
         previewImage.enabled = true;
     }
 
+    // ------------------------------------------------------------------ gun finishes + tracers (1.1.0)
+    static void Rarity(CosmeticDef d, out string key, out Color bg, out Color fg)
+    {
+        if (d.gems >= 150) { key = "rarity.legendary"; bg = UiKit.Hex(0x3A2A08); fg = UiKit.Gold; }
+        else if (d.gems > 0) { key = "rarity.epic"; bg = UiKit.Hex(0x2C1B45); fg = UiKit.Hex(0xC9A2FF); }
+        else if (d.gold > 0) { key = "rarity.rare"; bg = UiKit.Hex(0x14304A); fg = UiKit.Gem; }
+        else { key = "rarity.standard"; bg = UiKit.Hex(0x2A3324); fg = UiKit.Secondary; }
+    }
+
+    /// <summary>Finish / tracer cards: still of the selected gun in that finish (or firing that tracer); live when selected.</summary>
+    void RefreshLooks()
+    {
+        EnsureThumbs();
+        var w = Profile.SelectedWeapon;
+        for (int i = 0; i < characterCards.Count; i++)
+        {
+            var card = characterCards[i];
+            bool on = i < items.Count;
+            card.button.gameObject.SetActive(on);
+            if (!on) continue;
+            var it = items[i];
+            bool skin = it.kind == Kind.GunSkin;
+            var d = skin ? Economy.GunSkins[it.index] : Economy.Tracers[it.index];
+            bool owned = skin ? Profile.Owns((GunSkinId)it.index) : Profile.Owns((TracerId)it.index);
+            bool eq = skin ? Profile.SkinOf(w) == (GunSkinId)it.index : Profile.SelectedTracer == (TracerId)it.index;
+            bool sel = i == selected;
+            card.title.text = Name(it);
+            card.sub.text = Loc.T(d.key + ".desc");
+            Rarity(d, out var tagKey, out var tagBg, out var tagFg);
+            if (eq) { tagKey = "shop.equipped"; tagBg = UiKit.Hazard; tagFg = UiKit.Ink; }
+            card.tag.text = Loc.T(tagKey); card.tagBg.color = tagBg; card.tag.color = tagFg;
+            var thumb = sel ? previewImage.texture : ThumbOf(it);
+            card.preview.gameObject.SetActive(thumb);
+            card.preview.texture = thumb;
+            card.icon.gameObject.SetActive(!owned || !thumb);
+            card.icon.sprite = owned ? checkIcon : lockIcon;
+            if (card.selected) card.selected.gameObject.SetActive(sel || eq);
+            if (card.selected) card.selected.color = eq ? UiKit.Hazard : UiKit.Line2;
+            if (eq) SetButton(card.action, UiStyle.Disabled, Loc.T("shop.equipped"), false, checkIcon);
+            else if (owned) SetButton(card.action, UiStyle.Dark, Loc.T("shop.equip"));
+            else if (d.gems > 0) SetButton(card.action, UiStyle.Yellow, d.gems.ToString(), true, gemIcon);
+            else SetButton(card.action, UiStyle.Dark, d.gold.ToString(), true, coinIcon);
+            if (sel) ShowLive(it);
+        }
+        previewImage.enabled = true;
+    }
+
     // ------------------------------------------------------------------ bonuses
     void RefreshBonuses()
     {
@@ -459,10 +536,10 @@ public class ShopUI : MonoBehaviour
         Refresh();
     }
 
-    void Message(string s)
+    void Message(string s, float seconds = 2f)
     {
         message.text = s;
-        messageT = 2f;
+        messageT = seconds;
     }
 
     void DoAction()
@@ -503,6 +580,30 @@ public class ShopUI : MonoBehaviour
                     return;
                 }
                 Ask(d.gems > 0 ? Loc.F("shop.confirm_gems", Name(it), d.gems) : Loc.F("shop.confirm_gold", Name(it), d.gold), () => Result(Profile.BuyCostume(c)));
+                return;
+            }
+            case Kind.GunSkin:
+            case Kind.Tracer:
+            {
+                bool skin = it.kind == Kind.GunSkin;
+                var w = Profile.SelectedWeapon;
+                var d = skin ? Economy.GunSkins[it.index] : Economy.Tracers[it.index];
+                bool owned = skin ? Profile.Owns((GunSkinId)it.index) : Profile.Owns((TracerId)it.index);
+                if (owned)
+                {
+                    if (skin) Profile.SelectGunSkin(w, (GunSkinId)it.index); else Profile.SelectTracer((TracerId)it.index);
+                    Refresh();
+                    return;
+                }
+                if (!Profile.CanAfford(d.gold, d.gems))
+                {
+                    Message(Loc.T(d.gems > 0 ? "shop.no_gems" : "shop.no_gold"));
+                    if (d.gems > 0) Open(Tab.Gems, 1);
+                    return;
+                }
+                int idx = it.index;
+                Action buy = skin ? (Action)(() => Result(Profile.BuyGunSkin((GunSkinId)idx, w))) : () => Result(Profile.BuyTracer((TracerId)idx));
+                Ask(d.gems > 0 ? Loc.F("shop.confirm_gems", Name(it), d.gems) : Loc.F("shop.confirm_gold", Name(it), d.gold), buy);
                 return;
             }
             case Kind.Bonus:

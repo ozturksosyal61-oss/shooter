@@ -3,7 +3,7 @@
 Usage (numpy, scipy, soundfile):  python Tools/synth_guns.py .
   SFX/smg_shot_01..02     rifle_shot at 1.3x, high-passed, short tail          (derived from CC0)
   SFX/hmg_shot_01..02     rifle_shot at 0.82x + low body thump                (derived from CC0)
-  SFX/sniper_shot_01      rifle_shot at 0.72x + sharp crack + long echo tail   (derived from CC0)
+  SFX/uzi_shot_01..03     rifle_shot at 1.55x, high-passed, very short + click (derived from CC0)
   SFX/coin                bright double ping (gold counter tick)               (synth)
   SFX/purchase            cash chime: rising bell triad + shimmer              (synth)
 """
@@ -89,14 +89,11 @@ for i in range(2):
     thump = np.sin(2 * np.pi * np.cumsum(np.linspace(110, 45, int(0.25 * SR))) / SR) * np.exp(-t(0.25) * 14) * 0.6
     write(f"hmg_shot_{i + 1:02d}", trim(mix(s, thump), 0.55), -1.5)
 
-s = repitch(shots[0], 0.72)
-crack = hp(rng.standard_normal(int(0.03 * SR)), 2500) * env(int(0.03 * SR), 0.0005, 0.025) * 0.8
-echo = np.zeros(int(1.2 * SR))
-for k, (dly, g) in enumerate([(0.18, 0.35), (0.37, 0.22), (0.6, 0.12)]):
-    e = lp(s, 1800 - 400 * k) * g
-    st = int(dly * SR)
-    echo[st:st + len(e)] += e[: max(0, len(echo) - st)]
-write("sniper_shot_01", trim(mix(crack, s, echo), 1.2), -1)
+# Uzi (replaces the sniper, 1.1.0): snappier, higher and drier than the SMG, a tiny mechanical click on top.
+for i in range(3):
+    s = hp(repitch(shots[i], 1.55), 500)
+    click = hp(rng.standard_normal(int(0.012 * SR)), 3500) * env(int(0.012 * SR), 0.0003, 0.01) * 0.35
+    write(f"uzi_shot_{i + 1:02d}", trim(mix(click, s), 0.22), -3)
 
 
 def bell(f, sec, decay):

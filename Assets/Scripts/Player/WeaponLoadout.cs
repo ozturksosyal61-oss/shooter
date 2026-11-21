@@ -38,6 +38,7 @@ public class WeaponLoadout : MonoBehaviour
         var pc = GetComponent<PlayerController>();
         Apply(Override ?? (GameMode.Weekly ? WeeklyEvent.WeaponFor(WeeklyEvent.CurrentWeek) : Profile.SelectedWeapon), pc);
         ApplyCostume(Profile.SelectedCostume, pc);
+        ApplyLooks(Profile.SkinOf(Current), Profile.SelectedTracer, pc);
         pc.maxHealth += Economy.StartHealthBonus(Profile.BonusLevel(BonusId.StartHealth));
         if (GameMode.IsHard) pc.maxHealth = Mathf.Round(pc.maxHealth * ModeRules.HardPlayerHealthMul);
     }
@@ -83,6 +84,18 @@ public class WeaponLoadout : MonoBehaviour
         w.shotShake = d.shake;
         w.shootSfx = d.sfx;
         pc.moveSpeed *= d.moveMul;
+    }
+
+    public GunSkinId GunSkin { get; private set; }
+    public TracerId Tracer { get; private set; }
+
+    /// <summary>1.1.0 cosmetics: the current weapon's finish + this soldier's bullet tracers.</summary>
+    public void ApplyLooks(GunSkinId skin, TracerId tracer, PlayerController pc)
+    {
+        GunSkin = skin;
+        Tracer = tracer;
+        if (currentSlot != null) global::GunSkin.ApplyTo(currentSlot.root, skin);
+        if (pc && pc.weapon) pc.weapon.tracer = tracer;
     }
 
     public GameObject ModelFor(CostumeId c) =>

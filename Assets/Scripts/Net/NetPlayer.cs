@@ -12,6 +12,7 @@ public struct PlayerNetState : INetworkSerializable, IEquatable<PlayerNetState>
     public float hp01;
     public byte flags;        // 1 firing · 2 reloading · 4 dead (down or out) · 8 vaulting · 16 downed (revivable) · 32 grabbed
     public byte weapon, costume;
+    public byte gunSkin, tracer;   // 1.1.0 cosmetics
     public int score;
     public ushort kills;
     public byte revive;       // 0..255 revive progress while downed
@@ -34,6 +35,8 @@ public struct PlayerNetState : INetworkSerializable, IEquatable<PlayerNetState>
         s.SerializeValue(ref flags);
         s.SerializeValue(ref weapon);
         s.SerializeValue(ref costume);
+        s.SerializeValue(ref gunSkin);
+        s.SerializeValue(ref tracer);
         s.SerializeValue(ref score);
         s.SerializeValue(ref kills);
         s.SerializeValue(ref revive);
@@ -42,7 +45,7 @@ public struct PlayerNetState : INetworkSerializable, IEquatable<PlayerNetState>
 
     public bool Equals(PlayerNetState o) =>
         pos == o.pos && yaw == o.yaw && move == o.move && speed == o.speed && hp01 == o.hp01 && flags == o.flags && weapon == o.weapon
-        && costume == o.costume && score == o.score && kills == o.kills && revive == o.revive && bleed == o.bleed;
+        && costume == o.costume && gunSkin == o.gunSkin && tracer == o.tracer && score == o.score && kills == o.kills && revive == o.revive && bleed == o.bleed;
 }
 
 /// <summary>
@@ -90,7 +93,7 @@ public class NetPlayer : NetworkBehaviour
     SkinnedMeshRenderer avatarBody;
     HitFlash avatarFlash;
     Transform avatarFlashT;
-    byte shownWeapon = 255, shownCostume = 255;
+    byte shownWeapon = 255, shownCostume = 255, shownSkin = 255;
     bool shownDead;
     float flashUntil;
 
@@ -156,6 +159,8 @@ public class NetPlayer : NetworkBehaviour
             flags = f,
             weapon = (byte)(loadout ? loadout.Current : 0),
             costume = (byte)(loadout ? loadout.Costume : 0),
+            gunSkin = (byte)(loadout ? loadout.GunSkin : 0),
+            tracer = (byte)(loadout ? loadout.Tracer : 0),
             score = gm ? gm.Score : 0,
             kills = (ushort)Mathf.Min(gm ? gm.Kills : 0, ushort.MaxValue),
             revive = (byte)(team ? Mathf.RoundToInt(team.Revive01 * 255f) : 0),
@@ -181,6 +186,12 @@ public class NetPlayer : NetworkBehaviour
 
         if (s.weapon != shownWeapon) ShowWeapon((WeaponId)s.weapon);
         if (s.costume != shownCostume) ShowCostume((CostumeId)s.costume);
+        if (s.gunSkin != shownSkin)
+        {
+            shownSkin = s.gunSkin;
+            var sl = CurrentSlot();
+            if (sl != null) GunSkin.ApplyTo(sl.root, (GunSkinId)Mathf.Min(s.gunSkin, (byte)(Economy.GunSkins.Length - 1)));
+        }
         if (s.Dead != shownDead)
         {
             shownDead = s.Dead;
@@ -205,7 +216,7 @@ public class NetPlayer : NetworkBehaviour
                     {
                         float spread = def.pellets > 1 ? def.pelletSpread : def.spread;
                         Vector3 dir = Quaternion.Euler(0f, UnityEngine.Random.Range(-spread, spread), 0f) * avatar.forward;
-                        w.SpawnCosmetic(from, dir, def.bulletSpeed, def.range);
+                        w.SpawnCosmetic(from, dir, def.bulletSpeed, def.range, (TracerId)Mathf.Min(s.tracer, (byte)(Economy.Tracers.Length - 1)));
                     }
             }
         }
@@ -252,7 +263,7 @@ public class NetPlayer : NetworkBehaviour
         Destroy(holder);
         go.SetActive(true);
         avatar = go.transform;
-        shownWeapon = shownCostume = 255;
+        shownWeapon = shownCostume = shownSkin = 255;
         shownDead = false;
         AvatarCreated?.Invoke(this);
     }
@@ -260,6 +271,7 @@ public class NetPlayer : NetworkBehaviour
     void ShowWeapon(WeaponId id)
     {
         shownWeapon = (byte)id;
+        shownSkin = 255; // re-apply the finish on the newly shown gun
         if (avatarSlots == null) return;
         foreach (var sl in avatarSlots)
         {

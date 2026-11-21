@@ -493,8 +493,9 @@ public class PlaytestBot
 
     static readonly CardId[] Priority =
     {
-        CardId.DoubleShot, CardId.Pierce, CardId.FireRate, CardId.Turret, CardId.Shotgun, CardId.Grenade, CardId.KillBlast,
-        CardId.MaxHealth, CardId.Lifesteal, CardId.BreatherHeal, CardId.Crit, CardId.BigMag, CardId.FastReload, CardId.MoveSpeed, CardId.Magnet,
+        CardId.DoubleShot, CardId.Pierce, CardId.FireRate, CardId.Shock, CardId.Turret, CardId.Drone, CardId.Shotgun, CardId.Ricochet,
+        CardId.Grenade, CardId.KillBlast, CardId.Mines, CardId.MaxHealth, CardId.Lifesteal, CardId.Armor, CardId.BreatherHeal, CardId.Crit,
+        CardId.Frost, CardId.Adrenaline, CardId.BigMag, CardId.FastReload, CardId.MoveSpeed, CardId.Magnet,
     };
 
     /// <summary>Smart bots take the best card by a fixed priority; the simple bots take the first one.</summary>
@@ -505,6 +506,7 @@ public class PlaytestBot
         for (int i = 0; i < p.OfferCount; i++)
         {
             int rank = System.Array.IndexOf(Priority, p.OfferAt(i));
+            if (rank < 0) rank = Priority.Length;
             if (rank < bestRank) { bestRank = rank; best = i; }
         }
         return best;

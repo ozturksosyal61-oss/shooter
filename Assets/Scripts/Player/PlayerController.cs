@@ -217,6 +217,8 @@ public class PlayerController : MonoBehaviour
         if (IsDead || Time.time < invulnUntil) return;
         if (GameManager.I && GameManager.I.Won) return; // chapter cleared: the soldier is safe
         invulnUntil = Time.time + invulnerableTime;
+        // 1.1.0 Armour plate card: a charge soaks the whole hit (and keeps the combo).
+        if (Upgrades.I && Upgrades.I.AbsorbHit(transform.position + Vector3.up * 1.2f, fromDir)) return;
         lastDamageTime = Time.time;
         Health = Mathf.Max(0f, Health - amount);
         fromDir.y = 0f;

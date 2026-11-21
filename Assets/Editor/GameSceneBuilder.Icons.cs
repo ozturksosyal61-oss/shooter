@@ -176,6 +176,59 @@ public static partial class GameSceneBuilder
             case CardId.BreatherHeal:
                 return p => Min(Mathf.Max(RoundBox(p.x, p.y + 0.12f, 0.82f, 0.6f, 0.18f), -Plus(p - new Vector2(0f, -0.12f), 0.34f, 0.11f)),
                     Mathf.Max(Mathf.Abs(RoundBox(p.x, p.y - 0.55f, 0.32f, 0.22f, 0.12f)) - 0.07f, -(p.y - 0.5f)));
+            // ---- 1.1.0
+            case CardId.Ricochet:
+                // A round coming in from the bottom left, glancing off a wall, flying off up-right.
+                return p => Min(RoundBox(p.x + 0.05f, p.y + 0.78f, 0.82f, 0.07f, 0.03f),
+                    Seg(p, new Vector2(-0.8f, 0.55f), new Vector2(-0.1f, -0.6f), 0.08f),
+                    Bullet(Rot(p - new Vector2(0.42f, 0.12f), -32f), 0.2f, 0.95f),
+                    (p - new Vector2(-0.1f, -0.62f)).magnitude - 0.14f);
+            case CardId.Shock:
+                // Lightning bolt between two small nodes.
+                return p => Min(Poly(p, new[] { new Vector2(0.18f, 0.9f), new Vector2(-0.42f, 0.02f), new Vector2(-0.02f, 0.02f), new Vector2(-0.2f, -0.9f), new Vector2(0.45f, 0.06f), new Vector2(0.05f, 0.06f) }) - 0.02f,
+                    Mathf.Abs((p - new Vector2(-0.68f, 0.62f)).magnitude - 0.16f) - 0.05f,
+                    Mathf.Abs((p - new Vector2(0.68f, -0.62f)).magnitude - 0.16f) - 0.05f);
+            case CardId.Frost:
+                // Six-armed snowflake with little branches.
+                return p =>
+                {
+                    float d = 9f;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        Vector2 q = Rot(p, k * 60f);
+                        d = Min(d, Seg(q, new Vector2(0f, -0.88f), new Vector2(0f, 0.88f), 0.08f),
+                            Seg(q, new Vector2(0f, 0.5f), new Vector2(0.25f, 0.75f), 0.06f), Seg(q, new Vector2(0f, 0.5f), new Vector2(-0.25f, 0.75f), 0.06f),
+                            Seg(q, new Vector2(0f, -0.5f), new Vector2(0.25f, -0.75f), 0.06f), Seg(q, new Vector2(0f, -0.5f), new Vector2(-0.25f, -0.75f), 0.06f));
+                    }
+                    return d;
+                };
+            case CardId.Mines:
+                // Flat mine: wide base, dome, trigger pin.
+                return p => Min(RoundBox(p.x, p.y + 0.45f, 0.85f, 0.16f, 0.08f),
+                    Mathf.Max((p - new Vector2(0f, -0.32f)).magnitude - 0.6f, -(p.y + 0.3f)),
+                    RoundBox(p.x, p.y - 0.42f, 0.09f, 0.2f, 0.03f),
+                    (p - new Vector2(0f, 0.68f)).magnitude - 0.11f);
+            case CardId.Drone:
+                // Quad-copter from above: body, four arms, rotor rings.
+                return p =>
+                {
+                    float d = RoundBox(p.x, p.y, 0.24f, 0.24f, 0.08f);
+                    d = Min(d, Seg(p, new Vector2(-0.55f, -0.55f), new Vector2(0.55f, 0.55f), 0.07f), Seg(p, new Vector2(-0.55f, 0.55f), new Vector2(0.55f, -0.55f), 0.07f));
+                    foreach (var c in new[] { new Vector2(0.6f, 0.6f), new Vector2(-0.6f, 0.6f), new Vector2(0.6f, -0.6f), new Vector2(-0.6f, -0.6f) })
+                        d = Min(d, Mathf.Abs((p - c).magnitude - 0.27f) - 0.05f);
+                    return d;
+                };
+            case CardId.Adrenaline:
+                // Syringe, needle up-right.
+                return p =>
+                {
+                    Vector2 q = Rot(p, 45f);
+                    return Min(RoundBox(q.x, q.y + 0.05f, 0.2f, 0.42f, 0.05f), Seg(q, new Vector2(0f, 0.45f), new Vector2(0f, 0.95f), 0.04f),
+                        RoundBox(q.x, q.y + 0.55f, 0.32f, 0.05f, 0.02f), RoundBox(q.x, q.y + 0.75f, 0.06f, 0.2f, 0.02f), RoundBox(q.x, q.y + 0.95f, 0.22f, 0.05f, 0.02f));
+                };
+            case CardId.Armor:
+                // Shield with two horizontal plate bands cut out.
+                return p => Mathf.Max(Shield(p), -Min(RoundBox(p.x, p.y - 0.18f, 0.6f, 0.06f, 0.02f), RoundBox(p.x, p.y + 0.2f, 0.5f, 0.06f, 0.02f)));
         }
         return p => p.magnitude - 0.7f;
     }

@@ -115,6 +115,21 @@ public class Zombie : MonoBehaviour
     Vector3 netPos;
     float netYaw;
 
+    // ---- 1.1.0 Frost card: the bullet hitting now carries this frost level (co-op: rides on the hit kind bits).
+    public static int HitFrost;
+    float slowUntil, slowMul = 1f;
+    public bool Chilled => Time.time < slowUntil;
+
+    /// <summary>Frost card: slows this zombie for a moment (bosses half as much).</summary>
+    public void Chill(int level)
+    {
+        if (level <= 0) return;
+        float m = Upgrades.FrostSlow(level);
+        if (kind == ZombieKind.Boss) m = 1f - (1f - m) * 0.5f;
+        slowMul = Time.time < slowUntil ? Mathf.Min(slowMul, m) : m;
+        slowUntil = Time.time + Upgrades.FrostSeconds;
+    }
+
     /// <summary>Snapshot extras: a special phase (bomb swelling, tongue state…) and its argument.</summary>
     public virtual byte NetAct => 0;
     public virtual byte NetAux => 0;
@@ -148,6 +163,7 @@ public class Zombie : MonoBehaviour
         gait = runner ? 2f : 1f;
         moanTimer = Random.Range(2f, 8f);
         avoidSide = 0;
+        slowUntil = 0f; slowMul = 1f;
         steerAngle = 0f;
         steerT = Random.value * SteerInterval;
         sepT = Random.value * SeparationInterval;
@@ -440,6 +456,7 @@ public class Zombie : MonoBehaviour
             }
             sepPush = sep;
         }
+        if (Time.time < slowUntil) desired *= slowMul;
         desired += sepPush * Mathf.Max(moveSpeed, 1f) * 1.6f;
 
         // Slide along anything we still touch.
@@ -570,7 +587,7 @@ public class Zombie : MonoBehaviour
         if (Puppet)
         {
             // Co-op client: feedback now (a shield still sparks), damage on the host.
-            NetZombies.ReportHit(this, amount, crit, dir, point, explosive ? NetPlayer.HitExplosive : (byte)0);
+            NetZombies.ReportHit(this, amount, crit, dir, point, (byte)((explosive ? NetPlayer.HitExplosive : 0) | (Mathf.Clamp(HitFrost, 0, 3) << 2)));
             if (!explosive && Deflects(dir, point)) return false;
             if (!explosive) DirectionalMul(dir, point);
             flash.Flash(0.07f);
@@ -583,6 +600,7 @@ public class Zombie : MonoBehaviour
         LastHitBy = PendingHitter ?? NetZombies.LocalClientId;
         PendingHitter = null;
         if (!explosive && Deflects(dir, point)) return false;
+        if (HitFrost > 0) Chill(HitFrost);
         amount *= DamageTakenMul;
         if (!explosive) amount *= DirectionalMul(dir, point);
         hp -= amount;

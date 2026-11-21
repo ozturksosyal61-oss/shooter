@@ -376,6 +376,7 @@ public static partial class GameSceneBuilder
         q.transform.localPosition = new Vector3(0f, 0f, 0.22f);
         q.SetActive(false);
         flash = q.transform;
+        AttachGunSkin(root);
         return root;
     }
 

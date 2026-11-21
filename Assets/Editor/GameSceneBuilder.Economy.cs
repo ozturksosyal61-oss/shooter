@@ -18,7 +18,7 @@ public static partial class GameSceneBuilder
         new GunSpec { id = WeaponId.Smg, glb = "Assets/Art/Weapons/Smg/Smg.glb", right = new Vector3(0f, 0.166f, 0.19f), left = new Vector3(0f, 0.186f, 0.385f), muzzle = new Vector3(0f, 0.219f, 0.63f) },
         new GunSpec { id = WeaponId.Shotgun, glb = "Assets/Art/Weapons/Shotgun/Shotgun.glb", right = new Vector3(0f, 0.078f, 0.285f), left = new Vector3(0f, 0.1f, 0.59f), muzzle = new Vector3(0f, 0.128f, 0.96f) },
         new GunSpec { id = WeaponId.Hmg, glb = "Assets/Art/Weapons/Hmg/Hmg.glb", right = new Vector3(0f, 0.18f, 0.58f), left = new Vector3(0f, 0.205f, 0.8f), muzzle = new Vector3(0f, 0.235f, 1.01f) },
-        new GunSpec { id = WeaponId.Sniper, glb = "Assets/Art/Weapons/Sniper/Sniper.glb", right = new Vector3(0f, 0.075f, 0.345f), left = new Vector3(0f, 0.095f, 0.69f), muzzle = new Vector3(0f, 0.125f, 1.16f) },
+        new GunSpec { id = WeaponId.Uzi, glb = "Assets/Art/Weapons/Uzi/Uzi.glb", right = new Vector3(0f, 0.15f, 0.215f), left = new Vector3(0f, 0.17f, 0.375f), muzzle = new Vector3(0f, 0.222f, 0.51f) },
     };
     static readonly Vector3 RifleRootPos = new Vector3(0.1f, 0.95f, 0.2f);
     const float GunScale = 1.1f;
@@ -71,6 +71,7 @@ public static partial class GameSceneBuilder
         left = new GameObject("LeftGrip").transform; left.SetParent(root, false); left.localPosition = g.left; left.localRotation = Quaternion.Euler(0f, 0f, 90f);
         muzzle = new GameObject("Muzzle").transform; muzzle.SetParent(root, false); muzzle.localPosition = g.muzzle;
         flash = null;
+        AttachGunSkin(root);
         return root;
     }
 
@@ -225,6 +226,7 @@ public static partial class GameSceneBuilder
         stage.weaponPivot = wp;
         stage.weaponCamPos = new Vector3(0.4f, 1.35f, 2.1f);
         stage.weaponLook = new Vector3(0f, 1f, 0f);
+        stage.tracerQuads = PreviewTracers(stage.transform, m);
         stage.transform.position = new Vector3(0f, -400f, 0f);
         foreach (var smr in stage.GetComponentsInChildren<SkinnedMeshRenderer>(true)) smr.updateWhenOffscreen = true;
         SetLayer(stage.gameObject, GameLayers.Preview);

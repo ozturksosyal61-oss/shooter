@@ -41,6 +41,8 @@ public class WeaponLevels
 {
     public string id;
     public int damage, magazine, reload;
+    /// <summary>1.1.0: this weapon's finish (<see cref="GunSkinId"/> name; empty = standard).</summary>
+    public string skin;
 }
 
 [Serializable]
@@ -73,6 +75,10 @@ public class EconomyData
     public int reviewDay = -1;
     public long lifetimeGold;
     public List<string> receipts = new List<string>();
+    // v3 (1.1.0): gun finishes (owned once, chosen per weapon in WeaponLevels.skin) + bullet tracers.
+    public List<string> gunSkins = new List<string> { nameof(GunSkinId.Standard) };
+    public List<string> tracers = new List<string> { nameof(TracerId.Standard) };
+    public string tracer = nameof(TracerId.Standard);
 }
 
 /// <summary>Campaign progress (chapters later): stars per chapter.</summary>
@@ -158,7 +164,7 @@ public class MemorySaveStore : ISaveStore
 /// </summary>
 public static class SaveSystem
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     // Tamper protection: the JSON is obfuscated (xor + base64) and signed (SHA-256 of a salt + payload).
     // Not unbreakable — just enough that editing the file by hand makes it invalid (→ backup / fresh).
     const string Salt = "h0ld0ut-0zt-5a1t-2026";
@@ -288,8 +294,21 @@ public static class SaveSystem
         if (!e.costumes.Contains(nameof(CostumeId.Standard))) e.costumes.Add(nameof(CostumeId.Standard));
         if (string.IsNullOrEmpty(e.weapon)) e.weapon = nameof(WeaponId.M4);
         if (string.IsNullOrEmpty(e.costume)) e.costume = nameof(CostumeId.Standard);
-        // if (d.version < 3) { ... } — future steps go here.
+        // v2 → v3 (1.1.0): the sniper became the Uzi (same slot: owners keep it + its upgrades); cosmetics lists.
+        if (d.version < 3) RenameWeapon(e, "Sniper", nameof(WeaponId.Uzi));
+        e.gunSkins ??= new List<string>(); e.tracers ??= new List<string>();
+        if (!e.gunSkins.Contains(nameof(GunSkinId.Standard))) e.gunSkins.Add(nameof(GunSkinId.Standard));
+        if (!e.tracers.Contains(nameof(TracerId.Standard))) e.tracers.Add(nameof(TracerId.Standard));
+        if (string.IsNullOrEmpty(e.tracer)) e.tracer = nameof(TracerId.Standard);
+        // if (d.version < 4) { ... } — future steps go here.
         d.version = CurrentVersion;
+    }
+
+    static void RenameWeapon(EconomyData e, string from, string to)
+    {
+        for (int i = 0; i < e.weapons.Count; i++) if (e.weapons[i] == from) e.weapons[i] = to;
+        if (e.weapon == from) e.weapon = to;
+        foreach (var l in e.levels) if (l != null && l.id == from) l.id = to;
     }
 
     static void ImportLegacyPrefs(SaveData d)

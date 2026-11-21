@@ -207,7 +207,7 @@ public static partial class GameSceneBuilder
         // F13 weapons + economy (the shotgun weapon reuses the Shotgun entry).
         E(SfxId.ShootSmg, "smg_shot", 0.55f, 5, spatial: 0.15f, minInterval: 0.02f, pitchVar: 0.06f, haptic: true, hk: Haptics.Kind.Light),
         E(SfxId.ShootHmg, "hmg_shot", 0.75f, 5, spatial: 0.15f, minInterval: 0.03f, pitchVar: 0.05f, haptic: true, hk: Haptics.Kind.Light),
-        E(SfxId.ShootSniper, "sniper_shot", 0.95f, 2, spatial: 0.1f, minInterval: 0.1f, pitchVar: 0.03f, duck: true, haptic: true, hk: Haptics.Kind.Heavy),
+        E(SfxId.ShootUzi, "uzi_shot", 0.5f, 6, spatial: 0.15f, minInterval: 0.02f, pitchVar: 0.07f, haptic: true, hk: Haptics.Kind.Light),
         E(SfxId.Coin, "coin", 0.5f, 3, ui: true, minInterval: 0.05f, pitchVar: 0.05f),
         E(SfxId.Purchase, "purchase", 0.85f, 1, ui: true, pitchVar: 0f, haptic: true, hk: Haptics.Kind.Medium),
         // F9 boss (Kasap): heard from far away, rumble = heavy haptic + music duck.

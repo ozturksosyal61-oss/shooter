@@ -240,17 +240,44 @@ public class Weapon : MonoBehaviour
     public float DamageScale => BonusShots > 0 ? 1f + perfectDamageBonus : 1f;
 
     /// <summary>Pooled bullet for secondary weapons (shotgun pellets, turret).</summary>
+    /// <summary>1.1.0: this soldier's tracer look (set by <see cref="WeaponLoadout"/>; cosmetic only).</summary>
+    [System.NonSerialized] public TracerId tracer;
+    TracerId cosmeticTracer;
+    int shotCount;
+
+    /// <summary>1.1.0 cards on the gun's own bullets (set by <see cref="Upgrades"/>): bounces, frost / shock level.</summary>
+    [System.NonSerialized] public int ricochet, frost, shock;
+
+    Bullet Next(TracerId look, bool cards = false)
+    {
+        var b = pool.Get();
+        b.SetLook(look, shotCount++);
+        if (cards) b.SetCards(ricochet, frost, shock); else b.SetCards(0, 0, 0);
+        return b;
+    }
+
+    /// <summary>Ricochet card: a bounce bullet from a kill toward the next zombie (keeps the card effects).</summary>
+    public void SpawnBounce(Vector3 start, Vector3 dir, float dmg, int bouncesLeft, int frostLevel, int shockLevel)
+    {
+        if (pool == null) return;
+        var b = pool.Get();
+        b.SetLook(tracer, shotCount++);
+        b.SetCards(bouncesLeft, frostLevel, shockLevel, true);
+        b.Launch(start, start, dir, bulletSpeed, dmg, false, pool, 0.25f, 0);
+    }
+
     public void SpawnBullet(Vector3 start, Vector3 castFrom, Vector3 dir, float speed, float dmg, bool crit, float life, int pierceCount)
     {
         if (crit) dmg *= critMultiplier;
-        pool.Get().Launch(start, castFrom, dir, speed, dmg, crit, pool, life, pierceCount);
+        Next(tracer).Launch(start, castFrom, dir, speed, dmg, crit, pool, life, pierceCount);
     }
 
     /// <summary>Co-op: a teammate's shot — tracer only (their game reports the hits).</summary>
-    public void SpawnCosmetic(Vector3 start, Vector3 dir, float speed, float life)
+    public void SpawnCosmetic(Vector3 start, Vector3 dir, float speed, float life, TracerId look = TracerId.Standard)
     {
+        cosmeticTracer = look;
         if (pool == null) return;
-        pool.Get().Launch(start, start, dir, speed, 0f, false, pool, life, 0, true);
+        Next(cosmeticTracer).Launch(start, start, dir, speed, 0f, false, pool, life, 0, true);
     }
 
     Vector3 ScreenToGroundDir(Vector2 screen, Vector3 from)
@@ -282,7 +309,7 @@ public class Weapon : MonoBehaviour
             bool pc = Random.value < critChance;
             float pd = damage * scale * Random.Range(1f - damageJitter, 1f + damageJitter) * (pc ? critMultiplier : 1f);
             Vector3 pdir = Quaternion.Euler(0f, Random.Range(-pelletSpread, pelletSpread), 0f) * dir;
-            pool.Get().Launch(start, castFrom, pdir, bulletSpeed * Random.Range(0.92f, 1.05f), pd, pc, pool, bulletLife * Random.Range(0.85f, 1.1f), pierce + basePierce);
+            Next(tracer, true).Launch(start, castFrom, pdir, bulletSpeed * Random.Range(0.92f, 1.05f), pd, pc, pool, bulletLife * Random.Range(0.85f, 1.1f), pierce + basePierce);
         }
         for (int b = 0; b <= extraBullets; b++)
         {
@@ -296,7 +323,7 @@ public class Weapon : MonoBehaviour
                 d = Quaternion.Euler(0f, side, 0f) * dir;
                 dmg *= extraBulletDamage;
             }
-            pool.Get().Launch(start, castFrom, d, bulletSpeed, dmg, crit, pool, bulletLife, pierce + basePierce);
+            Next(tracer, true).Launch(start, castFrom, d, bulletSpeed, dmg, crit, pool, bulletLife, pierce + basePierce);
         }
 
         if (muzzleFlash)

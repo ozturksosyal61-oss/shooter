@@ -16,8 +16,8 @@ public static class ProjectSetup
 {
     public const string ProductName = "Holdout";
     public const string BundleId = "com.oztdigital.holdout";
-    public const string Version = "1.0.1";
-    public const string IosBuildNumber = "2611210241"; // > last TestFlight upload 2611210240 (CI: yyMMddHHmm)
+    public const string Version = "1.1.0";
+    public const string IosBuildNumber = "2611220100"; // 1.1.0; > last TestFlight upload (CI: yyMMddHHmm, never lower)
     public const string IconDir = "Assets/Art/Icon";
 
     public static void Apply()
@@ -28,7 +28,7 @@ public static class ProjectSetup
             PlayerSettings.SetApplicationIdentifier(t, BundleId);
         PlayerSettings.bundleVersion = Version;
         PlayerSettings.iOS.buildNumber = IosBuildNumber;
-        PlayerSettings.Android.bundleVersionCode = 8;
+        PlayerSettings.Android.bundleVersionCode = 9;
         PlayerSettings.iOS.targetOSVersionString = "15.0";
         // Live-ops: crashes + uncaught exceptions from players' devices → Unity Cloud dashboard (Diagnostics).
         UnityEditor.CrashReporting.CrashReportingSettings.enabled = true;
