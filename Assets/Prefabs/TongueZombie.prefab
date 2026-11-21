@@ -143,6 +143,8 @@ MonoBehaviour:
   score: 45
   xp: 7
   aimBias: 0
+  districtMaterials: []
+  districtLookChance: 0.65
   tongueLine: {fileID: 6687954547640928770}
   telegraphLine: {fileID: 5716338088505189980}
   tongueHitbox: {fileID: 8176181109260544059}

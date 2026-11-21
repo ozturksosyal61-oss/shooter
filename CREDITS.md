@@ -10,6 +10,7 @@ All files were trimmed, mixed to mono (music excepted), normalised and re-encode
 | `SFX/rifle_shot_01..03` | Single shots sliced from AR-15 / AK-47 recordings — [The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library) | bart (OpenGameArt) | CC0 |
 | `SFX/smg_shot_01..02`, `hmg_shot_01..02`, `uzi_shot_01..03` | Pitched / filtered / layered from `rifle_shot` (above) + synthesized thump and click — `Tools/synth_guns.py` | bart (OpenGameArt) + this project | CC0 (derivative) |
 | `SFX/coin`, `SFX/purchase` | Synthesized — `Tools/synth_guns.py` | this project | CC0 |
+| `SFX/rain_loop` | Synthesized (filtered noise + droplets) — `Tools/synth_weather.py` | this project | CC0 |
 | `SFX/reload_mag_out`, `reload_mag_in`, `reload_bolt` | Sliced from `assaultriflereload1.wav` — [Gun reload sounds](https://opengameart.org/content/gun-reload-sounds) | springyspringo | CC0 |
 | `SFX/hit_flesh_01..04` | Layer of Kenney *impactPunch_medium* + Kenney *slime* — [Impact Sounds](https://kenney.nl/assets/impact-sounds), [Sci-fi Sounds](https://kenney.nl/assets/sci-fi-sounds) | Kenney | CC0 |
 | `SFX/hit_crit_01..03` | *impactPunch_heavy* — Kenney Impact Sounds | Kenney | CC0 |

@@ -885,11 +885,13 @@ public static partial class GameSceneBuilder
         BuildBossHud(hud);
         BuildPauseUi(hud, controls);
 
+        BuildWeather(t);
+
         var warm = new GameObject("Warmup").AddComponent<Warmup>();
         warm.materials = AssetDatabase.FindAssets("t:Material", new[] { MatDir })
             .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g))).ToArray();
         warm.skinnedSample = LoadGo(ZombieRigged);
-        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash, m.shieldZombie, m.bombZombie, m.tongueZombie, boss.body };
+        warm.skinnedMaterials = new[] { m.zombie, m.zombieRunner, m.flash, m.shieldZombie, m.bombZombie, m.tongueZombie, boss.body }.Concat(ZombieDistrictMaterials().Where(x => x)).ToArray();
         warm.fonts = new[] { UiFonts.Display, UiFonts.Bold, UiFonts.Semi };
 
         var gm = new GameObject("GameManager").AddComponent<GameManager>();

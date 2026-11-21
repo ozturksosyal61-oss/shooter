@@ -590,6 +590,7 @@ public static partial class GameSceneBuilder
             q.transform.localPosition = new Vector3(0f, 0.025f, 0f);
             q.transform.localScale = new Vector3(11f, 11f, 1f);
         }, shadows: false);
+        BuildLandmarks(k, c, env, m);
         return k;
     }
 

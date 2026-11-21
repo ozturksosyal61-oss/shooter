@@ -23,6 +23,8 @@ public class SettingsPanel : MonoBehaviour
     public Button[] qualityButtons;
     public Button[] langButtons;
     public Button support, privacy, terms, reset, close, restore;
+    [Tooltip("1.1.0 cloud save: status label + 'sync now' (signs in to Game Center first if needed).")]
+    public Button cloud;
     public GameObject confirm;
     public Button confirmYes, confirmNo;
     public TMP_Text resetDone;
@@ -58,6 +60,13 @@ public class SettingsPanel : MonoBehaviour
             Click();
             Store.Restore(ok => Notify(Loc.T(ok ? "set.restored" : "set.restore_failed")));
         });
+        if (cloud) cloud.onClick.AddListener(() =>
+        {
+            Click();
+            if (!GameServices.Signed) { GameServices.Retry(); Notify(Loc.T("set.cloud.signin")); }
+            else CloudSync.Begin();
+        });
+        CloudSync.Changed += RefreshCloud;
         confirmNo.onClick.AddListener(() => { Click(); confirm.SetActive(false); });
         confirmYes.onClick.AddListener(() => { Click(); ResetProgress(); });
         close.onClick.AddListener(() => { Click(); Close(); });
@@ -70,6 +79,7 @@ public class SettingsPanel : MonoBehaviour
     void OnDestroy()
     {
         Loc.Changed -= Refresh;
+        CloudSync.Changed -= RefreshCloud;
         if (dirty) SaveSystem.Write();
     }
 
@@ -123,9 +133,19 @@ public class SettingsPanel : MonoBehaviour
         }
     }
 
+    void RefreshCloud()
+    {
+        if (!cloud || !root || !root.activeSelf) return;
+        var pb = cloud.GetComponent<PressButton>();
+        string key = CloudSync.State == CloudSync.Status.Synced ? "set.cloud.on" : CloudSync.State == CloudSync.Status.Connecting ? "set.cloud.wait"
+            : CloudSync.State == CloudSync.Status.Error ? "set.cloud.error" : "set.cloud.off";
+        if (pb) { pb.SetLabel(Loc.T(key)); pb.SetStyle(CloudSync.State == CloudSync.Status.Synced ? UiStyle.Green : UiStyle.Dark); }
+    }
+
     void Refresh()
     {
         if (!root || !root.activeSelf) return;
+        RefreshCloud();
         var s = Settings.S;
         music.SetValueWithoutNotify(s.music);
         sfx.SetValueWithoutNotify(s.sfx);

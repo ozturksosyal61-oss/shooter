@@ -14,7 +14,8 @@ public struct DistrictMood
 
 /// <summary>
 /// Cosmetic only: blends ambient light, the sun colour and exponential fog toward the mood of the district the
-/// player is in (Cadde warm, Çarşı orange, Sanayi grey-blue, Liman greenish fog). Reads state, never changes it.
+/// player is in (Cadde warm, Çarşı orange, Sanayi grey-blue, Liman greenish fog), tinted by the wave's weather
+/// (1.1.0: dusk / night / rain, <see cref="Weather"/>). Reads state, never changes it.
 /// </summary>
 public class DistrictAtmosphere : MonoBehaviour
 {
@@ -30,6 +31,10 @@ public class DistrictAtmosphere : MonoBehaviour
     bool init;
 
     public District Current { get; private set; }
+    /// <summary>1.1.0: the wave's sky (time of day + rain), see <see cref="Weather"/>; read by <see cref="WeatherFx"/>.</summary>
+    public WeatherState Sky { get; private set; }
+    public static DistrictAtmosphere I { get; private set; }
+    void Awake() => I = this;
 
     void Start()
     {
@@ -47,7 +52,9 @@ public class DistrictAtmosphere : MonoBehaviour
         Transform who = focus ? focus : gm && gm.player ? gm.player.transform : null;
         if (!cm || !who || moods == null || moods.Length < 4) return;
         Current = cm.DistrictAtPosition(who.position);
-        var target = moods[(int)Current];
+        var wd = WaveDirector.I;
+        Sky = wd ? Weather.For(wd.Wave, ChunkManager.I ? ChunkManager.I.seed : 0) : default;
+        var target = Weather.Tint(moods[(int)Current], Sky);
         float k = snap || !init ? 1f : 1f - Mathf.Exp(-blendSpeed * Time.unscaledDeltaTime);
         init = true;
         cur.sky = Color.Lerp(cur.sky, target.sky, k);

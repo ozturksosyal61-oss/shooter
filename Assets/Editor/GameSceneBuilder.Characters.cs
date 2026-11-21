@@ -402,6 +402,7 @@ public static partial class GameSceneBuilder
         z.bodyRenderer = smr;
         z.walkerMaterial = m.zombie;
         z.runnerMaterial = m.zombieRunner;
+        z.districtMaterials = ZombieDistrictMaterials();
         z.walkClipSpeed = ClipSpeed(a.zWalk);
         z.runClipSpeed = ClipSpeed(a.zRun);
         z.dyingLength = a.zDying.length;
@@ -552,5 +553,20 @@ public static partial class GameSceneBuilder
         go.AddComponent<SquadMember>().local = pc; // zombies chase squad members (co-op teammates too)
         SetLayer(go, GameLayers.Player);
         SavePrefab(go, $"{PrefabDir}/Player.prefab");
+    }
+
+    /// <summary>1.1.0 walker clothes per District (Tools/make_zombie_variants.py); Cadde keeps the default look.</summary>
+    static Material[] ZombieDistrictMaterials()
+    {
+        var mats = new Material[4];
+        foreach (var d in new[] { District.Carsi, District.Sanayi, District.Liman })
+        {
+            string path = System.IO.Path.GetDirectoryName(ZombieTex).Replace('\\', '/') + "/Zombie_" + d + ".png";
+            if (!System.IO.File.Exists(path)) continue;
+            ConfigureCharacterTexture(path);
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            mats[(int)d] = Mat("M_Zombie_" + d, "Universal Render Pipeline/Simple Lit", x => { x.SetTexture("_BaseMap", tex); x.SetColor("_BaseColor", Color.white); });
+        }
+        return mats;
     }
 }

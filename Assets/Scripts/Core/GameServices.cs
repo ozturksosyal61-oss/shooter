@@ -55,7 +55,7 @@ public static class GameServices
         started = true;
 #if UNITY_IOS && !UNITY_EDITOR
         GameCenterPlatform.ShowDefaultAchievementCompletionBanner(true);
-        Social.localUser.Authenticate(ok => { Signed = ok; if (ok) Flush(); else Debug.Log("GameCenter: not signed in"); });
+        Social.localUser.Authenticate(ok => { Signed = ok; if (ok) { Flush(); CloudSync.Begin(); } else Debug.Log("GameCenter: not signed in"); });
 #endif
     }
 
@@ -118,6 +118,9 @@ public static class GameServices
         Score(GameIds.LbStars, Campaign.TotalStars(d.campaign));
         if (d.records.weeklyWeek == WeeklyEvent.CurrentWeek) Score(GameIds.LbWeekly, d.records.weeklyScore);
     }
+
+    /// <summary>Settings → cloud button while not signed in: start Game Center sign-in again.</summary>
+    public static void Retry() { started = false; Init(); }
 
     public static void ShowLeaderboards()
     {

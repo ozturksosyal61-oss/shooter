@@ -14,6 +14,8 @@ public enum ChunkType
     Hospital,       // landmark: hospital entrance with an ambulance
     SignalTower,    // objective site (placed on demand)
     Helipad,        // objective site (placed on demand)
+    Landmark,       // 1.1.0: the district's signature structure (crane, smokestacks, domed han, metro entrance…)
+    Special,        // 1.1.0: rare set piece (crashed helicopter, military checkpoint, burning block)
 }
 
 public enum Edge { S = 0, N = 1, W = 2, E = 3 }
@@ -113,6 +115,9 @@ public static class CityLayout
     public static bool IsLandmark(ChunkType t) => t == ChunkType.GasStation || t == ChunkType.PoliceStation || t == ChunkType.Hospital;
     public static bool IsObjectiveSite(ChunkType t) => t == ChunkType.SignalTower || t == ChunkType.Helipad;
 
+    /// <summary>1.1.0: share of chunks that become the district's signature structure / a rare set piece.</summary>
+    public const float LandmarkChance = 0.08f, SpecialChance = 0.045f;
+
     /// <summary>Alleys need open (road-less) south and north edges: the lane runs west–east between two building rows.</summary>
     public static bool AlleyFits(int mask) => (mask & ((1 << (int)Edge.S) | (1 << (int)Edge.N))) == 0;
 
@@ -121,6 +126,10 @@ public static class CityLayout
     {
         if (c.x >= -1 && c.x <= 0 && c.y >= -1 && c.y <= 0) return ChunkType.Block;
         int mask = Mask(seed, c);
+        // Rare set pieces first, then the district's signature structures (both own rolls: the old type table and
+        // so the old layout of every other chunk stays the same).
+        if (H(seed, c.x, c.y, 0x5EC1) < SpecialChance) return ChunkType.Special;
+        if (H(seed, c.x, c.y, 0x1A4D) < LandmarkChance) return ChunkType.Landmark;
         var w = TypeWeights[(int)d];
         float sum = 0f;
         for (int i = 0; i < w.Length; i++) sum += w[i];

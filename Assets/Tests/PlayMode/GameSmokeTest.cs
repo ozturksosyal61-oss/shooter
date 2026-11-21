@@ -1429,6 +1429,31 @@ public class GameSmokeTest
     }
 
     /// <summary>[Explicit] PNGs of every chunk type, the objective HUD and the helicopter (needs graphics). CAPTURE_DIR.</summary>
+    /// <summary>1.1.0: dusk, night (flashlight) and a rainy night — PNGs to CAPTURE_DIR.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureWeather()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR") ?? Application.temporaryCachePath;
+        yield return LoadGame();
+        var wd = WaveDirector.I;
+        wd.enabled = false;
+        int seed = ChunkManager.I.seed;
+        foreach (int w in new[] { 7, 12 })
+        {
+            wd.ApplyRemote(w, true, 5f);
+            yield return Wait(5f);
+            PlaytestBot.Shot(Path.Combine(dir, $"weather_{Weather.PhaseFor(w)}.png"));
+        }
+        for (int w = 11; w < 60; w++)
+            if (Weather.PhaseFor(w) == DayPhase.Night && Weather.RainFor(w, seed))
+            {
+                wd.ApplyRemote(w, true, 5f);
+                yield return Wait(5f);
+                PlaytestBot.Shot(Path.Combine(dir, "weather_night_rain.png"));
+                break;
+            }
+    }
+
     [UnityTest, Explicit, Timeout(600000)]
     public IEnumerator CaptureCity()
     {

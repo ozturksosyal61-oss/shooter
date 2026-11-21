@@ -918,6 +918,7 @@ public static partial class GameSceneBuilder
         sp.privacy = KButton("Privacy", p.transform, UiStyle.Dark, "set.privacy", 96f, 44f, 17f); Prop(sp.privacy, W, 132f, 228f, 474f, 44f);
         sp.terms = KButton("Terms", p.transform, UiStyle.Dark, "set.terms", 110f, 44f, 17f); Prop(sp.terms, W, 240f, 350f, 474f, 44f);
         sp.restore = KButton("Restore", p.transform, UiStyle.Dark, "set.restore", 230f, 44f, 17f); Prop(sp.restore, W, 362f, 600f, 474f, 44f);
+        sp.cloud = KButton("Cloud", p.transform, UiStyle.Dark, "set.cloud.off", 290f, 44f, 17f); Prop(sp.cloud, W, 612f, 918f, 474f, 44f);
         sp.reset = KButton("Reset", p.transform, UiStyle.Danger, "set.reset", 190f, 44f, 17f, kit.refresh); Prop(sp.reset, W, 930f, 1136f, 474f, 44f);
         sp.resetDone = KTxt("ResetDone", p.transform, F.Bold, 17f, UiKit.Success, TextAlignmentOptions.Center); Prop(sp.resetDone, W, 360f, 900f, 420f, 26f);
 

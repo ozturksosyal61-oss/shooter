@@ -205,6 +205,26 @@ public class HUD : MonoBehaviour
     }
 
     /// <summary>Big centre banner (wave intro style) — objectives, story beats.</summary>
+    // 1.1.0: "LİMAN BÖLGESİ" when the soldier settles in another district (not while another banner shows, ≥ 40 s apart).
+    District shownDistrict, pendingDistrict;
+    bool districtInit;
+    float districtStableT, lastDistrictBanner = -99f;
+    public const float DistrictSettle = 2.5f, DistrictGap = 40f;
+
+    void UpdateDistrictBanner(float dt)
+    {
+        var a = DistrictAtmosphere.I;
+        if (!a || Time.timeSinceLevelLoad < 1f) return;
+        if (!districtInit) { shownDistrict = pendingDistrict = a.Current; districtInit = true; return; }
+        if (a.Current == shownDistrict) { districtStableT = 0f; return; }
+        if (a.Current != pendingDistrict) { pendingDistrict = a.Current; districtStableT = 0f; }
+        districtStableT += dt;
+        if (districtStableT < DistrictSettle || Time.unscaledTime - lastDistrictBanner < DistrictGap || bannerT < 3f) return;
+        shownDistrict = a.Current;
+        lastDistrictBanner = Time.unscaledTime;
+        ShowBanner(Loc.T("district." + a.Current), Loc.T("district." + a.Current + ".sub"), UiKit.Hazard);
+    }
+
     public void ShowBanner(string title, string sub, Color subColor)
     {
         if (!waveBanner) return;
@@ -368,6 +388,7 @@ public class HUD : MonoBehaviour
 
         // Intro banner: pop in, hold, fade.
         bannerT += dt;
+        UpdateDistrictBanner(dt);
         if (waveBannerGroup)
         {
             float a = bannerT < 0.2f ? bannerT / 0.2f : bannerT < 1.8f ? 1f : Mathf.Clamp01(1f - (bannerT - 1.8f) / 0.5f);

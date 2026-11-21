@@ -94,6 +94,10 @@ public class Zombie : MonoBehaviour
     protected static readonly Collider[] Buffer = new Collider[12];
     static readonly float[] SteerAngles = { 30f, 55f, 80f, 110f };
 
+    [Tooltip("1.1.0 walker clothes by District (null = the default look): harbour workers, factory hands, bazaar sellers.")]
+    public Material[] districtMaterials;
+    [Range(0f, 1f)] public float districtLookChance = 0.65f;
+
     public bool Targetable => state != State.Dying && (state != State.Rising || stateT > 0.35f);
     /// <summary>Can take damage (explosions also hit zombies that are still rising).</summary>
     public bool Damageable => state != State.Dying;
@@ -177,7 +181,7 @@ public class Zombie : MonoBehaviour
         model.localPosition = modelPos + Vector3.down * riseDepth;
         model.localRotation = Quaternion.identity;
         model.localScale = modelScale;
-        if (walkerMaterial) flash.SetBaseMaterial(runner && runnerMaterial ? runnerMaterial : walkerMaterial);
+        if (walkerMaterial) flash.SetBaseMaterial(runner && runnerMaterial ? runnerMaterial : LookFor(pos));
         body.enabled = true;
         if (ring) ring.gameObject.SetActive(true);
         activeIndex = Active.Count;
@@ -193,6 +197,16 @@ public class Zombie : MonoBehaviour
     }
 
     protected virtual void OnSpawned() { }
+
+    /// <summary>Walker material for a spawn point: most walkers wear their district's clothes (cosmetic).</summary>
+    Material LookFor(Vector3 pos)
+    {
+        var cm = ChunkManager.I;
+        if (districtMaterials == null || !cm) return walkerMaterial;
+        int d = (int)cm.DistrictAtPosition(pos);
+        if (d >= districtMaterials.Length || !districtMaterials[d] || Random.value > districtLookChance) return walkerMaterial;
+        return districtMaterials[d];
+    }
 
     /// <summary>Co-op client: a visual copy of host zombie <paramref name="s"/> (no AI, no health of its own).</summary>
     public void SpawnPuppet(ZombieNetState s, Pool<Zombie> owner)

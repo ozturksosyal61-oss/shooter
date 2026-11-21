@@ -105,6 +105,8 @@ public class SaveData
     public EconomyData economy = new EconomyData();
     /// <summary>Game Center achievements earned (re-sent after sign-in).</summary>
     public List<string> achievements = new List<string>();
+    /// <summary>1.1.0: this install has merged with the cloud save at least once (see <see cref="SaveMerge"/>).</summary>
+    public bool cloudSynced;
 }
 
 /// <summary>Where the JSON lives. Local file now; a cloud store (Game Center / Play Games saved games) implements the same.</summary>
@@ -190,6 +192,20 @@ public static class SaveSystem
 
     /// <summary>Raised after a reset or load (UI refreshes).</summary>
     public static event Action Changed;
+    /// <summary>Raised after every successful write (cloud sync uploads a little later).</summary>
+    public static event Action Written;
+
+    /// <summary>Cloud sync: adopt a merged save (writes it locally, UI refreshes).</summary>
+    public static void Replace(SaveData d)
+    {
+        if (d == null) return;
+        data = d;
+        Write();
+        Changed?.Invoke();
+    }
+
+    /// <summary>The current save as the signed text stored locally and in the cloud.</summary>
+    public static string CurrentText() => Serialize(Data);
 
     public static void Load()
     {
@@ -214,7 +230,8 @@ public static class SaveSystem
         if (data == null) return;
         data.savedAt = DateTime.UtcNow.Ticks;
         try { Store.Write(Serialize(data)); }
-        catch (Exception e) { Debug.LogWarning("Save: write failed: " + e.Message); }
+        catch (Exception e) { Debug.LogWarning("Save: write failed: " + e.Message); return; }
+        Written?.Invoke();
     }
 
     /// <summary>Wipes progress (records, currency, campaign, inventory, tutorial) — settings are kept.</summary>

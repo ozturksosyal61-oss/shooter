@@ -23,6 +23,10 @@ public class CityKit
     public GameObject[] trees, benches, fences, planters, lamps, rocks, lowWalls, debris, wrecks, ruins, alleyBuildings, trafficLights, statues;
     public GameObject fountain, busStop, gasCanopy, gasSign, policeBuilding, policeCar, hospitalBuilding, hospitalSign, ambulance;
     public GameObject signalTower, helipad, floodLight, generator, dumpster, crate;
+    [Tooltip("1.1.0 signature structures, two per district (index = District * 2 + variant).")]
+    public GameObject[] landmarks;
+    [Tooltip("1.1.0 rare set pieces: crashed helicopter, military checkpoint, burning block.")]
+    public GameObject[] specials;
 }
 
 /// <summary>Ground texture atlas layout (shared with the builder that paints it).</summary>
@@ -222,6 +226,8 @@ public class ChunkManager : MonoBehaviour
             case ChunkType.Hospital: BuildHospital(ch, rng); break;
             case ChunkType.SignalTower: BuildSignalTower(ch, rng); break;
             case ChunkType.Helipad: BuildHelipad(ch, rng); break;
+            case ChunkType.Landmark: BuildLandmark(ch, rng, district, ds); break;
+            case ChunkType.Special: BuildSpecial(ch, rng); break;
             default: BuildBlock(ch, rng, ds); break;
         }
 
@@ -276,7 +282,9 @@ public class ChunkManager : MonoBehaviour
             case ChunkType.Plaza: return GroundAtlas.Plaza;
             case ChunkType.Rubble: return GroundAtlas.Rubble;
             case ChunkType.Alley: return GroundAtlas.Alley;
-            case ChunkType.Block: return GroundAtlas.Cadde + (int)d;
+            case ChunkType.Block:
+            case ChunkType.Landmark: return GroundAtlas.Cadde + (int)d;
+            case ChunkType.Special: return GroundAtlas.Rubble;
             default: return GroundAtlas.Lot;
         }
     }
@@ -546,6 +554,32 @@ public class ChunkManager : MonoBehaviour
         Place(ch, kit.ambulance, new Vector2(6.2f, 8.2f), 90f + Range(rng, -10f, 10f), 2f);
         Place(ch, Pick(roadBarricades, rng), new Vector2(13.2f, 4.8f), Range(rng, -10f, 10f), 0.6f);
         if (kit.crate) Place(ch, kit.crate, new Vector2(14.6f, 6.2f), 15f, 0.6f);
+    }
+
+    /// <summary>1.1.0: the district's signature structure in the middle of the chunk (falls back to a plain block).</summary>
+    void BuildLandmark(Chunk ch, System.Random rng, District d, DistrictSettings ds)
+    {
+        var l = kit.landmarks;
+        int i = (int)d * 2 + rng.Next(2);
+        if (l == null || i >= l.Length || !l[i]) { BuildBlock(ch, rng, ds); return; }
+        Place(ch, l[i], new Vector2(10f, 10f), rng.Next(4) * 90f, RadiusOf(l[i]));
+    }
+
+    /// <summary>1.1.0: a rare set piece; burning barrels and debris around it sell the scene.</summary>
+    void BuildSpecial(Chunk ch, System.Random rng)
+    {
+        var s = kit.specials;
+        if (s == null || s.Length == 0) { BuildRubble(ch, rng, 0, District.Cadde); return; }
+        var p = s[rng.Next(s.Length)];
+        Place(ch, p, new Vector2(10f, 10f), rng.Next(4) * 90f, RadiusOf(p));
+        if (burningBarrels != null && burningBarrels.Length > 0)
+            for (int k = 0; k < 2; k++)
+            {
+                float a = (float)(rng.NextDouble() * Mathf.PI * 2f);
+                Place(ch, burningBarrels[0], new Vector2(10f + Mathf.Cos(a) * 7.2f, 10f + Mathf.Sin(a) * 7.2f), 0f, 0.7f);
+            }
+        if (kit.debris != null && kit.debris.Length > 0)
+            for (int k = 0; k < 4; k++) Spawn(ch, Pick(kit.debris, rng), new Vector2(Range(rng, 2f, 18f), Range(rng, 2f, 18f)), Range(rng, 0f, 360f));
     }
 
     void BuildSignalTower(Chunk ch, System.Random rng)

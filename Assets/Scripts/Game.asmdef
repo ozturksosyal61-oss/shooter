@@ -11,6 +11,7 @@
         "Unity.LevelPlay",
         "Unity.Advertisement.IosSupport",
         "Unity.Services.Authentication",
+        "Unity.Services.CloudSave",
         "Unity.Services.Multiplayer",
         "Unity.Netcode.Runtime",
         "Unity.Networking.Transport",

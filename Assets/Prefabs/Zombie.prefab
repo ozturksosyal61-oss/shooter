@@ -139,6 +139,12 @@ MonoBehaviour:
   score: 10
   xp: 1
   aimBias: 0
+  districtMaterials:
+  - {fileID: 0}
+  - {fileID: 2100000, guid: 6591f9cb07b235144a9838ad648c637d, type: 2}
+  - {fileID: 2100000, guid: 0ba045672f8c8e44cadc5150df1a04df, type: 2}
+  - {fileID: 2100000, guid: 64aeb811661fee447ac3ad63def35f76, type: 2}
+  districtLookChance: 0.65
 --- !u!1001 &7696287813222742639
 PrefabInstance:
   m_ObjectHideFlags: 0

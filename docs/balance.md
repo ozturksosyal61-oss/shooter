@@ -183,3 +183,16 @@ Havuz 15 → 22 kart. İlk koşuda kite her seed'de ilk Kasap'ta öldü (252–2
 | kite | 21 | 609 sn (tavan) | 12 | 2/2 |
 
 Bant: human 190–400 (değişmedi), kite 294–609 (önce 355–600; kart çeşitliliği varyansı büyüttü).
+
+## 1.1.0 — şehir imza yapıları + nadir sahneler (2026-11-22)
+Chunk'ların ~%8'i mahalle imza yapısı, ~%4.5'i nadir sahne (kendi seed zarlarıyla; diğer chunk'ların tipi değişmedi). Hava (gece / yağmur) yalnız görsel.
+
+| bot | seed | önce | sonra |
+|---|---|---|---|
+| kite | 7 | 307 sn (dalga 7) | 414 sn (dalga 9, Kasap yenildi) |
+| kite | 21 | 609 sn | 306 sn (dalga 7, Kasap yenildi) |
+| kite | rastgele | — | 211 sn (dalga 5) |
+| human | rastgele | 269–338 | 275 sn |
+| explore | rastgele | 158–198 | 254 sn |
+
+Ortalama değişmedi; düzen değişince tek seed'lik sonuçlar oynuyor (yeni yapılar hem siper hem tuzak).

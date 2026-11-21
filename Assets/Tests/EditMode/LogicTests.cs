@@ -1348,3 +1348,100 @@ public class Cards110Tests
         Assert.Less(sameFamily, 20);
     }
 }
+
+public class CloudMergeTests
+{
+    static SaveData Save(long at, int gold, int gems, bool synced, params string[] weapons)
+    {
+        var d = new SaveData { version = SaveSystem.CurrentVersion, savedAt = at, cloudSynced = synced };
+        d.wallet.gold = gold; d.wallet.gems = gems;
+        foreach (var w in weapons) if (!d.economy.weapons.Contains(w)) d.economy.weapons.Add(w);
+        return d;
+    }
+
+    [Test]
+    public void FreshInstallNeverWipesTheCloud()
+    {
+        var cloud = Save(100, 5000, 300, true, "Smg", "Uzi");
+        cloud.economy.costumes.Add("Hush"); cloud.economy.vip = true;
+        cloud.economy.levels.Add(new WeaponLevels { id = "Smg", damage = 3 });
+        cloud.campaign.stars.AddRange(new[] { 3, 2 });
+        cloud.records.bestScore = 9000;
+        var fresh = Save(500, 40, 0, false);           // newer, but a fresh install
+        fresh.settings.lang = "en";
+        var m = SaveMerge.Merge(fresh, cloud);
+        Assert.AreEqual(5000, m.wallet.gold, "first sync: higher wallet");
+        Assert.AreEqual(300, m.wallet.gems);
+        CollectionAssert.IsSupersetOf(m.economy.weapons, new[] { "M4", "Smg", "Uzi" });
+        CollectionAssert.Contains(m.economy.costumes, "Hush");
+        Assert.IsTrue(m.economy.vip);
+        Assert.AreEqual(3, m.economy.levels.Find(l => l.id == "Smg").damage);
+        CollectionAssert.AreEqual(new[] { 3, 2 }, m.campaign.stars);
+        Assert.AreEqual(9000, m.records.bestScore);
+        Assert.AreEqual("en", m.settings.lang, "settings stay with the device");
+        Assert.IsTrue(m.cloudSynced);
+    }
+
+    [Test]
+    public void AfterSyncNewerWalletWinsButOwnershipUnites()
+    {
+        var local = Save(900, 100, 5, true, "Smg");     // spent gold after the last sync
+        var cloud = Save(800, 2000, 50, true, "Uzi");
+        cloud.economy.gunSkins.Add("Gold");
+        local.campaign.stars.AddRange(new[] { 1, 3, 2 });
+        cloud.campaign.stars.AddRange(new[] { 3, 1 });
+        var m = SaveMerge.Merge(local, cloud);
+        Assert.AreEqual(100, m.wallet.gold, "newer save's wallet (no duplicate currency)");
+        Assert.AreEqual(5, m.wallet.gems);
+        CollectionAssert.IsSupersetOf(m.economy.weapons, new[] { "Smg", "Uzi" });
+        CollectionAssert.Contains(m.economy.gunSkins, "Gold");
+        CollectionAssert.AreEqual(new[] { 3, 3, 2 }, m.campaign.stars, "stars: max per chapter");
+        Assert.AreEqual(900, m.savedAt);
+        Assert.AreSame(local, SaveMerge.Merge(local, null));
+    }
+}
+
+public class World110Tests
+{
+    [Test]
+    public void WeatherCycleAndRain()
+    {
+        Assert.AreEqual(DayPhase.Day, Weather.PhaseFor(1));
+        Assert.AreEqual(DayPhase.Day, Weather.PhaseFor(5));
+        Assert.AreEqual(DayPhase.Dusk, Weather.PhaseFor(6));
+        Assert.AreEqual(DayPhase.Night, Weather.PhaseFor(11));
+        Assert.AreEqual(DayPhase.Day, Weather.PhaseFor(16), "cycles back to day");
+        int rain = 0;
+        for (int w = 1; w <= 400; w++)
+        {
+            bool r = Weather.RainFor(w, 12345);
+            if (w < 3) Assert.IsFalse(r, "no rain in the first waves");
+            if (r) { rain++; Assert.IsFalse(Weather.RainFor(w - 1, 12345), "never two rainy waves in a row"); }
+            Assert.AreEqual(r, Weather.RainFor(w, 12345), "deterministic (co-op peers agree)");
+        }
+        Assert.That(rain, Is.InRange(40, 120), "about a fifth of the waves");
+        var day = new DistrictMood { sky = Color.white, equator = Color.white, ground = Color.white, light = Color.white, lightIntensity = 1f, fog = Color.white, fogDensity = 0.01f };
+        var night = Weather.Tint(day, new WeatherState { phase = DayPhase.Night });
+        Assert.Less(night.lightIntensity, 0.5f);
+        Assert.Less(night.sky.r, day.sky.r);
+        var wet = Weather.Tint(day, new WeatherState { phase = DayPhase.Day, rain = true });
+        Assert.Greater(wet.fogDensity, day.fogDensity);
+    }
+
+    [Test]
+    public void LandmarksAndSetPiecesAppearSometimes()
+    {
+        int lm = 0, sp = 0, n = 0;
+        for (int x = -40; x < 40; x++)
+            for (int y = -40; y < 40; y++)
+            {
+                var t = CityLayout.NaturalType(777, new Vector2Int(x, y), District.Liman);
+                n++;
+                if (t == ChunkType.Landmark) lm++;
+                if (t == ChunkType.Special) sp++;
+            }
+        Assert.That(lm / (float)n, Is.InRange(0.05f, 0.11f));
+        Assert.That(sp / (float)n, Is.InRange(0.025f, 0.07f));
+        Assert.AreEqual(ChunkType.Block, CityLayout.NaturalType(777, Vector2Int.zero, District.Liman), "spawn stays plain");
+    }
+}

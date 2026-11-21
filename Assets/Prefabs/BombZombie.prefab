@@ -230,6 +230,8 @@ MonoBehaviour:
   score: 30
   xp: 5
   aimBias: 0
+  districtMaterials: []
+  districtLookChance: 0.65
   runDistance: 6
   runSpeedMul: 1.7
   triggerDistance: 2
