@@ -24,7 +24,7 @@ public static partial class GameSceneBuilder
     const float GunScale = 1.1f;
 
     /// <summary>Texture costumes on the soldier mesh (whole-character costumes have their own model).</summary>
-    static IEnumerable<string> CostumeNames() => System.Enum.GetNames(typeof(CostumeId)).Where(n => n != nameof(CostumeId.Standard) && n != nameof(CostumeId.SpecOps) && n != nameof(CostumeId.Firefighter));
+    static IEnumerable<string> CostumeNames() => System.Enum.GetNames(typeof(CostumeId)).Where(n => n != nameof(CostumeId.Standard) && !Economy.IsCharacter((CostumeId)System.Enum.Parse(typeof(CostumeId), n)));
     static string CostumeTex(string name) => $"{SoldierDir}/Textures/Costumes/Soldier_{name}.png";
     static string SoldierDir => System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(SoldierTex)).Replace('\\', '/');
 
@@ -117,7 +117,7 @@ public static partial class GameSceneBuilder
     }
 
     // ---------------------------------------------------------------- F15: whole-character costumes
-    static readonly (CostumeId id, string name)[] PlayerCharacters = { (CostumeId.SpecOps, "OzelHarekat"), (CostumeId.Firefighter, "Itfaiyeci") };
+    static readonly (CostumeId id, string name)[] PlayerCharacters = { (CostumeId.SpecOps, "OzelHarekat"), (CostumeId.Firefighter, "Itfaiyeci"), (CostumeId.Hush, "Hush"), (CostumeId.Lynx, "Lynx") };
 
     /// <summary>Material of a player character (own texture, colours untouched); null when its rig is missing.</summary>
     static Material PlayerCharacterMaterial(string name)

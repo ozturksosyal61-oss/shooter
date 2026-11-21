@@ -128,7 +128,7 @@ public class MainMenu : MonoBehaviour
     {
         var c = Profile.SelectedCostume;
         var wpn = Profile.SelectedWeapon;
-        if (characterName) characterName.text = Loc.T(c == CostumeId.SpecOps || c == CostumeId.Firefighter ? Economy.Costume(c).Key : "menu.soldier_name");
+        if (characterName) characterName.text = Loc.T(Economy.IsCharacter(c) ? Economy.Costume(c).Key : "menu.soldier_name");
         if (costumeChip) costumeChip.text = Loc.T(Economy.Costume(c).Key);
         int lv = Profile.Level(wpn, WeaponStat.Damage) + Profile.Level(wpn, WeaponStat.Magazine) + Profile.Level(wpn, WeaponStat.Reload);
         if (weaponChip) weaponChip.text = Loc.F("menu.weapon_chip", Loc.T(Economy.Weapon(wpn).Key), lv);

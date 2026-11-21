@@ -10,7 +10,7 @@ import shutil
 import sys
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
-PLAYERS = [("ozelharekat", "OzelHarekat"), ("itfaiyeci", "Itfaiyeci")]
+PLAYERS = [("ozelharekat", "OzelHarekat"), ("itfaiyeci", "Itfaiyeci"), ("hush", "Hush"), ("lynx", "Lynx")]
 
 for folder, name in PLAYERS:
     dst = os.path.join(ROOT, "Assets", "Art", "Characters", name)

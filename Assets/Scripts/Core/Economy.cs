@@ -10,7 +10,7 @@ public enum GunSkinId { Standard, Desert, Woodland, Arctic, Crimson, Ocean, Carb
 public enum TracerId { Standard, Red, Green, Blue, Purple, Fire, Plasma, Golden, Rainbow }
 public enum WeaponStat { Damage, Magazine, Reload }
 /// <summary>Standard..Commando: soldier textures. SpecOps / Firefighter (F15): whole other characters (own model, same animations).</summary>
-public enum CostumeId { Standard, Woodland, Desert, Night, Arctic, Gold, Commando, SpecOps, Firefighter }
+public enum CostumeId { Standard, Woodland, Desert, Night, Arctic, Gold, Commando, SpecOps, Firefighter, Hush, Lynx }
 public enum BonusId { StartHealth, StartCard, GoldBoost }
 public enum QuestKind { Kills, Specials, Bosses, ReachWave, Objectives, Runs, Combo }
 
@@ -97,7 +97,8 @@ public static class Economy
     public const int CharacterGems = 250;
 
     /// <summary>SpecOps / Firefighter: whole other characters (own model), not soldier skins.</summary>
-    public static bool IsCharacter(CostumeId c) => c == CostumeId.SpecOps || c == CostumeId.Firefighter;
+    /// <summary>Whole other characters (own model): Viper, Blaze, Hush, Lynx (1.1.0).</summary>
+    public static bool IsCharacter(CostumeId c) => c >= CostumeId.SpecOps;
 
     /// <summary>Catalogue price label, e.g. "99,99 TL".</summary>
     public static string PriceLabel(ProductDef p) => p.tl + " TL";
@@ -123,6 +124,8 @@ public static class Economy
         new CostumeDef { id = CostumeId.Commando, packOnly = true },
         new CostumeDef { id = CostumeId.SpecOps, gems = CharacterGems },
         new CostumeDef { id = CostumeId.Firefighter, gems = CharacterGems },
+        new CostumeDef { id = CostumeId.Hush, gems = CharacterGems },
+        new CostumeDef { id = CostumeId.Lynx, gems = CharacterGems },
     };
 
     // Pricing (1.1.0, docs/economy.md): plain looks in gold (1–2 days of play), the showy ones only in gems — the

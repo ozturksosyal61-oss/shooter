@@ -920,7 +920,7 @@ public class GameSmokeTest
         shop.ActNow();
         Assert.AreEqual(CostumeId.Woodland, Profile.SelectedCostume);
         shop.Open(ShopUI.Tab.Characters, 0);
-        Assert.AreEqual(3, shop.ItemCount, "soldier + 2 characters");
+        Assert.AreEqual(5, shop.ItemCount, "soldier + 4 characters");
 
         // 1.1.0: gun finish (on the selected SMG) with gold, tracer with gems.
         shop.Open(ShopUI.Tab.Skins, (int)GunSkinId.Desert);
@@ -1319,7 +1319,7 @@ public class GameSmokeTest
     [UnityTest, Timeout(180000)]
     public IEnumerator PlayerCharacters()
     {
-        foreach (var c in new[] { CostumeId.SpecOps, CostumeId.Firefighter })
+        foreach (var c in new[] { CostumeId.SpecOps, CostumeId.Firefighter, CostumeId.Hush, CostumeId.Lynx })
         {
             Profile.Grant(100000, 1000, "test");
             Assert.IsTrue(Profile.BuyCostume(c), "buy " + c);
@@ -2122,7 +2122,7 @@ public class GameSmokeTest
         string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
         if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
         Profile.Grant(100000, 1000, "test");
-        foreach (var c in new[] { CostumeId.Standard, CostumeId.SpecOps, CostumeId.Firefighter })
+        foreach (var c in new[] { CostumeId.Standard, CostumeId.SpecOps, CostumeId.Firefighter, CostumeId.Hush, CostumeId.Lynx })
         {
             if (c != CostumeId.Standard) Profile.BuyCostume(c);
             yield return LoadGame();
