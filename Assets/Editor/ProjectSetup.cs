@@ -122,9 +122,21 @@ public static class ProjectSetup
     }
 
     /// <summary>Batch: switch to iOS and export the Xcode project to Builds/iOS.</summary>
+    static string Arg(string name)
+    {
+        var a = System.Environment.GetCommandLineArgs();
+        int i = System.Array.IndexOf(a, name);
+        return i >= 0 && i + 1 < a.Length ? a[i + 1] : null;
+    }
+
+    /// <summary>iOS Xcode project → Builds/iOS. CI (GitHub Actions, .github/workflows/ios-testflight.yml) passes
+    /// -teamId and -buildNumber (UTC yyMMddHHmm, always above the last upload; never below 8).</summary>
     public static void BuildIos()
     {
         Apply();
+        var team = Arg("-teamId");
+        if (!string.IsNullOrEmpty(team)) { PlayerSettings.iOS.appleDeveloperTeamID = team; PlayerSettings.iOS.appleEnableAutomaticSigning = true; }
+        if (long.TryParse(Arg("-buildNumber"), out long bn) && bn >= 8) PlayerSettings.iOS.buildNumber = bn.ToString();
         AssetDatabase.SaveAssets();
         if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS)
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.iOS, BuildTarget.iOS);

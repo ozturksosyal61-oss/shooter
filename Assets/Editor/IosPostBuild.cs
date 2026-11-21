@@ -57,7 +57,7 @@ public static class IosPostBuild
         root.SetBoolean("CADisableMinimumFrameDurationOnPhone", true);
         root.SetString("CFBundleDisplayName", "Holdout");
         // CI (Cloud Build / GitHub Actions) may inject its own build number: never below the last uploaded one (8).
-        int.TryParse(root["CFBundleVersion"]?.AsString(), out int bn);
+        long.TryParse(root["CFBundleVersion"]?.AsString(), out long bn); // long: CI uses yyMMddHHmm (> int.MaxValue)
         if (bn < MinBuildNumber) root.SetString("CFBundleVersion", MinBuildNumber.ToString());
         // Only standard HTTPS / OS crypto: no export-compliance questions on every upload.
         root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
