@@ -111,6 +111,10 @@ jobs:
           if [ -d "$APP/Frameworks" ]; then
             find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -exec codesign --force --sign - {} \;
           fi
+          # Normalize to Apple's own XML plist format (AMFI parser rejects e.g. "<true />").
+          plutil -convert xml1 -o "$RUNNER_TEMP/Holdout.entitlements" "$ENT"
+          plutil -lint "$RUNNER_TEMP/Holdout.entitlements"
+          ENT="$RUNNER_TEMP/Holdout.entitlements"
           codesign --force --sign - --entitlements "$ENT" --generate-entitlement-der "$APP"
           echo "::group::Arşivdeki .app entitlement'ları (ad-hoc)"; codesign -d --entitlements :- "$APP"; echo "::endgroup::"
           if ! codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "com.apple.developer.game-center"; then

@@ -95,6 +95,9 @@ public static class IosPostBuild
         if (File.Exists(entPath)) ent.ReadFromFile(entPath);
         ent.root.SetBoolean("com.apple.developer.game-center", true);
         ent.WriteToFile(entPath);
+        // PlistDocument writes "<true />"; codesign's AMFI XML parser only accepts "<true/>" ("syntax error near line 6").
+        File.WriteAllText(entPath, File.ReadAllText(entPath).Replace("<true />", "<true/>").Replace("<false />", "<false/>"),
+            new System.Text.UTF8Encoding(false));
         proj = new PBXProject();
         proj.ReadFromFile(projPath);
         // Entitlements belong to the app target (Unity-iPhone) only; a framework target must not carry them.
