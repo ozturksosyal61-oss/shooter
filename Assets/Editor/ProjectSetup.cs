@@ -17,7 +17,7 @@ public static class ProjectSetup
     public const string ProductName = "Holdout";
     public const string BundleId = "com.oztdigital.holdout";
     public const string Version = "1.0.1";
-    public const string IosBuildNumber = "8";
+    public const string IosBuildNumber = "2611210137"; // > last TestFlight upload 2611210136 (CI: yyMMddHHmm)
     public const string IconDir = "Assets/Art/Icon";
 
     public static void Apply()
@@ -130,13 +130,13 @@ public static class ProjectSetup
     }
 
     /// <summary>iOS Xcode project → Builds/iOS. CI (GitHub Actions, .github/workflows/ios-testflight.yml) passes
-    /// -teamId and -buildNumber (UTC yyMMddHHmm, always above the last upload; never below 8).</summary>
+    /// -teamId and -buildNumber (UTC yyMMddHHmm, always above the last upload; never below IosPostBuild.MinBuildNumber).</summary>
     public static void BuildIos()
     {
         Apply();
         var team = Arg("-teamId");
         if (!string.IsNullOrEmpty(team)) { PlayerSettings.iOS.appleDeveloperTeamID = team; PlayerSettings.iOS.appleEnableAutomaticSigning = true; }
-        if (long.TryParse(Arg("-buildNumber"), out long bn) && bn >= 8) PlayerSettings.iOS.buildNumber = bn.ToString();
+        if (long.TryParse(Arg("-buildNumber"), out long bn) && bn >= IosPostBuild.MinBuildNumber) PlayerSettings.iOS.buildNumber = bn.ToString();
         AssetDatabase.SaveAssets();
         if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS)
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.iOS, BuildTarget.iOS);

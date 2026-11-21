@@ -44,9 +44,11 @@ public static class IosPostBuild
         "zmvfpc5aq8.skadnetwork", "zq492l623r.skadnetwork", 
     };
 
-    [PostProcessBuild(1000)]
-    const int MinBuildNumber = 8;
+    /// <summary>Last uploaded TestFlight build was 2611210136 (CI yyMMddHHmm): never at or below it.</summary>
+    public const long MinBuildNumber = 2611210137;
+    const string Entitlements = "Unity-iPhone/Holdout.entitlements";
 
+    [PostProcessBuild(1000)]
     public static void OnPostProcess(BuildTarget target, string path)
     {
         if (target != BuildTarget.iOS) return;
@@ -56,6 +58,9 @@ public static class IosPostBuild
         var root = plist.root;
         root.SetBoolean("CADisableMinimumFrameDurationOnPhone", true);
         root.SetString("CFBundleDisplayName", "Holdout");
+        // GameKit as a *required* device capability is deprecated and blocks devices; Game Center is optional.
+        if (root.values.TryGetValue("UIRequiredDeviceCapabilities", out var req) && req is PlistElementArray reqArr)
+            reqArr.values.RemoveAll(e => e is PlistElementString es && es.value == "gamekit");
         // CI (Cloud Build / GitHub Actions) may inject its own build number: never below the last uploaded one (8).
         long.TryParse(root["CFBundleVersion"]?.AsString(), out long bn); // long: CI uses yyMMddHHmm (> int.MaxValue)
         if (bn < MinBuildNumber) root.SetString("CFBundleVersion", MinBuildNumber.ToString());
@@ -79,9 +84,22 @@ public static class IosPostBuild
         string projPath = PBXProject.GetPBXProjectPath(path);
         var proj = new PBXProject();
         proj.ReadFromFile(projPath);
-        var cap = new ProjectCapabilityManager(projPath, "Unity-iPhone/Holdout.entitlements", null, proj.GetUnityMainTargetGuid());
+        string target = proj.GetUnityMainTargetGuid();
+        var cap = new ProjectCapabilityManager(projPath, Entitlements, null, target);
         cap.AddGameCenter();
         cap.WriteToFile();
+        // Make sure the key really is in the file (older Unity versions only add the pbx capability) and that every
+        // configuration signs with it — CI re-signs the archive with this same file (ios-testflight.yml).
+        string entPath = Path.Combine(path, Entitlements);
+        var ent = new PlistDocument();
+        if (File.Exists(entPath)) ent.ReadFromFile(entPath);
+        ent.root.SetBoolean("com.apple.developer.game-center", true);
+        ent.WriteToFile(entPath);
+        proj = new PBXProject();
+        proj.ReadFromFile(projPath);
+        proj.SetBuildProperty(target, "CODE_SIGN_ENTITLEMENTS", Entitlements);
+        proj.AddFrameworkToProject(target, "GameKit.framework", true);
+        proj.WriteToFile(projPath);
     }
 
     static void AddSkAdNetworks(PlistElementDict root)

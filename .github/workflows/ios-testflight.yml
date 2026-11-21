@@ -19,7 +19,10 @@ jobs:
         with: { android: true, dotnet: true, haskell: true, large-packages: false, tool-cache: false }
       - uses: actions/checkout@v4
       - name: Build numarası
-        run: echo "BUILD_NUMBER=$(date -u +%y%m%d%H%M)" >> "$GITHUB_ENV"
+        run: |
+          BN=$(date -u +%y%m%d%H%M)
+          if [ "$BN" -le 2611210136 ]; then BN=2611210137; fi  # last TestFlight upload 2611210136
+          echo "BUILD_NUMBER=$BN" >> "$GITHUB_ENV"
       - name: Library önbelleği
         uses: actions/cache@v4
         with:
@@ -75,6 +78,18 @@ jobs:
             -archivePath "$RUNNER_TEMP/Holdout.xcarchive" -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO archive | tail -n 40
           test -d "$RUNNER_TEMP/Holdout.xcarchive"
+      - name: Entitlement'ları arşive göm (Game Center)
+        # Archive is unsigned (CODE_SIGNING_ALLOWED=NO) → no entitlements in the binary, and export would re-sign
+        # without com.apple.developer.game-center. Ad-hoc sign with the entitlements file; export keeps them.
+        run: |
+          APP=$(ls -d "$RUNNER_TEMP"/Holdout.xcarchive/Products/Applications/*.app | head -n 1)
+          ENT=Builds/iOS/Unity-iPhone/Holdout.entitlements
+          grep -q "com.apple.developer.game-center" "$ENT"
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -exec codesign --force --sign - {} \;
+          fi
+          codesign --force --sign - --entitlements "$ENT" --generate-entitlement-der "$APP"
+          codesign -d --entitlements - "$APP" | grep -q "game-center"
       - name: İmzala + TestFlight'a yükle
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
