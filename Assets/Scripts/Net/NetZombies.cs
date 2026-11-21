@@ -10,6 +10,11 @@ using UnityEngine;
 /// on their own game). Client: its own spawner / waves are off, objectives / boss run in remote mode; zombies are
 /// puppets of the host's (<see cref="Zombie.Puppet"/>), created / moved / removed from the snapshots. A client's hits
 /// are forwarded to the host (<see cref="NetPlayer.SendHit"/>) which owns every zombie's health.
+/// Snapshots travel <b>unreliable</b>, split into parts of at most <see cref="PerPart"/> zombies (each under the MTU):
+/// a lost packet is simply superseded by the next one instead of stalling every reliable message behind it (the old
+/// fragmented-reliable 1.5 KB snapshots at wave 9+ froze teammates / zombies on lossy links and could overflow the
+/// reliable queue, which closes the connection). Puppets missing from a complete snapshot vanish; with lost parts they
+/// time out after <see cref="StaleSnapshots"/> newer snapshots.
 /// </summary>
 public class NetZombies : MonoBehaviour
 {
@@ -19,6 +24,10 @@ public class NetZombies : MonoBehaviour
     public float sendRate = 15f;
 
     const string SnapMsg = "coop.zs", KillMsg = "coop.zk";
+    /// <summary>Zombies per snapshot part: 7 + 56 x 18 + 27 + 8 header = 1.05 KB, under Netcode's non-fragmented limit.</summary>
+    public const int PerPart = 56;
+    /// <summary>A puppet missing from this many newer snapshots (~1 s) is dropped (its parts were lost).</summary>
+    public const int StaleSnapshots = 15;
 
     /// <summary>True on a co-op client (puppet zombies); tests can force it without a network.</summary>
     public bool IsClient { get; private set; }
@@ -49,6 +58,13 @@ public class NetZombies : MonoBehaviour
     readonly Dictionary<ushort, Zombie> puppets = new Dictionary<ushort, Zombie>(128);
     readonly HashSet<ushort> seen = new HashSet<ushort>();
     readonly List<ushort> gone = new List<ushort>(32);
+    readonly Dictionary<ushort, int> lastSeen = new Dictionary<ushort, int>(128);
+    /// <summary>Recently killed ids: a late unreliable part must not bring a dead zombie back as a ghost.</summary>
+    readonly Dictionary<ushort, float> killedAt = new Dictionary<ushort, float>(64);
+    ushort sendSeq, curSeq;
+    int partsMask, partsWanted;
+    bool haveSeq;
+    float staleT;
     bool registered;
 
     void Awake() => I = this;
@@ -92,18 +108,29 @@ public class NetZombies : MonoBehaviour
 
     void Update()
     {
+        if (IsClient) { DropStale(); if (spawner) spawner.TopUpPool(WaveDirector.I); return; }
         if (!IsHost) return;
         var nm = NetworkManager.Singleton;
         if (!nm || !nm.IsListening || nm.ConnectedClientsIds.Count < 2) return;
         sendT -= Time.unscaledDeltaTime;
         if (sendT > 0f) return;
         sendT = 1f / sendRate;
-        int len = BuildSnapshot();
-        using (var w = new FastBufferWriter(len + 8, Allocator.Temp))
+        int n = CollectStates(out var wave, out var boss);
+        int parts = Mathf.Max(1, (n + PerPart - 1) / PerPart);
+        sendSeq++;
+        for (int p = 0; p < parts; p++)
         {
-            w.WriteValueSafe(len);
-            w.WriteBytesSafe(buf, len);
-            nm.CustomMessagingManager.SendNamedMessageToAll(SnapMsg, w, NetworkDelivery.ReliableFragmentedSequenced);
+            int start = p * PerPart, count = Mathf.Min(PerPart, n - start);
+            int len = ZombieSnapshot.Write(buf, wave, states, start, count, p == 0 ? boss : null);
+            using (var w = new FastBufferWriter(len + 12, Allocator.Temp))
+            {
+                w.WriteValueSafe(sendSeq);
+                w.WriteValueSafe((byte)p);
+                w.WriteValueSafe((byte)parts);
+                w.WriteValueSafe(len);
+                w.WriteBytesSafe(buf, len);
+                nm.CustomMessagingManager.SendNamedMessageToAll(SnapMsg, w, NetworkDelivery.Unreliable);
+            }
         }
         SnapshotsSent++;
     }
@@ -118,7 +145,16 @@ public class NetZombies : MonoBehaviour
         return id;
     }
 
+    /// <summary>Host: the whole snapshot in one buffer (tests; the network path sends it in parts).</summary>
     public int BuildSnapshot()
+    {
+        int n = CollectStates(out var w, out var boss);
+        int size = ZombieSnapshot.Size(n);
+        if (buf.Length < size) buf = new byte[size + 512];
+        return ZombieSnapshot.Write(buf, w, states, n, boss);
+    }
+
+    int CollectStates(out WaveNetState w, out BossNetState? boss)
     {
         var act = Zombie.Active;
         if (states.Length < act.Count) states = new ZombieNetState[act.Count + 32];
@@ -129,14 +165,14 @@ public class NetZombies : MonoBehaviour
             if (z.NetId == 0) continue;
             states[n++] = z.ToNetState();
         }
-        int size = ZombieSnapshot.Size(n);
+        int size = ZombieSnapshot.Size(Mathf.Min(n, PerPart));
         if (buf.Length < size) buf = new byte[size + 512];
         var wd = WaveDirector.I;
-        var w = new WaveNetState { wave = wd ? wd.Wave : 0, inBreak = wd && wd.InBreak, timeLeft = wd ? wd.PhaseTimeLeft : 0f };
-        BossNetState? boss = null;
+        w = new WaveNetState { wave = wd ? wd.Wave : 0, inBreak = wd && wd.InBreak, timeLeft = wd ? wd.PhaseTimeLeft : 0f };
+        boss = null;
         var bd = BossDirector.I;
         if (bd && bd.BossAlive && bd.Boss is ButcherZombie b && b.NetId != 0) boss = b.ToBossNetState();
-        return ZombieSnapshot.Write(buf, w, states, n, boss);
+        return n;
     }
 
     public byte[] Buffer => buf;
@@ -177,26 +213,48 @@ public class NetZombies : MonoBehaviour
     void OnSnapshot(ulong sender, FastBufferReader r)
     {
         if (IsHost) return;
+        r.ReadValueSafe(out ushort seq);
+        r.ReadValueSafe(out byte part);
+        r.ReadValueSafe(out byte parts);
         r.ReadValueSafe(out int len);
-        if (len <= 0 || len > 1 << 20) return;
+        if (len <= 0 || len > 1 << 16 || parts == 0 || part >= parts || parts > 16) return;
         if (buf.Length < len) buf = new byte[len + 512];
         r.ReadBytesSafe(ref buf, len);
-        ApplySnapshot(buf, len);
+        ApplyPart(buf, len, seq, part, parts);
     }
 
-    public void ApplySnapshot(byte[] data, int len)
+    /// <summary>A complete snapshot in one buffer (tests; zombies missing from it vanish at once).</summary>
+    public void ApplySnapshot(byte[] data, int len) => ApplyPart(data, len, (ushort)(curSeq + 1), 0, 1);
+
+    /// <summary>Wrap-safe "a is newer than b" for 16-bit sequence numbers.</summary>
+    public static bool SeqNewer(ushort a, ushort b) => (short)(a - b) > 0;
+
+    void ApplyPart(byte[] data, int len, ushort seq, int part, int parts)
     {
+        if (haveSeq && seq != curSeq && !SeqNewer(seq, curSeq)) return; // a late part of an older snapshot
+        bool fresh = !haveSeq || seq != curSeq;
         int n = ZombieSnapshot.Read(data, len, out var w, ref states, out var boss);
         if (n < 0) return;
-        SnapshotsReceived++;
-        if (WaveDirector.I) WaveDirector.I.ApplyRemote(w.wave, w.inBreak, w.timeLeft);
-        seen.Clear();
+        if (fresh)
+        {
+            haveSeq = true;
+            curSeq = seq;
+            partsMask = 0;
+            partsWanted = parts;
+            seen.Clear();
+            SnapshotsReceived++;
+            if (WaveDirector.I) WaveDirector.I.ApplyRemote(w.wave, w.inBreak, w.timeLeft);
+        }
+        partsMask |= 1 << part;
+        float now = Time.unscaledTime;
         for (int i = 0; i < n; i++)
         {
             var s = states[i];
             seen.Add(s.id);
+            lastSeen[s.id] = SnapshotsReceived;
             if (!puppets.TryGetValue(s.id, out var z) || !z || z.NetId != s.id || !z.Puppet)
             {
+                if (killedAt.TryGetValue(s.id, out float kt) && now - kt < 3f) continue;
                 z = spawner ? spawner.SpawnPuppet(s) : null;
                 if (!z) continue;
                 puppets[s.id] = z;
@@ -206,15 +264,40 @@ public class NetZombies : MonoBehaviour
         }
         if (boss.HasValue && puppets.TryGetValue(boss.Value.id, out var bz) && bz is ButcherZombie bb && bb.Puppet)
             bb.ApplyBossState(boss.Value);
+        // Every part of this snapshot arrived: whoever is missing was recycled on the host.
+        if (partsMask != (1 << partsWanted) - 1) return;
         gone.Clear();
         foreach (var kv in puppets) if (!seen.Contains(kv.Key)) gone.Add(kv.Key);
+        RemovePuppets();
+    }
+
+    void RemovePuppets()
+    {
         foreach (var id in gone)
         {
             var z = puppets[id];
             puppets.Remove(id);
+            lastSeen.Remove(id);
             // Still standing = recycled on the host (no death message): just vanish.
             if (z && z.Puppet && z.NetId == id && z.Damageable) z.Despawn();
         }
+        gone.Clear();
+    }
+
+    /// <summary>Client: drops puppets whose snapshot parts kept getting lost, and old kill records.</summary>
+    void DropStale()
+    {
+        staleT -= Time.unscaledDeltaTime;
+        if (staleT > 0f) return;
+        staleT = 0.5f;
+        float now = Time.unscaledTime;
+        gone.Clear();
+        foreach (var kv in puppets)
+            if (lastSeen.TryGetValue(kv.Key, out int seenAt) && SnapshotsReceived - seenAt > StaleSnapshots) gone.Add(kv.Key);
+        RemovePuppets();
+        foreach (var kv in killedAt) if (now - kv.Value > 3f) gone.Add(kv.Key);
+        foreach (var id in gone) killedAt.Remove(id);
+        gone.Clear();
     }
 
     void OnKill(ulong sender, FastBufferReader r)
@@ -231,8 +314,10 @@ public class NetZombies : MonoBehaviour
     /// <summary>Client: the host says zombie <paramref name="id"/> died; <paramref name="killer"/> gets the score / XP.</summary>
     public void ApplyKill(ushort id, Vector3 dir, ulong killer)
     {
+        killedAt[id] = Time.unscaledTime;
         if (!puppets.TryGetValue(id, out var z)) return;
         puppets.Remove(id);
+        lastSeen.Remove(id);
         if (!z || !z.Puppet || z.NetId != id) return;
         var gm = GameManager.I;
         if (gm) gm.RemoteKill(z, killer == LocalClientId);

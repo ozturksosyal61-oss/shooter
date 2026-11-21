@@ -39,6 +39,8 @@ public static partial class GameSceneBuilder
         System.IO.Directory.CreateDirectory("Assets/Resources");
         var go = new GameObject("NetworkManager");
         var transport = go.AddComponent<UnityTransport>();
+        // 2–4 players at wave 9+: snapshot parts + RPCs + state every tick; the default 128-packet queue is tight.
+        transport.MaxPacketQueueSize = 512;
         var nm = go.AddComponent<NetworkManager>();
         nm.NetworkConfig = new NetworkConfig
         {

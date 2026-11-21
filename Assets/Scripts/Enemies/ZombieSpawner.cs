@@ -72,6 +72,7 @@ public class ZombieSpawner : MonoBehaviour
         RecycleStragglers(player.position);
 
         var waves = WaveDirector.I;
+        TopUpPool(waves);
         if (waves && waves.InBreak) return; // breather: no spawning
 
         timer -= Time.deltaTime;
@@ -99,6 +100,29 @@ public class ZombieSpawner : MonoBehaviour
             pool.Get().Spawn(pos, hp, speed, wp.contactDamage, runner, pool);
         }
     }
+
+    float growT;
+
+    /// <summary>
+    /// Pool head-room for the next wave (alive cap + corpses still sinking). The pool used to start at 50 and grow by
+    /// Instantiate mid-fight from wave 8–9 on (cap 54–70, co-op up to 90) → a hitch per new zombie. Now it grows during
+    /// the breather (2 per frame) and, if still short, one every 0.25 s while fighting.
+    /// </summary>
+    public void TopUpPool(WaveDirector waves)
+    {
+        if (pool == null) return;
+        int wave = waves ? waves.Wave : 1;
+        int want = PoolTarget(Difficulty.ForWave(wave + 1).maxAlive);
+        if (pool.Total >= want) return;
+        if (waves && waves.InBreak) { pool.GrowOne(); if (pool.Total < want) pool.GrowOne(); return; }
+        growT -= Time.unscaledDeltaTime;
+        if (growT > 0f && pool.Free > 4) return;
+        growT = 0.25f;
+        pool.GrowOne();
+    }
+
+    /// <summary>Pure (tests): pool size for an alive cap — the cap plus ~30 % for dying / sinking bodies.</summary>
+    public static int PoolTarget(int maxAlive) => Mathf.Min(Mathf.CeilToInt(maxAlive * 1.3f) + 4, 130);
 
     /// <summary>Co-op client: a puppet copy of a host zombie, from the pool of its kind.</summary>
     public Zombie SpawnPuppet(ZombieNetState s)

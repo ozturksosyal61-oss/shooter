@@ -64,6 +64,11 @@ public class Zombie : MonoBehaviour
     protected Vector3 knock;
     int avoidSide;          // sticky steering side (+1 / -1), 0 = none
     float avoidTimer;
+    // Time-sliced AI queries (perf: ~70–90 zombies at wave 9+): the whisker result (as an angle off the chase
+    // direction) and the separation push are re-evaluated a few times a second, staggered per zombie.
+    const float SteerInterval = 0.08f, SeparationInterval = 0.05f;
+    float steerT, steerAngle, sepT;
+    Vector3 sepPush;
     int activeIndex = -1;
     protected Pool<Zombie> pool;
 
@@ -143,6 +148,10 @@ public class Zombie : MonoBehaviour
         gait = runner ? 2f : 1f;
         moanTimer = Random.Range(2f, 8f);
         avoidSide = 0;
+        steerAngle = 0f;
+        steerT = Random.value * SteerInterval;
+        sepT = Random.value * SeparationInterval;
+        sepPush = Vector3.zero;
         state = State.Rising;
         stateT = 0f;
         var tm = Squad.Nearest(pos);
@@ -415,17 +424,23 @@ public class Zombie : MonoBehaviour
     protected void Move(float dt, Vector3 desired, float moveSpeed)
     {
         Vector3 pos = transform.position;
-        int n = Physics.OverlapSphereNonAlloc(pos + Vector3.up * 0.8f, separationRadius, Buffer, GameLayers.ZombieMask, QueryTriggerInteraction.Ignore);
-        Vector3 sep = Vector3.zero;
-        for (int i = 0; i < n; i++)
+        sepT -= dt;
+        if (sepT <= 0f)
         {
-            if (Buffer[i] == body || Buffer[i].isTrigger || Buffer[i].transform.IsChildOf(transform)) continue;
-            Vector3 v = pos - Buffer[i].transform.position; v.y = 0f;
-            float m = v.magnitude;
-            if (m < 0.001f) { v = Random.insideUnitSphere; v.y = 0f; m = 0.001f; }
-            sep += v / m * (1f - Mathf.Clamp01(m / separationRadius));
+            sepT = SeparationInterval;
+            int n = Physics.OverlapSphereNonAlloc(pos + Vector3.up * 0.8f, separationRadius, Buffer, GameLayers.ZombieMask, QueryTriggerInteraction.Ignore);
+            Vector3 sep = Vector3.zero;
+            for (int i = 0; i < n; i++)
+            {
+                if (Buffer[i] == body || Buffer[i].isTrigger || Buffer[i].transform.IsChildOf(transform)) continue;
+                Vector3 v = pos - Buffer[i].transform.position; v.y = 0f;
+                float m = v.magnitude;
+                if (m < 0.001f) { v = Random.insideUnitSphere; v.y = 0f; m = 0.001f; }
+                sep += v / m * (1f - Mathf.Clamp01(m / separationRadius));
+            }
+            sepPush = sep;
         }
-        desired += sep * Mathf.Max(moveSpeed, 1f) * 1.6f;
+        desired += sepPush * Mathf.Max(moveSpeed, 1f) * 1.6f;
 
         // Slide along anything we still touch.
         if (desired.sqrMagnitude > 0.0001f &&
@@ -473,13 +488,25 @@ public class Zombie : MonoBehaviour
     /// <summary>Whisker steering: keep the direct line if clear, otherwise turn to a sticky side.</summary>
     protected Vector3 Steer(Vector3 pos, Vector3 dir, float dt)
     {
+        avoidTimer -= dt;
+        steerT -= dt;
+        if (steerT <= 0f)
+        {
+            steerT = SteerInterval;
+            steerAngle = SteerAngle(pos, dir);
+        }
+        return steerAngle == 0f ? dir : Quaternion.Euler(0f, steerAngle, 0f) * dir;
+    }
+
+    /// <summary>The whisker query: 0 when the direct line is clear, otherwise the sticky side's free angle.</summary>
+    float SteerAngle(Vector3 pos, Vector3 dir)
+    {
         Vector3 origin = pos + Vector3.up * 0.6f;
         float r = body.radius * 0.9f;
-        avoidTimer -= dt;
         if (!Blocked(origin, dir, r))
         {
             if (avoidTimer <= 0f) avoidSide = 0;
-            return dir;
+            return 0f;
         }
         if (avoidSide == 0)
         {
@@ -494,11 +521,8 @@ public class Zombie : MonoBehaviour
         }
         avoidTimer = 0.6f;
         foreach (float a in SteerAngles)
-        {
-            Vector3 d = Quaternion.Euler(0f, a * avoidSide, 0f) * dir;
-            if (!Blocked(origin, d, r)) return d;
-        }
-        return Quaternion.Euler(0f, 120f * avoidSide, 0f) * dir;
+            if (!Blocked(origin, Quaternion.Euler(0f, a * avoidSide, 0f) * dir, r)) return a * avoidSide;
+        return 120f * avoidSide;
     }
 
     bool Blocked(Vector3 origin, Vector3 d, float r) =>
@@ -650,7 +674,8 @@ public class Zombie : MonoBehaviour
             deathVel.x *= Mathf.Exp(-8f * dt);
             deathVel.z *= Mathf.Exp(-8f * dt);
         }
-        pos = Depenetrate(pos);
+        // Lying still: no need to keep pushing out of obstacles (saves a physics query per corpse).
+        if (!landed || deathVel.x * deathVel.x + deathVel.z * deathVel.z > 0.04f) pos = Depenetrate(pos);
         transform.position = pos;
         deathSpin *= Mathf.Exp(-4f * dt);
         transform.rotation *= Quaternion.Euler(0f, deathSpin * dt, 0f);

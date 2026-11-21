@@ -1143,6 +1143,30 @@ public class CoopTests
         Assert.IsTrue(CoopTeam.Rules.TeamDown(true, new bool[0], 0), "alone and down");
         Assert.AreEqual(600, CoopTeam.Rules.TeamScore(100, new[] { 200, 300 }, 2));
     }
+
+    [Test]
+    public void SnapshotPartsAndSequence()
+    {
+        // A split snapshot: part 2 carries zombies 56.. with no boss block, each part under the MTU.
+        var zs = new ZombieNetState[70];
+        for (int i = 0; i < zs.Length; i++) zs[i] = new ZombieNetState { id = (ushort)(100 + i), kind = ZombieKind.Walker, pos = new Vector3(i, 0f, -i), maxHp = 60f, hp01 = 1f };
+        var buf = new byte[ZombieSnapshot.Size(NetZombies.PerPart)];
+        int len = ZombieSnapshot.Write(buf, new WaveNetState { wave = 9 }, zs, NetZombies.PerPart, zs.Length - NetZombies.PerPart, null);
+        Assert.Less(ZombieSnapshot.Size(NetZombies.PerPart) + 12, 1296 - 64, "a full part stays under Netcode's non-fragmented limit");
+        var outS = new ZombieNetState[4];
+        int n = ZombieSnapshot.Read(buf, len, out var w, ref outS, out var boss);
+        Assert.AreEqual(14, n);
+        Assert.AreEqual(9, w.wave);
+        Assert.IsFalse(boss.HasValue);
+        Assert.AreEqual(100 + NetZombies.PerPart, outS[0].id);
+        Assert.AreEqual(NetZombies.PerPart, outS[0].pos.x, 0.01f);
+
+        Assert.IsTrue(NetZombies.SeqNewer(5, 4));
+        Assert.IsFalse(NetZombies.SeqNewer(4, 5));
+        Assert.IsTrue(NetZombies.SeqNewer(2, 65530), "wraps");
+        Assert.IsFalse(NetZombies.SeqNewer(65530, 2));
+    }
+
 }
 
 
@@ -1180,5 +1204,41 @@ public class MutantBossTests
             foreach (var s in d.steps) if (s == ObjectiveKind.Boss) seen.Add(d.boss);
         }
         CollectionAssert.AreEqual(new[] { BossType.Butcher, BossType.Leaper, BossType.Hive, BossType.Crusher }, seen);
+    }
+}
+
+public class PerformanceTests
+{
+    [Test]
+    public void PoolHeadroomCoversAliveCapAndCorpses()
+    {
+        Assert.GreaterOrEqual(ZombieSpawner.PoolTarget(70), 90);
+        Assert.GreaterOrEqual(ZombieSpawner.PoolTarget(Difficulty.ForWave(10, false).maxAlive), Difficulty.ForWave(10, false).maxAlive + 15);
+        Assert.LessOrEqual(ZombieSpawner.PoolTarget(500), 130);
+    }
+
+    [Test]
+    public void HitStopIsRateLimited()
+    {
+        Assert.IsTrue(GameManager.HitStopAllowed(1f, 0.012f, 0.9f, 0.9f));
+        Assert.IsFalse(GameManager.HitStopAllowed(1f, 0.012f, 1.1f, 0f), "small stop waits for the gap");
+        Assert.IsTrue(GameManager.HitStopAllowed(1f, 0.06f, 1.1f, 0.9f), "a kill isn't blocked by a hit's gap");
+        Assert.IsFalse(GameManager.HitStopAllowed(1f, 0.06f, 0f, 1.2f));
+    }
+
+    [Test]
+    public void ResolutionAndThermalSteps()
+    {
+        Assert.AreEqual(1f, Settings.ResolutionCapFor(828));
+        Assert.AreEqual(1f, Settings.ResolutionCapFor(Settings.MaxRenderLines));
+        Assert.AreEqual(Settings.MaxRenderLines / 2064f, Settings.ResolutionCapFor(2064), 1e-4f);
+        Assert.AreEqual(0, PerfGovernor.ThermalFpsCap(0));
+        Assert.AreEqual(0, PerfGovernor.ThermalFpsCap(1));
+        Assert.AreEqual(60, PerfGovernor.ThermalFpsCap(2));
+        Assert.AreEqual(30, PerfGovernor.ThermalFpsCap(3));
+        Assert.Greater(PerfGovernor.ThermalScale(1), PerfGovernor.ThermalScale(2));
+        Assert.Greater(PerfGovernor.ThermalScale(2), PerfGovernor.ThermalScale(3));
+        Assert.Greater(PerfGovernor.LoadScale(0), PerfGovernor.LoadScale(1));
+        Assert.Greater(PerfGovernor.LoadScale(1), PerfGovernor.LoadScale(2));
     }
 }

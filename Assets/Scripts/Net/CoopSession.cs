@@ -52,7 +52,19 @@ public static class CoopSession
         var nm = go.GetComponent<NetworkManager>();
         nm.OnClientConnectedCallback += _ => Changed?.Invoke();
         nm.OnClientDisconnectCallback += OnDisconnect;
+        nm.OnTransportFailure += OnTransportFailure;
         return nm;
+    }
+
+    /// <summary>The transport died under us (Relay drop, send queue overflow): end the session like a lost host,
+    /// so the run ends on the team screen instead of a frozen world.</summary>
+    static void OnTransportFailure()
+    {
+        Debug.LogWarning("COOP: transport failure");
+        Session = null;
+        Reset(GameManager.I != null);
+        Disconnected?.Invoke();
+        Changed?.Invoke();
     }
 
     static async Task SignIn()

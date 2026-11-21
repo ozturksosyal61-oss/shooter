@@ -41,6 +41,10 @@ public static class ProjectSetup
         PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
         PlayerSettings.allowedAutorotateToLandscapeLeft = true;
         PlayerSettings.allowedAutorotateToLandscapeRight = true;
+        // Performance / heat: skin the ~70–90 zombies on the GPU (CPU skinning was the biggest per-zombie cost),
+        // no Metal API validation in the generated Xcode scheme.
+        PlayerSettings.meshDeformation = MeshDeformation.GPUBatched;
+        PlayerSettings.enableMetalAPIValidation = false;
         ApplyIcons();
     }
 

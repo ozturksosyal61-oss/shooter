@@ -211,7 +211,26 @@ public class GameManager : MonoBehaviour
 
     public bool IsSlowed => slow < 1f;
 
-    public void HitStop(float duration) => HitStop(duration, 0.02f);
+    /// <summary>Hit / kill freeze-frame, rate-limited: at wave 9+ (3–5 kills/s, fast weapons) back-to-back
+    /// freezes stopped the game 20–30 % of the time and read as stutter. After one, the next small (hit) stop waits
+    /// <see cref="HitStopGapSmall"/>, a kill / blast stop <see cref="HitStopGapBig"/>.</summary>
+    public void HitStop(float duration)
+    {
+        float now = Time.unscaledTime;
+        bool big = duration >= 0.04f;
+        if (!HitStopAllowed(now, duration, nextSmallHitStop, nextBigHitStop)) return;
+        float end = now + duration;
+        nextSmallHitStop = end + HitStopGapSmall;
+        if (big) nextBigHitStop = end + HitStopGapBig;
+        HitStop(duration, 0.02f);
+    }
+
+    public const float HitStopGapSmall = 0.12f, HitStopGapBig = 0.3f;
+    float nextSmallHitStop, nextBigHitStop;
+
+    /// <summary>Pure rule (tests): may a hit-stop of <paramref name="duration"/> start at <paramref name="now"/>?</summary>
+    public static bool HitStopAllowed(float now, float duration, float nextSmall, float nextBig) =>
+        now >= (duration >= 0.04f ? nextBig : nextSmall);
 
     /// <summary>Short slow motion (boss kill); <paramref name="realSeconds"/> of unscaled time at <paramref name="factor"/>.</summary>
     public void SlowMo(float factor, float realSeconds) => HitStop(realSeconds, factor);

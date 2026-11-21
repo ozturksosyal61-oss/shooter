@@ -43,7 +43,7 @@ public struct BossNetState
 /// Pure, allocation-free snapshot codec (EditMode-tested). Layout: header (wave u16, flags u8, timeLeft u16 ×0.1 s,
 /// count u16) then per zombie: id u16, kind/flags u8, x f32, z f32, yaw u8, gait u8, hp u8, maxHp u16, act u8, aux u8
 /// = 18 bytes; then a boss flag u8 + optional boss block (26 bytes).
-/// 70 zombies ≈ 1.3 KB → sent fragmented-reliable-sequenced at 15 Hz by <see cref="NetZombies"/>.
+/// <see cref="NetZombies"/> sends it unreliable at 15 Hz, split into parts of ≤ PerPart zombies (each under the MTU).
 /// </summary>
 public static class ZombieSnapshot
 {
@@ -54,7 +54,10 @@ public static class ZombieSnapshot
 
     public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int count) => Write(buf, w, zs, count, null);
 
-    public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int count, BossNetState? boss)
+    public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int count, BossNetState? boss) => Write(buf, w, zs, 0, count, boss);
+
+    /// <summary>Writes zombies <paramref name="start"/> .. start+count (one part of a split snapshot).</summary>
+    public static int Write(byte[] buf, WaveNetState w, ZombieNetState[] zs, int start, int count, BossNetState? boss)
     {
         int o = 0;
         U16(buf, ref o, (ushort)Mathf.Clamp(w.wave, 0, ushort.MaxValue));
@@ -63,7 +66,7 @@ public static class ZombieSnapshot
         U16(buf, ref o, (ushort)count);
         for (int i = 0; i < count; i++)
         {
-            var z = zs[i];
+            var z = zs[start + i];
             U16(buf, ref o, z.id);
             buf[o++] = (byte)(((int)z.kind & 0x0f) | (z.runner ? 0x10 : 0) | (z.rising ? 0x20 : 0));
             F32(buf, ref o, z.pos.x);

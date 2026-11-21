@@ -24,6 +24,19 @@ public static class Settings
 
     public static event Action Changed;
 
+    /// <summary><see cref="PerfGovernor"/>: frame-rate ceiling (0 = none) and render-scale factor (heat / load).</summary>
+    public static int GovernorFpsCap;
+    public static float GovernorScale = 1f;
+    /// <summary>Phones / tablets render at most this many lines (short side): native 1179–2064 px retina panels with
+    /// MSAA were the biggest GPU (heat) cost; above ~1100 lines the difference is invisible at arm's length.</summary>
+    public const int MaxRenderLines = 1100;
+
+    /// <summary>Pure: render-scale cap for a screen whose short side is <paramref name="shortSide"/> px.</summary>
+    public static float ResolutionCapFor(int shortSide) => shortSide <= MaxRenderLines ? 1f : (float)MaxRenderLines / shortSide;
+
+    static float ResolutionCap() => Application.isMobilePlatform && !Application.isEditor
+        ? ResolutionCapFor(Mathf.Min(Screen.width, Screen.height)) : 1f;
+
     static float baseShadowDistance = -1f, baseRenderScale = -1f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -54,7 +67,16 @@ public static class Settings
     public static void ApplyFrameRate()
     {
         QualitySettings.vSyncCount = 0;
-        Application.targetFrameRate = ClampFps(S.fps, DisplayHz());
+        int fps = ClampFps(S.fps, DisplayHz());
+        if (GovernorFpsCap > 0) fps = Mathf.Min(fps, GovernorFpsCap);
+        Application.targetFrameRate = fps;
+    }
+
+    /// <summary>Frame rate + render scale only (the governor's changes; no save, no Changed event).</summary>
+    public static void ApplyPerformance()
+    {
+        ApplyFrameRate();
+        ApplyQuality();
     }
 
     public static void Apply()
@@ -74,7 +96,7 @@ public static class Settings
         {
             // Relative to the asset's own values (in the editor the asset is not left changed at "high").
             if (baseShadowDistance < 0f) { baseShadowDistance = urp.shadowDistance; baseRenderScale = urp.renderScale; }
-            urp.renderScale = baseRenderScale * RenderScales[Quality];
+            urp.renderScale = Mathf.Max(0.4f, baseRenderScale * RenderScales[Quality] * ResolutionCap() * GovernorScale);
             urp.shadowDistance = baseShadowDistance * ShadowMul[Quality];
         }
     }

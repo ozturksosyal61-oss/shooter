@@ -76,6 +76,8 @@ public class NetPlayer : NetworkBehaviour
         default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
     public bool IsDead => State.Value.Dead;
+    /// <summary>Seconds of velocity lead on a teammate's avatar.</summary>
+    public const float AvatarLead = 0.07f;
     public Transform Avatar => avatar;
 
     PlayerController localPlayer;
@@ -169,9 +171,12 @@ public class NetPlayer : NetworkBehaviour
         if (!avatar) return;
         var s = State.Value;
         Vector3 p = avatar.position;
+        // Aim slightly ahead along the replicated move (≈ one tick + smoothing lag) so the teammate doesn't trail.
+        Vector3 goal = s.pos;
+        if (!s.Dead && !s.Vaulting && s.move.sqrMagnitude > 0.01f) goal += s.move.normalized * (s.speed * AvatarLead);
         // Snap when far (spawn / teleport), otherwise smooth toward the replicated position.
         if ((s.pos - p).sqrMagnitude > 25f) avatar.position = s.pos;
-        else avatar.position = Vector3.Lerp(p, s.pos, 1f - Mathf.Exp(-14f * dt));
+        else avatar.position = Vector3.Lerp(p, goal, 1f - Mathf.Exp(-14f * dt));
         avatar.rotation = Quaternion.Slerp(avatar.rotation, Quaternion.Euler(0f, s.yaw, 0f), 1f - Mathf.Exp(-16f * dt));
 
         if (s.weapon != shownWeapon) ShowWeapon((WeaponId)s.weapon);

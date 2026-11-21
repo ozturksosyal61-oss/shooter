@@ -20,13 +20,30 @@ public class Pool<T> where T : Component
             t.gameObject.SetActive(false);
             free.Push(t);
         }
+        Total = prewarm;
+    }
+
+    /// <summary>Instances made so far (free + in use).</summary>
+    public int Total { get; private set; }
+    public int Free => free.Count;
+
+    /// <summary>Adds one inactive instance ahead of need (spread over calm frames instead of a mid-fight hitch).</summary>
+    public void GrowOne()
+    {
+        using (GrowMarker.Auto())
+        {
+            var t = Object.Instantiate(prefab, parent);
+            t.gameObject.SetActive(false);
+            free.Push(t);
+            Total++;
+        }
     }
 
     public T Get()
     {
         T t;
         if (free.Count > 0) t = free.Pop();
-        else using (GrowMarker.Auto()) t = Object.Instantiate(prefab, parent);
+        else using (GrowMarker.Auto()) { t = Object.Instantiate(prefab, parent); Total++; }
         t.gameObject.SetActive(true);
         return t;
     }
