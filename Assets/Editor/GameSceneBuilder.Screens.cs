@@ -147,6 +147,11 @@ public static partial class GameSceneBuilder
         mm.shop = Row("Shop", 346f, kit.bag, "menu.shop", out var shopSub, out var sr);
         L((UiText)shopSub, "menu.shop_sub");
         var chev = KIcon("Chevron", sr, kit.chevronR, UiKit.Secondary, 20f); Margins(chev, 20f, 2f, 0f, 2f);
+        // Weekly event: same city + rule for everyone this week; starts the run directly.
+        mm.weeklyButton = Row("Weekly", 429f, kit.flag, "menu.weekly", out mm.weeklySub, out var wr);
+        var wplay = KIcon("Play", wr, kit.play, UiKit.Hazard, 20f); Margins(wplay, 20f, 2f, 0f, 2f);
+        // Game Center leaderboards (under settings).
+        mm.leaderboardButton = KIconButton("Leaderboard", main, kit.star, 48f); TR(mm.leaderboardButton, Safe, 82f, 48f, 48f);
 
         // Soldier (live preview of the selected character).
         var platform = KImg("Platform", main, kit.ringThin, new Color(UiKit.Hazard.r, UiKit.Hazard.g, UiKit.Hazard.b, 0.55f));

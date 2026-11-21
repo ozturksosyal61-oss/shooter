@@ -26,6 +26,8 @@ public class RecordsData
     // Hard mode keeps its own records.
     public int hardScore, hardWave, hardKills;
     public float hardTime;
+    // Weekly event: best of the current week (reset when the week changes).
+    public int weeklyWeek = -1, weeklyScore, weeklyWave;
 }
 
 [Serializable]
@@ -95,6 +97,8 @@ public class SaveData
     public CampaignData campaign = new CampaignData();
     public List<string> inventory = new List<string>();
     public EconomyData economy = new EconomyData();
+    /// <summary>Game Center achievements earned (re-sent after sign-in).</summary>
+    public List<string> achievements = new List<string>();
 }
 
 /// <summary>Where the JSON lives. Local file now; a cloud store (Game Center / Play Games saved games) implements the same.</summary>

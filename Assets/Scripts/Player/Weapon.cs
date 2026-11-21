@@ -44,8 +44,8 @@ public class Weapon : MonoBehaviour
     public int magazineSize = 40;
     public float reloadTime = 1.5f;
     [Tooltip("Idle time after releasing the trigger before a tactical reload starts.")]
-    public float tacticalReloadDelay = 1f;
-    [Range(0f, 1f)] public float tacticalReloadBelow = 0.5f;
+    public float tacticalReloadDelay = 0.6f; // playtest-02 #5: tops up between bursts so the magazine rarely runs dry
+    [Range(0f, 1f)] public float tacticalReloadBelow = 0.7f;
 
     [Header("Active reload")]
     [Range(0f, 1f)] public float sweetSpotStart = 0.42f;

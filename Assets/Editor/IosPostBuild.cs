@@ -65,6 +65,18 @@ public static class IosPostBuild
         AddSkAdNetworks(root);
         plist.WriteToFile(plistPath);
         AddInfoPlistStrings(path);
+        AddGameCenter(path);
+    }
+
+    /// <summary>Game Center capability (leaderboards + achievements, <c>GameServices</c>): entitlement + GameKit.</summary>
+    static void AddGameCenter(string path)
+    {
+        string projPath = PBXProject.GetPBXProjectPath(path);
+        var proj = new PBXProject();
+        proj.ReadFromFile(projPath);
+        var cap = new ProjectCapabilityManager(projPath, "Unity-iPhone/Holdout.entitlements", null, proj.GetUnityMainTargetGuid());
+        cap.AddGameCenter();
+        cap.WriteToFile();
     }
 
     static void AddSkAdNetworks(PlistElementDict root)

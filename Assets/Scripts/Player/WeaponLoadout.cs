@@ -36,7 +36,7 @@ public class WeaponLoadout : MonoBehaviour
         soldierBody = body;
         activeModel = defaultModel;
         var pc = GetComponent<PlayerController>();
-        Apply(Override ?? Profile.SelectedWeapon, pc);
+        Apply(Override ?? (GameMode.Weekly ? WeeklyEvent.WeaponFor(WeeklyEvent.CurrentWeek) : Profile.SelectedWeapon), pc);
         ApplyCostume(Profile.SelectedCostume, pc);
         pc.maxHealth += Economy.StartHealthBonus(Profile.BonusLevel(BonusId.StartHealth));
         if (GameMode.IsHard) pc.maxHealth = Mathf.Round(pc.maxHealth * ModeRules.HardPlayerHealthMul);

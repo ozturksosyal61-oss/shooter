@@ -71,6 +71,21 @@ public class RunRewards : MonoBehaviour
         Profile.Grant(delta, 0, "run");
         Profile.ReportRun(gm.Kills - repKills, gm.SpecialKills - repSpecials, bosses - repBosses, wave, objectives - repObjectives, gm.BestCombo, !reportedOnce);
         reportedOnce = true;
+        if (GameMode.Weekly)
+        {
+            var rec = SaveSystem.Data.records;
+            int week = WeeklyEvent.CurrentWeek;
+            if (rec.weeklyWeek != week) { rec.weeklyWeek = week; rec.weeklyScore = 0; rec.weeklyWave = 0; }
+            rec.weeklyScore = Mathf.Max(rec.weeklyScore, gm.Score);
+            rec.weeklyWave = Mathf.Max(rec.weeklyWave, wave);
+            SaveSystem.Write();
+        }
+        GameServices.ReportRun(new RunSummary
+        {
+            mode = GameMode.Current, weekly = GameMode.Weekly, won = gm.Won, score = gm.Score, wave = wave,
+            bestCombo = gm.BestCombo, bosses = bosses, chapter = GameMode.Chapter,
+            helicopters = ObjectiveDirector.I ? ObjectiveDirector.I.Helicopters : 0,
+        });
         repKills = gm.Kills; repSpecials = gm.SpecialKills; repBosses = bosses; repObjectives = objectives;
         shown = 0f;
         Refresh();

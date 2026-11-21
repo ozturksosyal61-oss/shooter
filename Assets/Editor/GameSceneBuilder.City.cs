@@ -755,7 +755,8 @@ public static partial class GameSceneBuilder
 
         // Radio (top right, under the FPS counter).
         var radio = Rect("Radio", obj);
-        Anchor(radio, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -74f), new Vector2(760f, 124f));
+        // Below the combo column (kills / score / combo take the top-right corner; playtest-02 #1).
+        Anchor(radio, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-104f, -330f), new Vector2(760f, 124f));
         var rg = radio.gameObject.AddComponent<CanvasGroup>();
         rg.blocksRaycasts = false; rg.interactable = false;
         var rp = Panel("Panel", radio, new Color(UiKhakiDark.r, UiKhakiDark.g, UiKhakiDark.b, 0.92f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(760f, 124f), 6f);
@@ -775,7 +776,7 @@ public static partial class GameSceneBuilder
 
         // Tracker under the radio.
         var tr = Rect("Tracker", obj);
-        Anchor(tr, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -210f), new Vector2(520f, 88f));
+        Anchor(tr, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-104f, -466f), new Vector2(520f, 88f));
         var tg = tr.gameObject.AddComponent<CanvasGroup>();
         tg.blocksRaycasts = false; tg.interactable = false;
         Panel("Panel", tr, new Color(UiKhaki.r, UiKhaki.g, UiKhaki.b, 0.9f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(520f, 88f), 6f);
@@ -791,6 +792,8 @@ public static partial class GameSceneBuilder
         var pFill = BarFill("Fill", pRoot.transform, UiOrange, 3f);
         oh.trackerGroup = tg; oh.trackerTitle = tTitle; oh.trackerInfo = tInfo; oh.trackerIcon = tIcon;
         oh.progressFill = pFill; oh.progressRoot = pRoot.gameObject;
+        var bossIntro = root.Find("BossIntro");
+        if (bossIntro) bossIntro.SetAsLastSibling(); // the boss title draws over the radio box
 
         // Target marker / edge arrow.
         var mk = Rect("Marker", obj);

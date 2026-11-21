@@ -121,7 +121,9 @@ public class ObjectiveDirector : MonoBehaviour
         if (!HasActive)
         {
             cooldown -= Time.deltaTime;
-            if (cooldown <= 0f && !Plan.Finished && Plan.ShouldIssue(wave, LastIssuedWave, false)) Issue(Plan.Next(rng));
+            // Endless: no new objective (helicopter zone included) during a boss wave — the boss fight comes alone (playtest-02 #2).
+            bool bossBusy = Plan is EndlessPlan && ((BossDirector.I && BossDirector.I.HoldsWave) || ModeRules.IsBossWave(GameMode.Current, wave));
+            if (cooldown <= 0f && !bossBusy && !Plan.Finished && Plan.ShouldIssue(wave, LastIssuedWave, false)) Issue(Plan.Next(rng));
             return;
         }
 

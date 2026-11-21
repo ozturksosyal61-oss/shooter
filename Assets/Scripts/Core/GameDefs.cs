@@ -109,14 +109,15 @@ public static class Difficulty
         };
     }
 
-    /// <summary>Waves 4–6 ramp density (spawn interval / max alive) a bit slower so players reach the first boss (wave 6).</summary>
-    public static readonly float[] DensityDip = { 1f, 1.6f, 2f };
+    /// <summary>Density "wave step" for waves 1–6 (playtest-02 #3): busier start (waves 1–2 were 3–10 zombies), softer
+    /// climb into wave 3 (specials start) and a slow wave 4–6 ramp so players reach the first boss. From wave 7: k = n − 1.</summary>
+    public static readonly float[] EarlyDensity = { 0.7f, 1.4f, 1.8f, 2.1f, 2.5f, 3f };
 
-    /// <summary>Density "wave step" (k = n − 1, minus the wave 4–6 dip); still increasing every wave.</summary>
+    /// <summary>Density "wave step" (spawn interval / max alive); increases every wave.</summary>
     public static float DensityStep(int n)
     {
         int k = Mathf.Max(0, n - 1);
-        return n >= 4 && n <= 6 ? k - DensityDip[n - 4] : k;
+        return n >= 1 && n <= EarlyDensity.Length ? EarlyDensity[n - 1] : k;
     }
 
     // Special zombies: mixed in from wave 3, more every wave; every 5th wave is a special wave.

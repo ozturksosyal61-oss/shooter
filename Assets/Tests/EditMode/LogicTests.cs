@@ -30,8 +30,8 @@ public class DifficultyTests
         var w1 = Difficulty.ForWave(1);
         Assert.AreEqual(1, w1.wave);
         Assert.AreEqual(30f, w1.duration, 1e-4f);
-        Assert.AreEqual(Difficulty.BaseInterval, w1.spawnInterval, 1e-4f);
-        Assert.AreEqual(Difficulty.BaseAlive, w1.maxAlive);
+        Assert.AreEqual(Difficulty.BaseInterval * Mathf.Pow(Difficulty.IntervalDecay, Difficulty.DensityStep(1)), w1.spawnInterval, 1e-4f);
+        Assert.AreEqual(Difficulty.BaseAlive + Mathf.RoundToInt(Difficulty.AlivePerWave * Difficulty.DensityStep(1)), w1.maxAlive);
         Assert.AreEqual(1f, w1.healthMultiplier, 1e-4f);
         Assert.AreEqual(Difficulty.BaseDamage, w1.contactDamage, 1e-4f);
         Assert.AreEqual(0f, w1.runnerChance, 1e-4f);
@@ -40,6 +40,8 @@ public class DifficultyTests
         Assert.AreEqual(Difficulty.BaseAlive + Mathf.RoundToInt(Difficulty.AlivePerWave * Difficulty.DensityStep(5)), w5.maxAlive);
         Assert.Less(Difficulty.DensityStep(5), 4f, "waves 4-6 ramp slower");
         Assert.AreEqual(6f, Difficulty.DensityStep(7), 1e-4f, "back on the curve from wave 7");
+        Assert.Greater(Difficulty.DensityStep(1), 0.5f, "wave 1 not empty");
+        for (int n = 1; n < 12; n++) Assert.Less(Difficulty.DensityStep(n), Difficulty.DensityStep(n + 1), "density rises every wave");
         Assert.AreEqual(Difficulty.BaseDamage + 4 * Difficulty.DamagePerWave, w5.contactDamage, 1e-4f);
         Assert.AreEqual(Difficulty.BaseInterval * Mathf.Pow(Difficulty.IntervalDecay, Difficulty.DensityStep(5)), w5.spawnInterval, 1e-4f);
     }
@@ -252,6 +254,78 @@ public class CardTests
         Upgrades.Offer(levels, 3, r, into, scratch, true);
         Assert.AreEqual(3, into.Count);
         Assert.AreEqual(2, Upgrades.GuaranteedDamagePicks);
+    }
+
+    [Test]
+    public void OffersMixCardFamiliesAndFavourOwnedCards()
+    {
+        var into = new List<CardId>(); var scratch = new List<int>();
+        var rng = new System.Random(7);
+        Func<float> r = () => (float)rng.NextDouble();
+        var levels = Levels();
+        int mixed = 0;
+        for (int k = 0; k < 2000; k++)
+        {
+            Upgrades.Offer(levels, 3, r, into, scratch);
+            var g = new HashSet<Upgrades.Group>(); foreach (var id in into) g.Add(Upgrades.GroupOf(id));
+            if (g.Count == 3) mixed++;
+        }
+        Assert.Greater(mixed, 1100, "most offers show one damage, one build and one utility card");
+        // Owning a card makes its next level show up more often.
+        int Seen(int[] lv) { int n = 0; for (int k = 0; k < 3000; k++) { Upgrades.Offer(lv, 3, r, into, scratch); if (into.Contains(CardId.Grenade)) n++; } return n; }
+        int fresh = Seen(Levels());
+        var owned = Levels(); owned[(int)CardId.Grenade] = 1;
+        Assert.Greater(Seen(owned), fresh * 1.2f);
+    }
+
+    [Test]
+    public void SynergiesNeedBothCards()
+    {
+        var lv = Levels();
+        foreach (var p in Upgrades.SynergyPairs)
+        {
+            Assert.IsFalse(Upgrades.HasSynergy(lv, p.s));
+            lv[(int)p.a] = 1; Assert.IsFalse(Upgrades.HasSynergy(lv, p.s), "one card is not enough");
+            lv[(int)p.b] = 2; Assert.IsTrue(Upgrades.HasSynergy(lv, p.s));
+            lv = Levels();
+            Assert.IsTrue(Loc.Has("syn." + p.s) && Loc.Has("syn." + p.s + ".desc"));
+        }
+        Assert.AreEqual(System.Enum.GetValues(typeof(Synergy)).Length, Upgrades.SynergyPairs.Length);
+    }
+
+    [Test]
+    public void WeeklyEventIsStablePerWeek()
+    {
+        var mon = new System.DateTime(2026, 11, 23, 0, 0, 0, System.DateTimeKind.Utc); // a Monday
+        int w = WeeklyEvent.Week(mon);
+        Assert.AreEqual(w, WeeklyEvent.Week(mon.AddDays(6.99)), "same week until Sunday night");
+        Assert.AreEqual(w + 1, WeeklyEvent.Week(mon.AddDays(7)));
+        Assert.AreEqual(w - 1, WeeklyEvent.Week(mon.AddSeconds(-1)));
+        Assert.AreEqual(7, WeeklyEvent.DaysLeft(mon));
+        Assert.AreEqual(1, WeeklyEvent.DaysLeft(mon.AddDays(6.5)));
+        Assert.AreNotEqual(WeeklyEvent.WeaponFor(w), WeeklyEvent.WeaponFor(w + 1), "rule rotates");
+        Assert.AreNotEqual(WeeklyEvent.SeedFor(w), WeeklyEvent.SeedFor(w + 1));
+        for (int k = -5; k < 200; k++)
+        {
+            Assert.AreNotEqual(0, WeeklyEvent.SeedFor(k));
+            Assert.IsTrue(Loc.Has(WeeklyEvent.RuleKey(k)));
+        }
+    }
+
+    [Test]
+    public void AchievementRules()
+    {
+        var into = new List<string>();
+        GameServices.AchievementsFor(new RunSummary { mode = RunMode.Endless, wave = 4 }, 0, 18, into);
+        Assert.AreEqual(0, into.Count);
+        GameServices.AchievementsFor(new RunSummary { mode = RunMode.Hard, wave = 10, bosses = 1, bestCombo = 50, helicopters = 1 }, 0, 18, into);
+        CollectionAssert.IsSubsetOf(new[] { GameIds.AchWave5, GameIds.AchWave10, GameIds.AchHard10, GameIds.AchFirstBoss, GameIds.AchCombo50, GameIds.AchHelicopter }, into);
+        CollectionAssert.DoesNotContain(into, GameIds.AchWave20);
+        GameServices.AchievementsFor(new RunSummary { mode = RunMode.Campaign, wave = 30, won = true, chapter = Campaign.Count - 1 }, 18, 18, into);
+        CollectionAssert.Contains(into, GameIds.AchCampaign);
+        CollectionAssert.Contains(into, GameIds.AchAllStars);
+        CollectionAssert.DoesNotContain(into, GameIds.AchWave20, "campaign waves don't count for wave achievements");
+        foreach (var id in into) CollectionAssert.Contains(GameIds.Achievements, id);
     }
 
     [Test]

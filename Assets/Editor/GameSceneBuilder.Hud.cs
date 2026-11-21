@@ -58,6 +58,15 @@ public static partial class GameSceneBuilder
         Anchor(rightTip.rectTransform, new Vector2(0.75f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -170f), new Vector2(800f, 200f));
         L(rightTip, "tut.right");
         hud.tutorialGroup = tipsGroup;
+        // Step 1 = the left/right hints; steps 2–3 = one centred line; small "GUIDE n/3" tag above.
+        var step1 = Rect("Step1", tips); Stretch(step1);
+        divider.transform.SetParent(step1, true); leftTip.transform.SetParent(step1, true); rightTip.transform.SetParent(step1, true);
+        var stepTxt = Txt("Step", tips, 52, TextAnchor.MiddleCenter, UiKit.Text);
+        Anchor(stepTxt.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -200f), new Vector2(1500f, 220f));
+        stepTxt.horizontalOverflow = HorizontalWrapMode.Wrap; stepTxt.gameObject.SetActive(false);
+        var countTxt = Txt("Count", tips, 30, TextAnchor.MiddleCenter, UiKit.Hazard);
+        Anchor(countTxt.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -40f), new Vector2(600f, 44f));
+        hud.tutorialStep1 = step1.gameObject; hud.tutorialStep = stepTxt; hud.tutorialCount = countTxt;
 
         // ---- Joystick + aim ring.
         var joyBase = KImg("JoystickBase", root, kit.ringThin, Color.white);
@@ -440,6 +449,7 @@ public static partial class GameSceneBuilder
         // Intro title (legacy layer, centre).
         var intro = Rect("BossIntro", legacy);
         Anchor(intro, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 170f), new Vector2(1400f, 260f));
+        intro.SetAsLastSibling();
         var ig = intro.gameObject.AddComponent<CanvasGroup>(); ig.blocksRaycasts = false; ig.interactable = false;
         var title = Txt("Title", intro, 140, TextAnchor.MiddleCenter, UiKit.DangerAlt);
         Anchor(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1400f, 180f));

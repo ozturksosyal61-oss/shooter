@@ -10,6 +10,8 @@ public enum CardId
 
 public enum Rarity { Common, Rare, Epic }
 
+public enum Synergy { FlameShot, TurretMaster, Demolition, IronBlood, Deadeye }
+
 public struct CardDef
 {
     public CardId id;
@@ -75,6 +77,26 @@ public class Upgrades : MonoBehaviour
     public static readonly CardId[] DamageCards = { CardId.Pierce, CardId.FireRate, CardId.DoubleShot, CardId.Crit, CardId.KillBlast, CardId.Shotgun };
     public const int GuaranteedDamagePicks = 2;
     public static bool IsDamageCard(CardId id) => Array.IndexOf(DamageCards, id) >= 0;
+
+    // ---------------------------------------------------------------- hidden synergies (pure, unit-tested)
+    /// <summary>Two owned cards unlock a bonus (announced when it happens; not shown in the offers).</summary>
+    public static readonly (Synergy s, CardId a, CardId b)[] SynergyPairs =
+    {
+        (Synergy.FlameShot, CardId.Shotgun, CardId.Pierce),       // shotgun pellets pierce + hit harder
+        (Synergy.TurretMaster, CardId.Turret, CardId.FireRate),   // turrets fire faster
+        (Synergy.Demolition, CardId.Grenade, CardId.KillBlast),   // grenades more often, bigger kill blasts
+        (Synergy.IronBlood, CardId.Lifesteal, CardId.MaxHealth),  // double lifesteal
+        (Synergy.Deadeye, CardId.Crit, CardId.DoubleShot),        // +10 % crit chance
+    };
+    public static bool HasSynergy(int[] levels, Synergy s)
+    {
+        foreach (var p in SynergyPairs) if (p.s == s) return levels[(int)p.a] > 0 && levels[(int)p.b] > 0;
+        return false;
+    }
+    public const float FlameShotDamageMul = 1.4f, TurretMasterRateMul = 1.4f, DemolitionGrenadeMul = 0.7f,
+        DemolitionBlastMul = 1.3f, IronBloodLifestealMul = 2f, DeadeyeCrit = 0.1f;
+    public bool Has(Synergy s) => HasSynergy(levels, s);
+    public event Action<Synergy> SynergyUnlocked;
 
     [Header("Active cards")]
     public Turret turretPrefab;
@@ -235,6 +257,32 @@ public class Upgrades : MonoBehaviour
         into.Add(Cards[chosen].id);
     }
 
+    /// <summary>Card families: an offer mixes them so the three choices feel different (playtest-02 #6).</summary>
+    public enum Group { Damage, Build, Utility }
+
+    public static Group GroupOf(CardId id)
+    {
+        switch (id)
+        {
+            case CardId.Pierce: case CardId.FireRate: case CardId.DoubleShot: case CardId.Crit: return Group.Damage;
+            case CardId.KillBlast: case CardId.Shotgun: case CardId.Turret: case CardId.Grenade: return Group.Build;
+            default: return Group.Utility;
+        }
+    }
+
+    /// <summary>Owned cards come back more often (directed builds); a family already in the offer is less likely.</summary>
+    public const float OwnedBoost = 1.7f, SameGroupMul = 0.12f;
+
+    /// <summary>Offer weight of card <paramref name="i"/> given what is already offered (pure).</summary>
+    public static float OfferWeight(int[] levels, int i, List<CardId> offered)
+    {
+        float w = RarityWeight[(int)Cards[i].rarity];
+        if (levels[i] > 0) w *= OwnedBoost;
+        var g = GroupOf(Cards[i].id);
+        foreach (var id in offered) if (GroupOf(id) == g) { w *= SameGroupMul; break; }
+        return w;
+    }
+
     static void Draw(int[] levels, int count, Func<float> rand01, List<CardId> into, List<int> scratch)
     {
         into.Clear();
@@ -243,12 +291,12 @@ public class Upgrades : MonoBehaviour
         while (into.Count < count && scratch.Count > 0)
         {
             float total = 0f;
-            foreach (int i in scratch) total += RarityWeight[(int)Cards[i].rarity];
+            foreach (int i in scratch) total += OfferWeight(levels, i, into);
             float r = rand01() * total;
             int chosen = scratch[scratch.Count - 1];
             foreach (int i in scratch)
             {
-                r -= RarityWeight[(int)Cards[i].rarity];
+                r -= OfferWeight(levels, i, into);
                 if (r <= 0f) { chosen = i; break; }
             }
             scratch.Remove(chosen);
@@ -279,6 +327,8 @@ public class Upgrades : MonoBehaviour
     public void Take(CardId id)
     {
         if (!CanTake(id)) return;
+        int synBefore = 0;
+        foreach (var sp in SynergyPairs) if (Has(sp.s)) synBefore |= 1 << (int)sp.s;
         int l = ++levels[(int)id];
         Picks++;
         if (l == 1) Owned.Add(id);
@@ -291,13 +341,15 @@ public class Upgrades : MonoBehaviour
             case CardId.Grenade: grenadeT = 1f; break;
         }
         Changed?.Invoke(id, l);
+        foreach (var sp in SynergyPairs)
+            if (Has(sp.s) && (synBefore & (1 << (int)sp.s)) == 0) { SynergyUnlocked?.Invoke(sp.s); GameServices.Unlock(GameIds.AchSynergy); }
     }
 
     void Recompute()
     {
         weapon.fireRate = baseFireRate * FireRateMul(Level(CardId.FireRate));
         weapon.reloadTime = baseReload * ReloadMul(Level(CardId.FastReload));
-        weapon.critChance = CritChance(baseCrit, Level(CardId.Crit));
+        weapon.critChance = Mathf.Min(0.9f, CritChance(baseCrit, Level(CardId.Crit)) + (Has(Synergy.Deadeye) ? DeadeyeCrit : 0f));
         weapon.magazineSize = MagazineSize(baseMag, Level(CardId.BigMag));
         weapon.pierce = Level(CardId.Pierce);
         weapon.extraBullets = Level(CardId.DoubleShot);
@@ -310,10 +362,10 @@ public class Upgrades : MonoBehaviour
     void OnKilled(Zombie z)
     {
         int ls = Level(CardId.Lifesteal);
-        if (ls > 0) player.Regen(ls);
+        if (ls > 0) player.Regen(ls * (Has(Synergy.IronBlood) ? IronBloodLifestealMul : 1f));
         int kb = Level(CardId.KillBlast);
         if (kb > 0 && !z.KilledByExplosion && UnityEngine.Random.value < KillBlastChance(kb))
-            Explosions.Explode(z.transform.position, killBlastRadius, 45f + 10f * kb, 0f, SfxId.Explosion, 0.25f, z, false);
+            Explosions.Explode(z.transform.position, killBlastRadius * (Has(Synergy.Demolition) ? DemolitionBlastMul : 1f), 45f + 10f * kb, 0f, SfxId.Explosion, 0.25f, z, false);
     }
 
     void OnWaveCleared(int wave)
@@ -345,7 +397,7 @@ public class Upgrades : MonoBehaviour
         int gr = Level(CardId.Grenade);
         if (gr > 0 && (grenadeT -= dt) <= 0f)
         {
-            if (TryThrowGrenade()) grenadeT = 7f - gr;
+            if (TryThrowGrenade()) grenadeT = (7f - gr) * (Has(Synergy.Demolition) ? DemolitionGrenadeMul : 1f);
             else grenadeT = 0.3f;
         }
         UpdateGrenades();
@@ -356,12 +408,13 @@ public class Upgrades : MonoBehaviour
         Vector3 p = player.transform.position;
         Vector3 aim = target.transform.position - p; aim.y = 0f; aim.Normalize();
         Vector3 start = p + Vector3.up * 1.1f + aim * 0.5f;
-        float dmg = shotgunDamage * weapon.DamageScale;
+        bool flame = Has(Synergy.FlameShot);
+        float dmg = shotgunDamage * weapon.DamageScale * (flame ? FlameShotDamageMul : 1f);
         for (int i = 0; i < shotgunPellets; i++)
         {
             float a = Mathf.Lerp(-shotgunCone * 0.5f, shotgunCone * 0.5f, i / (shotgunPellets - 1f)) + UnityEngine.Random.Range(-3f, 3f);
             Vector3 d = Quaternion.Euler(0f, a, 0f) * aim;
-            weapon.SpawnBullet(start, p + Vector3.up * 1.1f, d, 48f, dmg, UnityEngine.Random.value < weapon.critChance, 0.2f, 0);
+            weapon.SpawnBullet(start, p + Vector3.up * 1.1f, d, 48f, dmg, UnityEngine.Random.value < weapon.critChance, 0.2f, flame ? 1 + Level(CardId.Pierce) : 0);
         }
         if (Fx.I) Fx.I.Muzzle(start, aim);
         GameManager.I.Shake(0.12f);
@@ -379,7 +432,7 @@ public class Upgrades : MonoBehaviour
         if (Physics.CheckSphere(spot + Vector3.up * 0.6f, 0.5f, GameLayers.ObstacleMask, QueryTriggerInteraction.Ignore)) spot = p;
         spot.y = 0f;
         int l = Level(CardId.Turret);
-        turret.Deploy(spot, turretLife, 6f + 2.5f * (l - 1), 14f + 3f * (l - 1), turretHealth + 40f * (l - 1), weapon);
+        turret.Deploy(spot, turretLife, (6f + 2.5f * (l - 1)) * (Has(Synergy.TurretMaster) ? TurretMasterRateMul : 1f), 14f + 3f * (l - 1), turretHealth + 40f * (l - 1), weapon);
         turretT = l >= 3 ? turretEveryMax : turretEvery;
     }
 

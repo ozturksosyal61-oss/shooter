@@ -114,6 +114,7 @@ public class ChunkManager : MonoBehaviour
     {
         I = this;
         if (SeedOverride != 0) seed = SeedOverride;
+        else if (GameMode.Weekly) seed = WeeklyEvent.SeedFor(WeeklyEvent.CurrentWeek);
         else if (randomSeed) seed = UnityEngine.Random.Range(1, 1_000_000);
         var r = new System.Random(seed);
         noiseOffset = new Vector2((float)r.NextDouble() * 1000f, (float)r.NextDouble() * 1000f);

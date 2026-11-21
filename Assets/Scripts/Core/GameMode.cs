@@ -17,9 +17,19 @@ public static class GameMode
     public static bool IsCampaign => Current == RunMode.Campaign;
     public static bool IsCoop => Current == RunMode.Coop;
 
+    /// <summary>Weekly event run (endless rules + the week's seed and forced weapon, see <see cref="WeeklyEvent"/>).</summary>
+    public static bool Weekly;
+
+    public static void SetWeekly()
+    {
+        Set(RunMode.Endless);
+        Weekly = true;
+    }
+
     public static void Set(RunMode m, int chapter = 0)
     {
         Current = m;
+        Weekly = false;
         Chapter = Mathf.Clamp(chapter, 0, Campaign.Count - 1);
     }
 }

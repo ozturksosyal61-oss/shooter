@@ -35,6 +35,9 @@ public class MainMenu : MonoBehaviour
     public CoopPanel coopPanel;
     public ModePanel modePanel;
     public Button questsButton, loginButton;
+    [Header("Weekly event + Game Center")]
+    public Button weeklyButton, leaderboardButton;
+    public TMP_Text weeklySub;
     public GameObject questBadge, loginBadge;
     public TMP_Text questBadgeText, questSub, loginSub, loginTimer;
 
@@ -59,6 +62,8 @@ public class MainMenu : MonoBehaviour
         if (gemPlus) gemPlus.onClick.AddListener(() => { Click(); shopUI.Open(ShopUI.Tab.Gems, 1); });
         if (questsButton) questsButton.onClick.AddListener(() => { Click(); quests.Open(); });
         if (loginButton) loginButton.onClick.AddListener(() => { Click(); login.Open(); });
+        if (weeklyButton) weeklyButton.onClick.AddListener(() => { Click(); GameMode.SetWeekly(); PlayEndless(); });
+        if (leaderboardButton) leaderboardButton.onClick.AddListener(() => { Click(); GameServices.ShowLeaderboards(); });
         settings.onClick.AddListener(() => { Click(); settingsPanel.Open(); });
         if (shopUI) shopUI.Closed += RefreshSoldier;
         Profile.Changed += Refresh;
@@ -81,9 +86,11 @@ public class MainMenu : MonoBehaviour
 
     void AfterSplash()
     {
-        Ads.Warm(); // ATT prompt + SDK init + first rewarded load now, so ads are ready by the first death / shop visit
+        Ads.Warm();
+        GameServices.Init(); // ATT prompt + SDK init + first rewarded load now, so ads are ready by the first death / shop visit
         var o = OpenOnStart;
         OpenOnStart = Open.None;
+        if (GameMode.Weekly) GameMode.Set(RunMode.Endless); // back from a weekly run: the normal weapon choice again
         if (o == Open.Loadout && loadout) { loadout.Open(); return; }
         if (o == Open.Campaign && campaignPanel) { campaignPanel.Open(); return; }
         AutoLogin();
@@ -94,6 +101,14 @@ public class MainMenu : MonoBehaviour
         var w = SaveSystem.Data.wallet;
         gold.text = w.gold.ToString();
         gems.text = w.gems.ToString();
+        if (weeklySub)
+        {
+            int wk = WeeklyEvent.CurrentWeek;
+            var rec = SaveSystem.Data.records;
+            int best = rec.weeklyWeek == wk ? rec.weeklyScore : 0;
+            weeklySub.text = Loc.F(best > 0 ? "weekly.sub_best" : "weekly.sub", Loc.T(WeeklyEvent.RuleKey(wk)), WeeklyEvent.DaysLeft(System.DateTime.UtcNow), best);
+        }
+        if (leaderboardButton) leaderboardButton.gameObject.SetActive(Application.platform == RuntimePlatform.IPhonePlayer || Application.isEditor);
         int open = 0;
         foreach (var q in Profile.Quests) if (!q.claimed) open++;
         if (questBadge) questBadge.SetActive(open > 0);

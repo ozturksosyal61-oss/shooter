@@ -17,7 +17,7 @@ public class Fx : MonoBehaviour
 
     public GameObject splatPrefab;
     public int splatCount = 40;
-    public float splatLife = 8f;
+    public float splatLife = 6f;
 
     static ParticleSystem.EmitParams ep;
     static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
@@ -76,7 +76,7 @@ public class Fx : MonoBehaviour
             if (!splats[i].gameObject.activeSelf) continue;
             float age = now - splatBorn[i];
             if (age > splatLife) { splats[i].gameObject.SetActive(false); continue; }
-            float fade = Mathf.Clamp01((splatLife - age) / 2f);
+            float fade = Mathf.Clamp01((splatLife - age) / (splatLife * 0.6f)); // fades out over most of its life so crowds don't carpet the street
             var c = splatColor[i]; c.a *= fade;
             mpb.SetColor(BaseColor, c);
             splatRenderers[i].SetPropertyBlock(mpb);

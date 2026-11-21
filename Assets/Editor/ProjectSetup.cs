@@ -30,6 +30,9 @@ public static class ProjectSetup
         PlayerSettings.iOS.buildNumber = IosBuildNumber;
         PlayerSettings.Android.bundleVersionCode = 8;
         PlayerSettings.iOS.targetOSVersionString = "15.0";
+        // Live-ops: crashes + uncaught exceptions from players' devices → Unity Cloud dashboard (Diagnostics).
+        UnityEditor.CrashReporting.CrashReportingSettings.enabled = true;
+        UnityEditor.CrashReporting.CrashReportingSettings.captureEditorExceptions = false;
         PlayerSettings.SplashScreen.show = true;
         PlayerSettings.SplashScreen.backgroundColor = new Color(0.07f, 0.08f, 0.05f);
         // Landscape only (left + right).

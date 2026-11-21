@@ -56,6 +56,9 @@ public class HUD : MonoBehaviour
     [Header("Misc")]
     public TMP_Text fpsText;
     public CanvasGroup tutorialGroup;
+    [Tooltip("First-run guide: step text (steps 2–3 + done) and the left/right hints of step 1.")]
+    public TMP_Text tutorialStep, tutorialCount;
+    public GameObject tutorialStep1;
 
     [Header("Redesign HUD")]
     public TMP_Text killsText, runGoldText, waveNumber, waveLeft, weaponName;
@@ -105,8 +108,8 @@ public class HUD : MonoBehaviour
         if (waveBannerGroup) waveBannerGroup.alpha = 0f;
         tutorialActive = tutorialGroup && !SaveSystem.Data.tutorialDone;
         if (tutorialGroup) tutorialGroup.alpha = tutorialActive ? 1f : 0f;
-        if (WaveDirector.I) WaveDirector.I.WaveStarted += OnWaveStarted;
-        if (Upgrades.I) Upgrades.I.Changed += OnCardChanged;
+        if (WaveDirector.I) { WaveDirector.I.WaveStarted += OnWaveStarted; WaveDirector.I.WaveCleared += OnWaveClearedReward; }
+        if (Upgrades.I) { Upgrades.I.Changed += OnCardChanged; Upgrades.I.SynergyUnlocked += OnSynergy; }
         if (cardIconTemplate) cardIconTemplate.gameObject.SetActive(false);
         if (reloadSweetSpot && GameManager.I && GameManager.I.player)
         {
@@ -118,8 +121,9 @@ public class HUD : MonoBehaviour
 
     void OnDestroy()
     {
-        if (WaveDirector.I) WaveDirector.I.WaveStarted -= OnWaveStarted;
-        if (Upgrades.I) Upgrades.I.Changed -= OnCardChanged;
+        if (WaveDirector.I) { WaveDirector.I.WaveStarted -= OnWaveStarted; WaveDirector.I.WaveCleared -= OnWaveClearedReward; }
+        if (Upgrades.I) { Upgrades.I.Changed -= OnCardChanged; Upgrades.I.SynergyUnlocked -= OnSynergy; }
+        Explosions.OnExplosion -= OnTutorialExplosion;
     }
 
     static readonly string[] LevelDigits = { "0", "1", "2", "3", "4", "5" };
@@ -170,6 +174,36 @@ public class HUD : MonoBehaviour
         bannerT = 0f;
     }
 
+    void OnSynergy(Synergy s)
+    {
+        ShowBanner(Loc.F("syn.title", Loc.T("syn." + s)), Loc.T("syn." + s + ".desc"), Upgrades.RarityColors[(int)Rarity.Epic]);
+        GameAudio.Play(SfxId.ObjectiveDone, Vector3.zero);
+    }
+
+    // Wave-end reward moment (playtest-02): the gold this wave earned, coin sound, the run-gold pill pops.
+    int goldAtWaveStart;
+    float goldPop = 99f;
+
+    int CurrentRunGold(GameManager gm)
+    {
+        int wave = WaveDirector.I ? WaveDirector.I.Wave : 0;
+        int objectives = ObjectiveDirector.I ? ObjectiveDirector.I.CompletedCount : 0;
+        int bosses = BossDirector.I ? BossDirector.I.BossesDefeated : 0;
+        return Economy.RunGold(gm.Score, wave, gm.Kills, objectives, bosses, Profile.GoldMultiplier * ModeRules.GoldMul(GameMode.Current));
+    }
+
+    void OnWaveClearedReward(int wave)
+    {
+        var gm = GameManager.I;
+        if (!gm || gm.IsGameOver) return;
+        int g = CurrentRunGold(gm);
+        int earned = Mathf.Max(0, g - goldAtWaveStart);
+        goldAtWaveStart = g;
+        goldT = 0f; goldPop = 0f;
+        GameAudio.Play(SfxId.Coin, Vector3.zero);
+        if (bannerT > 2.2f) ShowBanner(Loc.F("hud.wave_clear", wave), Loc.F("hud.wave_gold", earned), Gold);
+    }
+
     /// <summary>Big centre banner (wave intro style) — objectives, story beats.</summary>
     public void ShowBanner(string title, string sub, Color subColor)
     {
@@ -216,13 +250,17 @@ public class HUD : MonoBehaviour
     void UpdateRun(GameManager gm, float dt)
     {
         if (killsText && gm.Kills != shownKills) { shownKills = gm.Kills; killsText.text = gm.Kills.ToString(); }
+        if (goldPop < 0.6f && runGoldText)
+        {
+            goldPop += dt;
+            float k = goldPop / 0.6f;
+            runGoldText.transform.parent.localScale = Vector3.one * (1f + 0.35f * Mathf.Sin(Mathf.Min(1f, k) * Mathf.PI));
+            runGoldText.color = Color.Lerp(Gold, UiKit.Text, k);
+        }
         goldT -= dt;
         if (!runGoldText || goldT > 0f) return;
         goldT = 0.5f;
-        int wave = WaveDirector.I ? WaveDirector.I.Wave : 0;
-        int objectives = ObjectiveDirector.I ? ObjectiveDirector.I.CompletedCount : 0;
-        int bosses = BossDirector.I ? BossDirector.I.BossesDefeated : 0;
-        int g = Economy.RunGold(gm.Score, wave, gm.Kills, objectives, bosses, Profile.GoldMultiplier * ModeRules.GoldMul(GameMode.Current));
+        int g = CurrentRunGold(gm);
         if (g != shownGold) { shownGold = g; runGoldText.text = "+" + g; }
     }
 
@@ -453,20 +491,56 @@ public class HUD : MonoBehaviour
         }
     }
 
+    // First-run guide (playtest-02): 1 move + fire, 2 active reload, 3 shoot a barrel; each step also times out.
+    int tutorialStepIx, tutorialReloads;
+    float tutorialFire;
+    bool tutorialWasReloading, tutorialBoom;
+    static readonly string[] TutorialKeys = { null, "tut.step2", "tut.step3", "tut.done" };
+    static readonly float[] TutorialTimeout = { 14f, 25f, 25f, 2f };
+
+    void OnTutorialExplosion(Vector3 p, float r) => tutorialBoom = true;
+
+    void ShowTutorialStep(int ix)
+    {
+        tutorialStepIx = ix; tutorialT = 0f;
+        if (tutorialStep1) tutorialStep1.SetActive(ix == 0);
+        if (tutorialStep) { tutorialStep.gameObject.SetActive(ix > 0); if (ix > 0) tutorialStep.text = Loc.T(TutorialKeys[ix]); }
+        if (tutorialCount) { tutorialCount.gameObject.SetActive(ix < 3); tutorialCount.text = Loc.F("tut.count", ix + 1); }
+        tutorialGroup.alpha = 1f;
+        if (ix == 2) { tutorialBoom = false; Explosions.OnExplosion -= OnTutorialExplosion; Explosions.OnExplosion += OnTutorialExplosion; }
+        if (ix > 0) GameAudio.Play(SfxId.UiClick, Vector3.zero);
+    }
+
     void UpdateTutorial(float dt)
     {
         if (!tutorialActive) return;
+        if (tutorialT == 0f && tutorialStepIx == 0 && tutorialFire == 0f) ShowTutorialStep(0);
         tutorialT += dt;
-        if (tutorialT > 5f)
+        var w = GameManager.I && GameManager.I.player ? GameManager.I.player.weapon : null;
+        bool done = tutorialT > TutorialTimeout[tutorialStepIx];
+        switch (tutorialStepIx)
         {
-            tutorialGroup.alpha = Mathf.MoveTowards(tutorialGroup.alpha, 0f, dt * 2f);
-            if (tutorialGroup.alpha <= 0f)
-            {
-                tutorialActive = false;
-                SaveSystem.Data.tutorialDone = true;
-                SaveSystem.Write();
-            }
+            case 0:
+                if (w && w.IsFiring) tutorialFire += dt;
+                done |= tutorialFire > 1.5f;
+                break;
+            case 1:
+                if (w && w.IsReloading && !tutorialWasReloading) tutorialReloads++;
+                if (w) tutorialWasReloading = w.IsReloading;
+                done |= (w && w.ActiveReloadResult == 1) || (tutorialReloads >= 3 && w && !w.IsReloading);
+                break;
+            case 2:
+                done |= tutorialBoom;
+                break;
         }
+        if (!done) return;
+        if (tutorialStepIx < 3) { ShowTutorialStep(tutorialStepIx + 1); return; }
+        tutorialGroup.alpha = Mathf.MoveTowards(tutorialGroup.alpha, 0f, dt * 2f);
+        if (tutorialGroup.alpha > 0f) return;
+        tutorialActive = false;
+        Explosions.OnExplosion -= OnTutorialExplosion;
+        SaveSystem.Data.tutorialDone = true;
+        SaveSystem.Write();
     }
 
     void UpdateFps(float dt)
