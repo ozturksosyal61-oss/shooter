@@ -85,6 +85,17 @@ jobs:
           if [ "$APP_ENT" != "Unity-iPhone/Holdout.entitlements" ]; then
             echo "::error::Unity-iPhone hedefinde CODE_SIGN_ENTITLEMENTS yanlış: '$APP_ENT'"; exit 1
           fi
+      - name: Proje yolları kontrolü (.lproj + mutlak yol)
+        run: |
+          for l in en tr; do
+            F=Builds/iOS/$l.lproj/InfoPlist.strings
+            if [ ! -f "$F" ]; then echo "::error::$F yok"; exit 1; fi
+            echo "$F:"; cat "$F"
+          done
+          grep -n "lproj" Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj | head -n 20
+          if grep -n "/github/workspace" Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj; then
+            echo "::error::project.pbxproj içinde mutlak /github/workspace yolu var (yukarıda)"; exit 1
+          fi
       - name: Arşiv
         run: |
           if [ -d Builds/iOS/Unity-iPhone.xcworkspace ]; then SRC=(-workspace Builds/iOS/Unity-iPhone.xcworkspace); else SRC=(-project Builds/iOS/Unity-iPhone.xcodeproj); fi

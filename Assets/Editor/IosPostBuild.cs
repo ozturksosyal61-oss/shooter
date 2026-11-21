@@ -138,8 +138,12 @@ public static class IosPostBuild
             File.WriteAllText(abs, "/* App Tracking Transparency */\n\"NSUserTrackingUsageDescription\" = \"" + text.Replace("\"", "\\\"") + "\";\n", new System.Text.UTF8Encoding(false));
             // Folder reference: the .lproj folder is copied into the bundle as is (a plain file would be flattened).
             string folder = lang + ".lproj";
-            if (string.IsNullOrEmpty(proj.FindFileGuidByProjectPath(folder)))
-                proj.AddFileToBuild(target, proj.AddFolderReference(Path.Combine(path, folder), folder, PBXSourceTree.Source));
+            // Path relative to the Xcode project (SOURCE_ROOT): CI generates on Linux (/github/workspace/...) and
+            // archives on macOS, so an absolute path breaks CpResource. Replace any older (absolute) reference.
+            if (!File.Exists(abs)) throw new IOException("[IosPostBuild] " + abs + " was not written");
+            string old = proj.FindFileGuidByProjectPath(folder);
+            if (!string.IsNullOrEmpty(old)) proj.RemoveFile(old);
+            proj.AddFileToBuild(target, proj.AddFolderReference(folder, folder, PBXSourceTree.Source));
         }
         proj.WriteToFile(projPath);
     }
