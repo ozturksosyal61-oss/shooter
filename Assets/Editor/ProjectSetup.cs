@@ -17,7 +17,7 @@ public static class ProjectSetup
     public const string ProductName = "Holdout";
     public const string BundleId = "com.oztdigital.holdout";
     public const string Version = "1.0.1";
-    public const string IosBuildNumber = "2611210137"; // > last TestFlight upload 2611210136 (CI: yyMMddHHmm)
+    public const string IosBuildNumber = "2611210241"; // > last TestFlight upload 2611210240 (CI: yyMMddHHmm)
     public const string IconDir = "Assets/Art/Icon";
 
     public static void Apply()

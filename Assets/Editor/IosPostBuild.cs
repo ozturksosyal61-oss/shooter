@@ -44,8 +44,8 @@ public static class IosPostBuild
         "zmvfpc5aq8.skadnetwork", "zq492l623r.skadnetwork", 
     };
 
-    /// <summary>Last uploaded TestFlight build was 2611210136 (CI yyMMddHHmm): never at or below it.</summary>
-    public const long MinBuildNumber = 2611210137;
+    /// <summary>Last uploaded TestFlight build was 2611210240 (CI yyMMddHHmm): never at or below it.</summary>
+    public const long MinBuildNumber = 2611210241;
     const string Entitlements = "Unity-iPhone/Holdout.entitlements";
 
     [PostProcessBuild(1000)]
@@ -97,9 +97,15 @@ public static class IosPostBuild
         ent.WriteToFile(entPath);
         proj = new PBXProject();
         proj.ReadFromFile(projPath);
+        // Entitlements belong to the app target (Unity-iPhone) only; a framework target must not carry them.
         proj.SetBuildProperty(target, "CODE_SIGN_ENTITLEMENTS", Entitlements);
+        string fw = proj.GetUnityFrameworkTargetGuid();
+        if (!string.IsNullOrEmpty(fw) && fw != target && !string.IsNullOrEmpty(proj.GetBuildPropertyForAnyConfig(fw, "CODE_SIGN_ENTITLEMENTS")))
+            proj.SetBuildProperty(fw, "CODE_SIGN_ENTITLEMENTS", "");
         proj.AddFrameworkToProject(target, "GameKit.framework", true);
         proj.WriteToFile(projPath);
+        UnityEngine.Debug.Log("[IosPostBuild] Game Center: " + Entitlements + " → Unity-iPhone (main target)" +
+            ", CODE_SIGN_ENTITLEMENTS=" + proj.GetBuildPropertyForAnyConfig(target, "CODE_SIGN_ENTITLEMENTS"));
     }
 
     static void AddSkAdNetworks(PlistElementDict root)

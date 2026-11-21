@@ -21,7 +21,7 @@ jobs:
       - name: Build numarası
         run: |
           BN=$(date -u +%y%m%d%H%M)
-          if [ "$BN" -le 2611210136 ]; then BN=2611210137; fi  # last TestFlight upload 2611210136
+          if [ "$BN" -le 2611210240 ]; then BN=2611210241; fi  # last TestFlight upload 2611210240
           echo "BUILD_NUMBER=$BN" >> "$GITHUB_ENV"
       - name: Library önbelleği
         uses: actions/cache@v4
@@ -71,26 +71,41 @@ jobs:
         run: |
           mkdir -p ~/keys
           printf '%s' "$ASC_KEY_P8" > ~/keys/AuthKey.p8
+      - name: Entitlement kontrolü (Xcode projesi)
+        run: |
+          ENT=Builds/iOS/Unity-iPhone/Holdout.entitlements
+          echo "::group::$ENT"; cat "$ENT" || true; echo "::endgroup::"
+          if ! grep -q "com.apple.developer.game-center" "$ENT"; then
+            echo "::error::$ENT içinde com.apple.developer.game-center yok (IosPostBuild.AddGameCenter çalışmadı mı?)"; exit 1
+          fi
+          APP_ENT=$(xcodebuild -project Builds/iOS/Unity-iPhone.xcodeproj -target Unity-iPhone -configuration Release -showBuildSettings 2>/dev/null | awk -F' = ' '/^ *CODE_SIGN_ENTITLEMENTS =/{print $2}')
+          FW_ENT=$(xcodebuild -project Builds/iOS/Unity-iPhone.xcodeproj -target UnityFramework -configuration Release -showBuildSettings 2>/dev/null | awk -F' = ' '/^ *CODE_SIGN_ENTITLEMENTS =/{print $2}')
+          echo "Unity-iPhone CODE_SIGN_ENTITLEMENTS = '$APP_ENT'"
+          echo "UnityFramework CODE_SIGN_ENTITLEMENTS = '$FW_ENT'"
+          if [ "$APP_ENT" != "Unity-iPhone/Holdout.entitlements" ]; then
+            echo "::error::Unity-iPhone hedefinde CODE_SIGN_ENTITLEMENTS yanlış: '$APP_ENT'"; exit 1
+          fi
       - name: Arşiv
         run: |
           if [ -d Builds/iOS/Unity-iPhone.xcworkspace ]; then SRC=(-workspace Builds/iOS/Unity-iPhone.xcworkspace); else SRC=(-project Builds/iOS/Unity-iPhone.xcodeproj); fi
-          xcodebuild "${SRC[@]}" -scheme Unity-iPhone -configuration Release \
-            -archivePath "$RUNNER_TEMP/Holdout.xcarchive" -destination "generic/platform=iOS" \
-            CODE_SIGNING_ALLOWED=NO archive | tail -n 40
+          xcodebuild "${SRC[@]}" -scheme Unity-iPhone -configuration Release             -archivePath "$RUNNER_TEMP/Holdout.xcarchive" -destination "generic/platform=iOS"             CODE_SIGNING_ALLOWED=NO archive | tail -n 40
           test -d "$RUNNER_TEMP/Holdout.xcarchive"
       - name: Entitlement'ları arşive göm (Game Center)
         # Archive is unsigned (CODE_SIGNING_ALLOWED=NO) → no entitlements in the binary, and export would re-sign
-        # without com.apple.developer.game-center. Ad-hoc sign with the entitlements file; export keeps them.
+        # without com.apple.developer.game-center. Ad-hoc sign with the entitlements file; export keeps them
+        # (intersected with what the provisioning profile allows — checked after export).
         run: |
           APP=$(ls -d "$RUNNER_TEMP"/Holdout.xcarchive/Products/Applications/*.app | head -n 1)
           ENT=Builds/iOS/Unity-iPhone/Holdout.entitlements
-          grep -q "com.apple.developer.game-center" "$ENT"
           if [ -d "$APP/Frameworks" ]; then
             find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -exec codesign --force --sign - {} \;
           fi
           codesign --force --sign - --entitlements "$ENT" --generate-entitlement-der "$APP"
-          codesign -d --entitlements - "$APP" | grep -q "game-center"
-      - name: İmzala + TestFlight'a yükle
+          echo "::group::Arşivdeki .app entitlement'ları (ad-hoc)"; codesign -d --entitlements :- "$APP"; echo "::endgroup::"
+          if ! codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "com.apple.developer.game-center"; then
+            echo "::error::Ad-hoc imzalı arşivde game-center entitlement yok"; exit 1
+          fi
+      - name: İmzala (export)
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -101,17 +116,43 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
+            <key>destination</key><string>export</string>
             <key>teamID</key><string>$TEAM_ID</string>
             <key>signingStyle</key><string>automatic</string>
             <key>manageAppVersionAndBuildNumber</key><false/>
             <key>uploadSymbols</key><true/>
           </dict></plist>
           EOF
-          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Holdout.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates -authenticationKeyPath ~/keys/AuthKey.p8 \
-            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Holdout.xcarchive"             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"             -allowProvisioningUpdates -authenticationKeyPath ~/keys/AuthKey.p8             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER"
+          ls "$RUNNER_TEMP/export"
+      - name: İmzalı .app + provisioning profile kontrolü (Game Center)
+        run: |
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -n 1)
+          rm -rf "$RUNNER_TEMP/ipa"; mkdir -p "$RUNNER_TEMP/ipa"; unzip -q "$IPA" -d "$RUNNER_TEMP/ipa"
+          APP=$(ls -d "$RUNNER_TEMP"/ipa/Payload/*.app | head -n 1)
+          security cms -D -i "$APP/embedded.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          PB=/usr/libexec/PlistBuddy
+          echo "Profile: $($PB -c 'Print :Name' "$RUNNER_TEMP/profile.plist") (UUID $($PB -c 'Print :UUID' "$RUNNER_TEMP/profile.plist"), bitiş $($PB -c 'Print :ExpirationDate' "$RUNNER_TEMP/profile.plist"))"
+          echo "::group::Profile Entitlements"; $PB -c 'Print :Entitlements' "$RUNNER_TEMP/profile.plist"; echo "::endgroup::"
+          echo "::group::İmzalı .app entitlement'ları"; codesign -d --entitlements :- "$APP"; echo "::endgroup::"
+          FAIL=0
+          if [ "$($PB -c 'Print :Entitlements:com.apple.developer.game-center' "$RUNNER_TEMP/profile.plist" 2>/dev/null)" != "true" ]; then
+            echo "::error::Provisioning profile Game Center içermiyor. developer.apple.com → Identifiers → com.oztdigital.holdout → Game Center'ı işaretle + Save; Profiles'taki eski com.oztdigital.holdout App Store profillerini sil (otomatik imza yenisini üretir); ASC API anahtarı Admin/App Manager olmalı; workflow'u yeniden çalıştır."
+            FAIL=1
+          fi
+          if ! codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "com.apple.developer.game-center"; then
+            echo "::error::İmzalı .app'te com.apple.developer.game-center yok"; FAIL=1
+          fi
+          exit $FAIL
+      - name: TestFlight'a yükle
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          cp ~/keys/AuthKey.p8 ~/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -n 1)
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER"
       - name: Temizlik
         if: always()
-        run: rm -rf ~/keys
+        run: rm -rf ~/keys ~/.appstoreconnect
