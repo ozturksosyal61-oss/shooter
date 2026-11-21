@@ -45,6 +45,8 @@ public static class IosPostBuild
     };
 
     [PostProcessBuild(1000)]
+    const int MinBuildNumber = 8;
+
     public static void OnPostProcess(BuildTarget target, string path)
     {
         if (target != BuildTarget.iOS) return;
@@ -54,6 +56,9 @@ public static class IosPostBuild
         var root = plist.root;
         root.SetBoolean("CADisableMinimumFrameDurationOnPhone", true);
         root.SetString("CFBundleDisplayName", "Holdout");
+        // CI (Cloud Build / GitHub Actions) may inject its own build number: never below the last uploaded one (8).
+        int.TryParse(root["CFBundleVersion"]?.AsString(), out int bn);
+        if (bn < MinBuildNumber) root.SetString("CFBundleVersion", MinBuildNumber.ToString());
         // Only standard HTTPS / OS crypto: no export-compliance questions on every upload.
         root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
         // ATT: base text English; Turkish comes from tr.lproj/InfoPlist.strings.

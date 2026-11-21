@@ -161,7 +161,7 @@ Seed 7, timescale 8, 600 sn tavan:
 
 - Nişan alan botlar önceki bantta → zombi canı değiştirilmedi. Botlar fareyle tam nişan alıyor; gerçek dokunmatik sürüklemede isabet daha düşük olacak — cihaz testinden sonra erken dalga canı (`Difficulty.HealthPerWave`) gerekirse düşürülür.
 
-## 0.1.1 — playtest-02 düzeltmeleri (2026-11-21)
+## 1.0.1 — playtest-02 düzeltmeleri (2026-11-21)
 
 Değişiklikler: ilk 6 dalga `Difficulty.EarlyDensity` {0.7, 1.4, 1.8, 2.1, 2.5, 3} (dalga 1–2 daha kalabalık, 3–6 yumuşak), taktik reload 0.6 sn / < %70, aile karışık kart teklifleri (sahip olunana ×1.7), 5 gizli sinerji, boss dalgasında yeni hedef yok. Botlar tek oturum, timescale 8.
 

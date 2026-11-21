@@ -1,6 +1,6 @@
-# Game Center — App Store Connect kurulumu (0.1.1)
+# Game Center — App Store Connect kurulumu (1.0.1)
 
-App Store Connect → Holdout → **Özellikler / Features → Game Center**. Kimlikler (ID) koddakiyle (`GameIds`, `Assets/Scripts/Core/GameServices.cs`) **birebir aynı** olmalı. Sonra 0.1.1 sürüm sayfasında **Game Center** kutusunu işaretle ve aşağıdakilerin hepsini sürüme ekle.
+App Store Connect → Holdout → **Özellikler / Features → Game Center**. Kimlikler (ID) koddakiyle (`GameIds`, `Assets/Scripts/Core/GameServices.cs`) **birebir aynı** olmalı. Sonra 1.0.1 sürüm sayfasında **Game Center** kutusunu işaretle ve aşağıdakilerin hepsini sürüme ekle.
 
 ## Sıralamalar (Leaderboards)
 
@@ -30,7 +30,7 @@ Skor gönderme: "En iyi skor" (Best score) seçeneği.
 
 Toplam 300 puan (Apple sınırı 1000). Her başarım için 512×512 (veya 1024×1024) görsel istenir — şimdilik oyun ikonu kullanılabilir.
 
-## Bu sürümde yenilikler (0.1.1)
+## Bu sürümde yenilikler (1.0.1)
 
 **TR**
 - Game Center: Sonsuz, Zor, Hikâye ve Haftalık sıralamaları + 10 başarım
