@@ -1461,3 +1461,23 @@ public class MetaEventsTests
         MetaEvents.RunFinished(RunMode.Endless, 4);
     }
 }
+
+public class WeeklyRewardTests
+{
+    [Test]
+    public void MilestonesPayOncePerWeek()
+    {
+        int mask = WeeklyEvent.Claim(4, 0, out int g, out int e);
+        Assert.AreEqual(0, mask); Assert.AreEqual(0, g + e, "below wave 5: nothing");
+        mask = WeeklyEvent.Claim(11, mask, out g, out e);
+        Assert.AreEqual(0b11, mask); Assert.AreEqual(250, g); Assert.AreEqual(10, e, "waves 5 and 10 at once");
+        mask = WeeklyEvent.Claim(12, mask, out g, out e);
+        Assert.AreEqual(0, g + e, "already paid this week");
+        Assert.AreEqual(2, WeeklyEvent.NextMilestone(mask));
+        mask = WeeklyEvent.Claim(30, mask, out g, out e);
+        Assert.AreEqual(600, g); Assert.AreEqual(25, e);
+        Assert.AreEqual(-1, WeeklyEvent.NextMilestone(mask));
+        int weekGems = 0; foreach (var m in WeeklyEvent.Milestones) weekGems += m.gems;
+        Assert.LessOrEqual(weekGems, 40, "free gems per week stay small (gem packs keep their value)");
+    }
+}

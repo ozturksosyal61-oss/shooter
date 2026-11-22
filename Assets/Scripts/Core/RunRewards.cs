@@ -59,8 +59,16 @@ public class RunRewards : MonoBehaviour
         if (gm) { gm.GameOverStarted -= OnGameOver; gm.Revived -= OnRevived; }
     }
 
+    int weeklyGold, weeklyGems;
+    string weeklyMsg;
+
+    /// <summary>"+250 altın" / "+10 elmas" / both.</summary>
+    public static string RewardText(int gold, int gems) =>
+        gold > 0 && gems > 0 ? Loc.F("weekly.prize_both", gold, gems) : gems > 0 ? Loc.F("weekly.prize_gems", gems) : Loc.F("weekly.prize_gold", gold);
+
     void OnGameOver()
     {
+        weeklyGold = weeklyGems = 0;
         var gm = GameManager.I;
         int wave = WaveDirector.I ? WaveDirector.I.Wave : 1;
         int earned = Economy.RunGold(gm.Score, wave, gm.Kills, objectives, bosses, Profile.GoldMultiplier * ModeRules.GoldMul(GameMode.Current));
@@ -75,10 +83,13 @@ public class RunRewards : MonoBehaviour
         {
             var rec = SaveSystem.Data.records;
             int week = WeeklyEvent.CurrentWeek;
-            if (rec.weeklyWeek != week) { rec.weeklyWeek = week; rec.weeklyScore = 0; rec.weeklyWave = 0; }
+            if (rec.weeklyWeek != week) { rec.weeklyWeek = week; rec.weeklyScore = 0; rec.weeklyWave = 0; rec.weeklyClaimed = 0; }
             rec.weeklyScore = Mathf.Max(rec.weeklyScore, gm.Score);
             rec.weeklyWave = Mathf.Max(rec.weeklyWave, wave);
+            // 1.1.0 weekly rewards: every newly reached wave milestone pays once this week.
+            rec.weeklyClaimed = WeeklyEvent.Claim(wave, rec.weeklyClaimed, out weeklyGold, out weeklyGems);
             SaveSystem.Write();
+            if (weeklyGold > 0 || weeklyGems > 0) Profile.Grant(weeklyGold, weeklyGems, "weekly");
         }
         GameServices.ReportRun(new RunSummary
         {
@@ -89,6 +100,8 @@ public class RunRewards : MonoBehaviour
         repKills = gm.Kills; repSpecials = gm.SpecialKills; repBosses = bosses; repObjectives = objectives;
         shown = 0f;
         Refresh();
+        weeklyMsg = weeklyGold > 0 || weeklyGems > 0 ? Loc.F("weekly.reward", RewardText(weeklyGold, weeklyGems)) : null;
+        if (message && weeklyMsg != null) message.text = weeklyMsg;
         if (root) root.SetActive(true);
         // Continue offer first (once per run, not after a won chapter / in co-op).
         if (revivePanel && gm.Continues == 0 && !gm.Won && !GameMode.IsCoop)
@@ -127,7 +140,7 @@ public class RunRewards : MonoBehaviour
         if (doubleLabel) doubleLabel.text = Loc.T(vip ? "rew.double_vip" : "rew.double");
         if (continueAdLabel) continueAdLabel.text = Loc.T(vip ? "rew.continue_vip" : "rew.continue_ad");
         if (continueGemLabel) continueGemLabel.text = Loc.F("rew.continue_gems", Economy.ContinueGems);
-        if (message) message.text = "";
+        if (message) message.text = weeklyMsg ?? ""; // the weekly prize line stays until the next run
         lastAdReady = Ads.Available;
     }
 

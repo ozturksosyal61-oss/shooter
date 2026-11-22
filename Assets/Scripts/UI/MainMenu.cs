@@ -107,6 +107,15 @@ public class MainMenu : MonoBehaviour
             var rec = SaveSystem.Data.records;
             int best = rec.weeklyWeek == wk ? rec.weeklyScore : 0;
             weeklySub.text = Loc.F(best > 0 ? "weekly.sub_best" : "weekly.sub", Loc.T(WeeklyEvent.RuleKey(wk)), WeeklyEvent.DaysLeft(System.DateTime.UtcNow), best);
+            // 1.1.0: the next weekly prize ("Dalga 10 → 10 elmas").
+            int claimed = rec.weeklyWeek == wk ? rec.weeklyClaimed : 0;
+            int next = WeeklyEvent.NextMilestone(claimed);
+            if (next >= 0)
+            {
+                var m = WeeklyEvent.Milestones[next];
+                weeklySub.text += " · " + Loc.F("weekly.next", m.wave, RunRewards.RewardText(m.gold, m.gems));
+            }
+            else weeklySub.text += " · " + Loc.T("weekly.all_done");
         }
         if (leaderboardButton) leaderboardButton.gameObject.SetActive(Application.platform == RuntimePlatform.IPhonePlayer || Application.isEditor);
         int open = 0;

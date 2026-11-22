@@ -34,4 +34,29 @@ public static class WeeklyEvent
     }
 
     public static string RuleKey(int week) => "weekly.rule." + WeaponFor(week);
+
+    // ---- 1.1.0 weekly rewards: reach a wave in the week's event once → its prize (once per week, granted at run end).
+    public static readonly (int wave, int gold, int gems)[] Milestones = { (5, 250, 0), (10, 0, 10), (15, 600, 0), (20, 0, 25) };
+
+    /// <summary>Pure: milestones reached with <paramref name="wave"/> and not yet in <paramref name="claimedMask"/>
+    /// (bit i = Milestones[i]); returns the new mask and the prize total.</summary>
+    public static int Claim(int wave, int claimedMask, out int gold, out int gems)
+    {
+        gold = gems = 0;
+        for (int i = 0; i < Milestones.Length; i++)
+        {
+            if (wave < Milestones[i].wave || (claimedMask & (1 << i)) != 0) continue;
+            claimedMask |= 1 << i;
+            gold += Milestones[i].gold;
+            gems += Milestones[i].gems;
+        }
+        return claimedMask;
+    }
+
+    /// <summary>The next unclaimed milestone index (-1 = all claimed this week).</summary>
+    public static int NextMilestone(int claimedMask)
+    {
+        for (int i = 0; i < Milestones.Length; i++) if ((claimedMask & (1 << i)) == 0) return i;
+        return -1;
+    }
 }

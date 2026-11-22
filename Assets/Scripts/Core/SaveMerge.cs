@@ -81,7 +81,7 @@ public static class SaveMerge
         r.hardWave = Mathf.Max(r.hardWave, o.hardWave);
         r.hardKills = Mathf.Max(r.hardKills, o.hardKills);
         r.hardTime = Mathf.Max(r.hardTime, o.hardTime);
-        if (o.weeklyWeek > r.weeklyWeek) { r.weeklyWeek = o.weeklyWeek; r.weeklyScore = o.weeklyScore; r.weeklyWave = o.weeklyWave; }
-        else if (o.weeklyWeek == r.weeklyWeek) { r.weeklyScore = Mathf.Max(r.weeklyScore, o.weeklyScore); r.weeklyWave = Mathf.Max(r.weeklyWave, o.weeklyWave); }
+        if (o.weeklyWeek > r.weeklyWeek) { r.weeklyWeek = o.weeklyWeek; r.weeklyScore = o.weeklyScore; r.weeklyWave = o.weeklyWave; r.weeklyClaimed = o.weeklyClaimed; }
+        else if (o.weeklyWeek == r.weeklyWeek) { r.weeklyScore = Mathf.Max(r.weeklyScore, o.weeklyScore); r.weeklyWave = Mathf.Max(r.weeklyWave, o.weeklyWave); r.weeklyClaimed |= o.weeklyClaimed; }
     }
 }

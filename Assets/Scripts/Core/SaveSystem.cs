@@ -28,6 +28,8 @@ public class RecordsData
     public float hardTime;
     // Weekly event: best of the current week (reset when the week changes).
     public int weeklyWeek = -1, weeklyScore, weeklyWave;
+    /// <summary>1.1.0: weekly reward milestones already paid this week (bit i = WeeklyEvent.Milestones[i]).</summary>
+    public int weeklyClaimed;
 }
 
 [Serializable]

@@ -380,7 +380,7 @@ public class Upgrades : MonoBehaviour
         switch (id)
         {
             case CardId.MaxHealth: player.Heal(25f); break;
-            case CardId.Turret: DeployTurret(); break;
+            case CardId.Turret: if (DeployedTurrets() < MaxTurrets(l)) DeployTurret(); break; // level 2 must not add a second turret
             case CardId.Shotgun: shotgunT = 0.3f; break;
             case CardId.Grenade: grenadeT = 1f; break;
             case CardId.Armor: armorCharges = ArmorCharges(l); break;
