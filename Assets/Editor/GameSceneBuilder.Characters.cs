@@ -505,6 +505,9 @@ public static partial class GameSceneBuilder
         Debug.Log($"BUILD: specials shield walk={shield.walkClipSpeed:0.00} roar={a.sRoar.length:0.0}s | bomb walk={bomb.walkClipSpeed:0.00} run={bomb.runClipSpeed:0.00} swell={a.bSwell.length:0.0}s | tongue sneak={tongue.walkClipSpeed:0.00} throw={a.tThrow.length:0.0}s pull={a.tPull.length:0.0}s");
     }
 
+    /// <summary>1.1.0: visual size of the player characters (and their guns) relative to the 1.8 m rig.</summary>
+    public const float PlayerVisualScale = 1.18f;
+
     static void BuildPlayerPrefab(Mats m, Bullet bullet, CharacterAnims a)
     {
         var controller = BuildSoldierController(a);
@@ -551,6 +554,16 @@ public static partial class GameSceneBuilder
         pc.flash = flash;
         weapon.owner = pc;
         go.AddComponent<SquadMember>().local = pc; // zombies chase squad members (co-op teammates too)
+        // 1.1.0: the chibi soldier read smaller than the lanky zombies — every visible part (character models + guns)
+        // is scaled up; the CharacterController (hits, vaults, contact range) stays the same size.
+        foreach (Transform ch in go.transform)
+        {
+            if (ch.name == "Ring") continue;
+            ch.localPosition *= PlayerVisualScale;
+            ch.localScale *= PlayerVisualScale;
+        }
+        foreach (var r in go.GetComponentsInChildren<SoldierRig>(true)) r.holdOffset *= PlayerVisualScale;
+        ring.transform.localScale = new Vector3(2.1f, 2.1f, 1f);
         SetLayer(go, GameLayers.Player);
         SavePrefab(go, $"{PrefabDir}/Player.prefab");
     }

@@ -1519,7 +1519,7 @@ public class GameSmokeTest
         try
         {
             // --- Readability setup.
-            Assert.AreEqual(17.5f, gm.cameraRig.distance, 0.01f, "camera pulled back (F6.5)");
+            Assert.AreEqual(15.5f, gm.cameraRig.distance, 0.01f, "camera distance (F6.5: 17.5, 1.1.0: 15.5)");
             Assert.NotNull(p.transform.Find("Ring"), "bright ring under the soldier");
             Assert.Greater(Object.FindAnyObjectByType<ThreatIndicators>().normalRange, 0f, "nearby off-screen zombies get arrows");
             var panel = gm.hud.gameOverPanel.GetComponent<UnityEngine.UI.Image>();
@@ -2336,7 +2336,9 @@ public class GameSmokeTest
         mm.shopUI.Close();
         mm.login.Open(); yield return null; S("ui08_login"); mm.login.root.SetActive(false);
         mm.quests.Open(); yield return null; S("ui09_quests"); mm.quests.root.SetActive(false);
-        mm.settingsPanel.Open(); yield return null; S("ui10_settings"); mm.settingsPanel.Close();
+        mm.settingsPanel.Open(); yield return null; S("ui10_settings");
+        CloudSync.SetStateForTests(CloudSync.Status.Synced); yield return null; S("ui10b_settings_cloud_on");
+        CloudSync.SetStateForTests(CloudSync.Status.Off); mm.settingsPanel.Close();
         mm.campaignPanel.Open(); yield return null; S("ui15_campaign"); mm.campaignPanel.root.SetActive(false);
 
         GameMode.Set(RunMode.Endless);

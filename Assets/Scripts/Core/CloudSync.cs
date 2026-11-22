@@ -47,6 +47,9 @@ public static class CloudSync
 
     static void Set(Status s) { State = s; Changed?.Invoke(); }
 
+    /// <summary>Tests / screenshots: show a status without a network.</summary>
+    public static void SetStateForTests(Status s) => Set(s);
+
     static void Hook()
     {
         if (hooked) return;

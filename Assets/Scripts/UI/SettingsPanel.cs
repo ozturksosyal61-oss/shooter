@@ -23,8 +23,12 @@ public class SettingsPanel : MonoBehaviour
     public Button[] qualityButtons;
     public Button[] langButtons;
     public Button support, privacy, terms, reset, close, restore;
-    [Tooltip("1.1.0 cloud save: status label + 'sync now' (signs in to Game Center first if needed).")]
+    [Tooltip("1.1.0 cloud save: a quiet status line; the button only shows when the save is NOT backed up (connect / retry).")]
     public Button cloud;
+    public TMP_Text cloudText;
+    public Image cloudIcon;
+    public Sprite cloudOkIcon, cloudWarnIcon;
+    public GameObject cloudRow;
     public GameObject confirm;
     public Button confirmYes, confirmNo;
     public TMP_Text resetDone;
@@ -135,11 +139,23 @@ public class SettingsPanel : MonoBehaviour
 
     void RefreshCloud()
     {
-        if (!cloud || !root || !root.activeSelf) return;
-        var pb = cloud.GetComponent<PressButton>();
-        string key = CloudSync.State == CloudSync.Status.Synced ? "set.cloud.on" : CloudSync.State == CloudSync.Status.Connecting ? "set.cloud.wait"
-            : CloudSync.State == CloudSync.Status.Error ? "set.cloud.error" : "set.cloud.off";
-        if (pb) { pb.SetLabel(Loc.T(key)); pb.SetStyle(CloudSync.State == CloudSync.Status.Synced ? UiStyle.Green : UiStyle.Dark); }
+        if (!root || !root.activeSelf) return;
+        // Game Center is iOS only: Android builds don't show the row at all (until Play Games sign-in exists).
+        if (cloudRow) cloudRow.SetActive(Application.platform != RuntimePlatform.Android);
+        var st = CloudSync.State;
+        bool ok = st == CloudSync.Status.Synced;
+        if (cloudText)
+        {
+            cloudText.text = Loc.T(ok ? "set.cloud.on" : st == CloudSync.Status.Connecting ? "set.cloud.wait" : st == CloudSync.Status.Error ? "set.cloud.error" : "set.cloud.off");
+            cloudText.color = ok ? UiKit.Success : UiKit.Secondary;
+        }
+        if (cloudIcon) { cloudIcon.color = ok ? UiKit.Success : UiKit.Hazard; if (cloudOkIcon && cloudWarnIcon) cloudIcon.sprite = ok ? cloudOkIcon : cloudWarnIcon; }
+        if (cloud)
+        {
+            cloud.gameObject.SetActive(!ok && st != CloudSync.Status.Connecting);
+            var pb = cloud.GetComponent<PressButton>();
+            if (pb) pb.SetLabel(Loc.T(st == CloudSync.Status.Error ? "set.cloud.retry" : "set.cloud.connect"));
+        }
     }
 
     void Refresh()

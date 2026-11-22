@@ -852,7 +852,7 @@ public static partial class GameSceneBuilder
         var rig = camGo.AddComponent<CameraRig>();
         rig.target = player.transform;
         // Pulled back from 14 m (F6.5) so more of the street is visible; same angle. Rings/arrows/cutout scaled to match.
-        rig.distance = 17.5f;
+        rig.distance = 15.5f; // 1.1.0: closer (was 17.5) — characters and effects read bigger on phones
         rig.cutRadius = 0.17f; // playtest-02 #4: roofs hid half the screen with 0.105
         camGo.transform.SetPositionAndRotation(Quaternion.Euler(57f, 0f, 0f) * Vector3.back * 17.5f, Quaternion.Euler(57f, 0f, 0f));
 

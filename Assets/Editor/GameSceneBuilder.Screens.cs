@@ -918,7 +918,15 @@ public static partial class GameSceneBuilder
         sp.privacy = KButton("Privacy", p.transform, UiStyle.Dark, "set.privacy", 96f, 44f, 17f); Prop(sp.privacy, W, 132f, 228f, 474f, 44f);
         sp.terms = KButton("Terms", p.transform, UiStyle.Dark, "set.terms", 110f, 44f, 17f); Prop(sp.terms, W, 240f, 350f, 474f, 44f);
         sp.restore = KButton("Restore", p.transform, UiStyle.Dark, "set.restore", 230f, 44f, 17f); Prop(sp.restore, W, 362f, 600f, 474f, 44f);
-        sp.cloud = KButton("Cloud", p.transform, UiStyle.Dark, "set.cloud.off", 290f, 44f, 17f); Prop(sp.cloud, W, 612f, 918f, 474f, 44f);
+        // 1.1.0 cloud save: one quiet line under the e-mail; a small button only while not backed up.
+        var cloudRow = Rect("CloudRow", p.transform); Prop(cloudRow, W, 597f, 1136f, 394f, 40f);
+        sp.cloudRow = cloudRow.gameObject;
+        sp.cloudOkIcon = kit.check; sp.cloudWarnIcon = kit.warn;
+        sp.cloudIcon = KIcon("CloudIcon", cloudRow, kit.check, UiKit.Success, 18f); Place(sp.cloudIcon.rectTransform, new Vector2(0f, 0.5f), 8f, 0f, 18f, 18f);
+        sp.cloudText = KTxt("CloudText", cloudRow, F.Semi, 16f, UiKit.Success, TextAlignmentOptions.Left, "set.cloud.on"); Margins(sp.cloudText, 36f, 0f, 150f, 0f);
+        sp.cloudText.enableAutoSizing = true; sp.cloudText.fontSizeMin = 12f; sp.cloudText.fontSizeMax = 16f;
+        sp.cloud = KButton("Cloud", cloudRow, UiStyle.Dark, "set.cloud.connect", 136f, 38f, 15f);
+        { var cr = (RectTransform)sp.cloud.transform; cr.anchorMin = cr.anchorMax = new Vector2(1f, 0.5f); cr.pivot = new Vector2(1f, 0.5f); cr.anchoredPosition = Vector2.zero; }
         sp.reset = KButton("Reset", p.transform, UiStyle.Danger, "set.reset", 190f, 44f, 17f, kit.refresh); Prop(sp.reset, W, 930f, 1136f, 474f, 44f);
         sp.resetDone = KTxt("ResetDone", p.transform, F.Bold, 17f, UiKit.Success, TextAlignmentOptions.Center); Prop(sp.resetDone, W, 360f, 900f, 420f, 26f);
 
