@@ -2369,6 +2369,29 @@ public class GameSmokeTest
         void G2(GameManager g, string n) => ShotCanvas(Path.Combine(dir, n + ".png"), g.hud.GetComponent<Canvas>(), W, H);
     }
 
+    /// <summary>Design aid: every player character (holding the M4 / a finish) as a transparent PNG → CAPTURE_DIR.</summary>
+    [UnityTest, Explicit]
+    public IEnumerator CaptureCharacterRenders()
+    {
+        string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR") ?? Application.temporaryCachePath;
+        SceneManager.LoadScene(LoadingScreen.MenuScene);
+        yield return null; yield return null;
+        var stage = Object.FindAnyObjectByType<PreviewStage>(FindObjectsInactive.Include);
+        stage.cam.clearFlags = CameraClearFlags.SolidColor;
+        stage.cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+        var rt = new RenderTexture(900, 1100, 24, RenderTextureFormat.ARGB32);
+        foreach (var c in new[] { CostumeId.Standard, CostumeId.SpecOps, CostumeId.Firefighter, CostumeId.Hush, CostumeId.Lynx, CostumeId.Gold })
+        {
+            stage.Snapshot(c, c == CostumeId.Hush ? WeaponId.Smg : c == CostumeId.Lynx ? WeaponId.Uzi : WeaponId.M4, rt, 32f);
+            RenderTexture.active = rt;
+            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0); tex.Apply();
+            RenderTexture.active = null;
+            File.WriteAllBytes(Path.Combine(dir, "char_" + c + ".png"), tex.EncodeToPNG());
+            yield return null;
+        }
+    }
+
     static void ShotCanvas(string path, Canvas canvas, int w = 1600, int h = 900)
     {
         var cam = Camera.main;
