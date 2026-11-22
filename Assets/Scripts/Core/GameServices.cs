@@ -82,6 +82,7 @@ public static class GameServices
     /// <summary>Run over: leaderboards + achievements (co-op runs don't count).</summary>
     public static void ReportRun(RunSummary r)
     {
+        MetaEvents.RunFinished(r.mode, r.wave);
         if (r.mode == RunMode.Coop) return;
         var d = SaveSystem.Data;
         int stars = Campaign.TotalStars(d.campaign);

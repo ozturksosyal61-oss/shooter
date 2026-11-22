@@ -561,6 +561,7 @@ public class HUD : MonoBehaviour
         tutorialActive = false;
         Explosions.OnExplosion -= OnTutorialExplosion;
         SaveSystem.Data.tutorialDone = true;
+        MetaEvents.TutorialCompleted();
         SaveSystem.Write();
     }
 

@@ -1445,3 +1445,19 @@ public class World110Tests
         Assert.AreEqual(ChunkType.Block, CityLayout.NaturalType(777, Vector2Int.zero, District.Liman), "spawn stays plain");
     }
 }
+
+public class MetaEventsTests
+{
+    [Test]
+    public void KeysAndRunParams()
+    {
+        Assert.AreEqual("1109686598492645", MetaEvents.AppId);
+        Assert.AreEqual(32, MetaEvents.ClientToken.Length);
+        Assert.AreEqual("{\"fb_level\":\"9\",\"mode\":\"Hard\"}", MetaEvents.RunParams(RunMode.Hard, 9));
+        Assert.AreEqual("{\"fb_level\":\"0\",\"mode\":\"Endless\"}", MetaEvents.RunParams(RunMode.Endless, -3));
+        // Not started (editor / no ATT answer yet): logging is a safe no-op.
+        Assert.IsFalse(MetaEvents.Started);
+        MetaEvents.TutorialCompleted();
+        MetaEvents.RunFinished(RunMode.Endless, 4);
+    }
+}

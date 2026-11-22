@@ -41,7 +41,7 @@ public static class IosPostBuild
         "uw77j35x4d.skadnetwork", "v72qych5uu.skadnetwork", "v79kvwwj4g.skadnetwork", "v9wttpbfk9.skadnetwork", 
         "vhf287vqwu.skadnetwork", "w9q455wk68.skadnetwork", "wg4vff78zm.skadnetwork", "wzmmz9fp6w.skadnetwork", 
         "x44k69ngh6.skadnetwork", "xga6mpmplv.skadnetwork", "yclnxrl5pm.skadnetwork", "ydx93a7ass.skadnetwork", 
-        "zmvfpc5aq8.skadnetwork", "zq492l623r.skadnetwork", 
+        "zmvfpc5aq8.skadnetwork", "zq492l623r.skadnetwork", "n38lu8286q.skadnetwork", // Meta (v9wttpbfk9 above)
     };
 
     /// <summary>Last uploaded TestFlight build was 2611210240 (CI yyMMddHHmm): never at or below it.</summary>
@@ -66,6 +66,14 @@ public static class IosPostBuild
         if (bn < MinBuildNumber) root.SetString("CFBundleVersion", MinBuildNumber.ToString());
         // Only standard HTTPS / OS crypto: no export-compliance questions on every upload.
         root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
+        // Meta (Facebook) SDK, app events only (MetaEvents.cs). Started by hand after the ATT answer; purchases are
+        // auto-logged by the SDK; advertiser ID collection stays off until ATT is authorized.
+        root.SetString("FacebookAppID", MetaEvents.AppId);
+        root.SetString("FacebookClientToken", MetaEvents.ClientToken);
+        root.SetString("FacebookDisplayName", "Holdout");
+        root.SetBoolean("FacebookAutoInitEnabled", false);
+        root.SetBoolean("FacebookAutoLogAppEventsEnabled", true);
+        root.SetBoolean("FacebookAdvertiserIDCollectionEnabled", false);
         // ATT: base text English; Turkish comes from tr.lproj/InfoPlist.strings.
         root.SetString("NSUserTrackingUsageDescription", TrackingEn);
         root.SetString("CFBundleDevelopmentRegion", "en");

@@ -56,7 +56,7 @@ public static class Ads
     public static void ShowRewarded(AdPlacement p, Action<bool> done)
     {
         if (Profile.Vip) { done?.Invoke(true); return; }
-        Backend.Show(p, done);
+        Backend.Show(p, ok => { if (ok) MetaEvents.RewardedAdWatched(p.ToString()); done?.Invoke(ok); });
     }
 }
 
@@ -104,6 +104,7 @@ public class LevelPlayAdBackend : IAdBackend
 
     void StartSdk(bool tracking)
     {
+        MetaEvents.Init(tracking); // Meta app events right after the ATT answer (refused → no advertiser tracking)
         LevelPlay.SetMetaData("is_child_directed", "false");          // COPPA off
         if (!tracking) LevelPlay.SetMetaData("do_not_sell", "true");   // ATT refused → non-personalised
         if (AdConfig.TestMode) LevelPlay.SetMetaData("is_test_suite", "enable");

@@ -1,0 +1,11 @@
+<dependencies>
+  <!-- Meta (Facebook) SDK, app events only (MetaEvents.cs + Plugins/iOS/HoldoutMeta.swift). Resolved by EDM4U into the
+       Podfile; CI runs `pod install`. Core kit only: no Login / Share. -->
+  <iosPods>
+    <iosPod name="FBSDKCoreKit" version="~> 18.1" minTargetSdk="12.0">
+      <sources>
+        <source>https://github.com/CocoaPods/Specs</source>
+      </sources>
+    </iosPod>
+  </iosPods>
+</dependencies>
