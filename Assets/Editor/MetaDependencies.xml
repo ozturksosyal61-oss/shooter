@@ -2,7 +2,10 @@
   <!-- Meta (Facebook) SDK, app events only (MetaEvents.cs + Plugins/iOS/HoldoutMeta.swift). Resolved by EDM4U into the
        Podfile; CI runs `pod install`. Core kit only: no Login / Share. -->
   <iosPods>
-    <iosPod name="FBSDKCoreKit" version="~> 18.1" minTargetSdk="12.0">
+    <!-- addToAllTargets: FBSDK pods are prebuilt *dynamic* XCFrameworks. In UnityFramework only, CocoaPods never embeds
+         them into the app (embed phase runs for the app target only) → dyld "Library not loaded: @rpath/FBSDKCoreKit"
+         → instant crash at launch (1.1.0 build 2611220404). -->
+    <iosPod name="FBSDKCoreKit" version="~> 18.1" minTargetSdk="12.0" addToAllTargets="true">
       <sources>
         <source>https://github.com/CocoaPods/Specs</source>
       </sources>

@@ -158,6 +158,14 @@ jobs:
           if ! codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "com.apple.developer.game-center"; then
             echo "::error::İmzalı .app'te com.apple.developer.game-center yok"; FAIL=1
           fi
+          # dyld: every @rpath framework the app / UnityFramework links must be inside the IPA (else instant launch crash).
+          for BIN in "$APP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")" "$APP/Frameworks/UnityFramework.framework/UnityFramework"; do
+            for LIB in $(otool -L "$BIN" | awk '/@rpath\//{print $1}'); do
+              REL=${LIB#@rpath/}
+              if [ ! -e "$APP/Frameworks/$REL" ]; then echo "::error::$(basename "$BIN") → $LIB IPA'da yok (açılışta dyld çökmesi)"; FAIL=1; fi
+            done
+          done
+          echo "::group::Gömülü framework'ler"; ls "$APP/Frameworks"; echo "::endgroup::"
           exit $FAIL
       - name: TestFlight'a yükle
         env:
