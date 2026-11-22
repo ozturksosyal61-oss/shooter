@@ -75,6 +75,7 @@ public class PressButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         float target = down ? 1f : 0f;
         if (Mathf.Approximately(k, target)) return;
         k = Mathf.MoveTowards(k, target, Time.unscaledDeltaTime / 0.09f);
-        if (face) face.anchoredPosition = rest + Vector2.down * depth * k;
+        // B look: the face slides down-right onto its hard shadow.
+        if (face) face.anchoredPosition = rest + new Vector2(0.8f, -1f) * depth * k;
     }
 }

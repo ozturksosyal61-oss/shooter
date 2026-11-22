@@ -77,7 +77,7 @@ public static partial class GameSceneBuilder
         ch.rows = new CoopHUD.Row[3];
         for (int i = 0; i < 3; i++)
         {
-            var row = KCard("Mate" + i, content, 12, UiKit.Hex(0x10140E, 0.88f), UiKit.Line); TL(row, Safe, 124f + i * 34f, 214f, 30f);
+            var row = KCard("Mate" + i, content, 12, UiKit.Hex(0x1E1928, 0.88f), UiKit.Line); TL(row, Safe, 124f + i * 34f, 214f, 30f);
             var ic = KIcon("Icon", row.transform, kit.user, UiKit.Success, 14f); In(ic, 8f, 8f, 14f, 14f);
             var name = KTxt("Name", row.transform, F.Bold, 13f, UiKit.Text); In(name, 28f, 5f, 80f, 20f);
             var bar = KBar("Hp", row.transform, UiKit.Success, out var trough, 6f); In(trough, 108f, 12f, 96f, 6f);
@@ -88,7 +88,7 @@ public static partial class GameSceneBuilder
         }
 
         // Down / out overlay (centre).
-        var dn = KCard("Downed", content, 20, UiKit.Hex(0x10140E, 0.9f), UiKit.Hex(0x5A1E18)); CC(dn, 400f, 330f, 480f, 150f);
+        var dn = KCard("Downed", content, 20, UiKit.Hex(0x1E1928, 0.9f), UiKit.Hex(0x5A1E18)); CC(dn, 400f, 330f, 480f, 150f);
         ch.downed = dn.gameObject;
         ch.downedTitle = KTxt("Title", dn.transform, F.Display, 30f, UiKit.DangerAlt, TextAlignmentOptions.Center); In(ch.downedTitle, 20f, 14f, 440f, 38f);
         ch.downedTimer = KTxt("Timer", dn.transform, F.Display, 26f, UiKit.Text, TextAlignmentOptions.Right); In(ch.downedTimer, 380f, 16f, 80f, 34f);
@@ -101,7 +101,7 @@ public static partial class GameSceneBuilder
         dn.gameObject.SetActive(false);
 
         // "Reviving X" (bottom centre).
-        var hp = KCard("Helping", content, 16, UiKit.Hex(0x10140E, 0.9f), UiKit.Hex(0x4F7A0C)); CC(hp, 470f, 470f, 340f, 56f);
+        var hp = KCard("Helping", content, 16, UiKit.Hex(0x1E1928, 0.9f), UiKit.Hex(0x4F7A0C)); CC(hp, 470f, 470f, 340f, 56f);
         ch.helping = hp.gameObject;
         ch.helpingText = KTxt("Text", hp.transform, F.Bold, 16f, UiKit.Success, TextAlignmentOptions.Center); In(ch.helpingText, 10f, 8f, 320f, 20f);
         ch.helpingFill = KBar("Bar", hp.transform, UiKit.Success, out var ht, 8f); In(ht, 30f, 36f, 280f, 8f);
@@ -112,7 +112,7 @@ public static partial class GameSceneBuilder
         ch.markers = new CoopHUD.Marker[3];
         for (int i = 0; i < 3; i++)
         {
-            var m = KImg("Marker" + i, mroot, kit.pill, UiKit.Hex(0x10140E, 0.92f), true, 2f);
+            var m = KImg("Marker" + i, mroot, kit.pill, UiKit.Hex(0x1E1928, 0.92f), true, 2f);
             var mr = m.rectTransform; mr.anchorMin = mr.anchorMax = Vector2.zero; mr.pivot = new Vector2(0.5f, 0f); mr.sizeDelta = new Vector2(120f, 40f);
             var ms = KImg("Stroke", m.transform, kit.pillStroke, UiKit.Success, true, 2f); Fill(ms);
             var lab = KTxt("Label", m.transform, F.Display, 15f, UiKit.Success, TextAlignmentOptions.Center); In(lab, 6f, 4f, 108f, 20f);
@@ -122,7 +122,7 @@ public static partial class GameSceneBuilder
         }
 
         // Toast (top centre, under the wave pill).
-        var toast = KImg("Toast", content, kit.pill, UiKit.Hex(0x10140E, 0.94f), true, 2f); TC(toast, 440f, 72f, 400f, 40f);
+        var toast = KImg("Toast", content, kit.pill, UiKit.Hex(0x1E1928, 0.94f), true, 2f); TC(toast, 440f, 72f, 400f, 40f);
         var ts = KImg("Stroke", toast.transform, kit.pillStroke, UiKit.Hazard, true, 2f); Fill(ts);
         ch.toast = toast.gameObject.AddComponent<CanvasGroup>();
         ch.toast.blocksRaycasts = false;

@@ -168,7 +168,7 @@ public class SettingsPanel : MonoBehaviour
         joySize.SetValueWithoutNotify(s.joystickSize);
         joyAlpha.SetValueWithoutNotify(s.joystickAlpha);
         vibrationLabel.text = Loc.T(s.vibration ? "set.on" : "set.off");
-        if (vibrationTrack) vibrationTrack.color = s.vibration ? UiKit.Hazard : UiKit.Hex(0x232B1E);
+        if (vibrationTrack) vibrationTrack.color = s.vibration ? UiKit.Hazard : UiKit.Hex(0x2E2740);
         if (vibrationKnob) vibrationKnob.anchoredPosition = new Vector2(s.vibration ? 16f : -16f, 0f);
         if (musicValue) musicValue.text = Mathf.RoundToInt(s.music * 100f).ToString();
         if (sfxValue) sfxValue.text = Mathf.RoundToInt(s.sfx * 100f).ToString();

@@ -20,6 +20,17 @@ public class PreviewStage : MonoBehaviour
     [Tooltip("Weapons the character holds (indexed by WeaponId), children of the soldier pivot.")]
     public Held[] heldWeapons;
     public float degreesPerSecond = 35f;
+    [Header("1.1.0 hero poses (menu / shop)")]
+    [Tooltip("By CostumeId: the weapon each character / skin shows off with.")]
+    public WeaponId[] heroWeapon;
+    [Tooltip("By CostumeId: index into poseStates.")]
+    public int[] heroPose;
+    public string[] poseStates;
+    public bool[] poseTwoHanded, poseLoops;
+    public float[] posePitch;
+    /// <summary>Hero mode: the character stands in its pose at a fixed 3/4 angle instead of turning.</summary>
+    bool heroMode;
+    public const float HeroYaw = 24f;
     [Tooltip("1.1.0 tracer preview: quads streaming out of the shown gun's muzzle (children of the stage).")]
     public Renderer[] tracerQuads;
     TracerId shownTracer;
@@ -39,8 +50,52 @@ public class PreviewStage : MonoBehaviour
 
     public void ShowCostume(CostumeId c) => ShowCostume(c, Profile.SelectedWeapon);
 
+    /// <summary>Menu / shop: the character with its own weapon, in its own pose (falls back to the aim pose).</summary>
+    public void ShowHero(CostumeId c, float yaw = float.NaN)
+    {
+        int ci = (int)c;
+        var w = heroWeapon != null && ci < heroWeapon.Length ? heroWeapon[ci] : Profile.SelectedWeapon;
+        ShowCostume(c, w);
+        heroMode = true;
+        soldierPivot.rotation = Quaternion.Euler(0f, float.IsNaN(yaw) ? HeroYaw : yaw, 0f);
+        int pi = heroPose != null && ci < heroPose.Length ? heroPose[ci] : -1;
+        if (pi < 0 || poseStates == null || pi >= poseStates.Length || !activeRig || !activeModel) return;
+        // One aim-pose IK pass first: the gun sits in the hands, then rides on the right hand into the pose.
+        var anim = activeModel.GetComponent<Animator>();
+        anim.Update(0f);
+        for (int i = 0; i < 3; i++) { activeRig.Tick(0.5f, Vector3.zero, 0f, true, false); anim.Update(0.2f); }
+        bool loops = poseLoops != null && pi < poseLoops.Length && poseLoops[pi];
+        activeRig.StartPose(poseStates[pi], poseTwoHanded != null && pi < poseTwoHanded.Length && poseTwoHanded[pi], loops ? Random.value : 0.98f,
+            posePitch != null && pi < posePitch.Length ? posePitch[pi] : 0f);
+        anim.Update(0f);
+    }
+
+    /// <summary>Still of a character / skin in its hero pose (shop cards).</summary>
+    public bool SnapshotHero(CostumeId c, RenderTexture rt, float yaw = 28f)
+    {
+        if (!CanRender || !cam || !rt) return false;
+        var rot = soldierPivot.rotation;
+        ShowHero(c, yaw);
+        var anim = activeModel ? activeModel.GetComponent<Animator>() : null;
+        if (anim) for (int i = 0; i < 3; i++) anim.Update(0.15f);
+        var prev = cam.targetTexture;
+        cam.targetTexture = rt;
+        cam.Render();
+        cam.targetTexture = prev;
+        soldierPivot.rotation = rot;
+        return true;
+    }
+
+    void StopPoses()
+    {
+        if (soldierModel && soldierModel.TryGetComponent(out SoldierRig r0)) r0.StopPose();
+        if (costumeModels != null) foreach (var m in costumeModels) if (m && m.TryGetComponent(out SoldierRig r)) r.StopPose();
+    }
+
     public void ShowCostume(CostumeId c, WeaponId held)
     {
+        StopPoses();
+        heroMode = false;
         cam.enabled = CanRender;
         soldierPivot.gameObject.SetActive(true);
         weaponPivot.gameObject.SetActive(false);
@@ -191,7 +246,7 @@ public class PreviewStage : MonoBehaviour
     void Update()
     {
         float d = degreesPerSecond * Time.unscaledDeltaTime;
-        if (soldierPivot) soldierPivot.Rotate(0f, d, 0f, Space.World);
+        if (soldierPivot && !heroMode) soldierPivot.Rotate(0f, d, 0f, Space.World);
         // Idle with the weapon up: aim layer on, hands on the grips (the rig reads the pivot's facing).
         if (activeRig && soldierPivot && soldierPivot.gameObject.activeInHierarchy) activeRig.Tick(Time.unscaledDeltaTime, Vector3.zero, 0f, true, false);
         if (tracerMode) { tracerT += Time.unscaledDeltaTime; PlaceTracers(); }

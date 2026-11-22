@@ -22,6 +22,9 @@ public static class UiFonts
     public static TMP_FontAsset Bold => AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(BoldPath);
     public static TMP_FontAsset Semi => AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(SemiPath);
     public static Material DisplayShadow => AssetDatabase.LoadAssetAtPath<Material>(DisplayShadowPath);
+    /// <summary>1.1.0 B look: Bungee with a thick ink outline + hard ink drop (big titles, logo, CTA labels).</summary>
+    public const string DisplayInkPath = TmpDir + "/Bungee Ink.mat";
+    public static Material DisplayInk => AssetDatabase.LoadAssetAtPath<Material>(DisplayInkPath);
 
     static string Charset()
     {
@@ -49,6 +52,23 @@ public static class UiFonts
             m.SetFloat("_UnderlayOffsetY", -0.55f);
             m.SetFloat("_UnderlaySoftness", 0.25f);
             AssetDatabase.CreateAsset(m, DisplayShadowPath);
+        }
+        // B look (rebuilt every run so it can be tuned): ink outline + hard offset underlay.
+        {
+            var m = AssetDatabase.LoadAssetAtPath<Material>(DisplayInkPath);
+            bool fresh = m == null;
+            if (fresh) m = new Material(Display.material);
+            m.EnableKeyword("OUTLINE_ON");
+            m.SetFloat("_OutlineWidth", 0.22f);
+            m.SetColor("_OutlineColor", new Color(0.055f, 0.047f, 0.07f, 1f));
+            m.SetFloat("_FaceDilate", 0.18f);
+            m.EnableKeyword("UNDERLAY_ON");
+            m.SetColor("_UnderlayColor", new Color(0.055f, 0.047f, 0.07f, 1f));
+            m.SetFloat("_UnderlayOffsetX", 0.75f);
+            m.SetFloat("_UnderlayOffsetY", -0.85f);
+            m.SetFloat("_UnderlayDilate", 0.4f);
+            m.SetFloat("_UnderlaySoftness", 0f);
+            if (fresh) AssetDatabase.CreateAsset(m, DisplayInkPath); else EditorUtility.SetDirty(m);
         }
         var settings = TMP_Settings.instance;
         if (settings != null)

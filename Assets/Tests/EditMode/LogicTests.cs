@@ -1481,3 +1481,15 @@ public class WeeklyRewardTests
         Assert.LessOrEqual(weekGems, 40, "free gems per week stay small (gem packs keep their value)");
     }
 }
+
+public class CanvasAspectTests
+{
+    [Test]
+    public void WideMatchesHeightNarrowMatchesWidth()
+    {
+        float refA = 1280f / 590f;
+        Assert.AreEqual(1f, CanvasAspectMatch.MatchFor(2556f / 1179f, refA), "iPhone 15 (19.5:9)");
+        Assert.AreEqual(0f, CanvasAspectMatch.MatchFor(16f / 9f, refA), "16:9 phones");
+        Assert.AreEqual(0f, CanvasAspectMatch.MatchFor(4f / 3f, refA), "iPad");
+    }
+}

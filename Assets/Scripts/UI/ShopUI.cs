@@ -26,6 +26,8 @@ public class ShopUI : MonoBehaviour
         public Image frame, selected;
         public TMP_Text title, sub, tag;
         public Image tagBg, icon;
+        /// <summary>B look: the card's rarity-coloured top (character / finish / tracer cards).</summary>
+        public Image top;
         public RawImage preview;
         public Button action;
     }
@@ -162,7 +164,7 @@ public class ShopUI : MonoBehaviour
             if (!rt) { rt = new RenderTexture(252, 300, 24) { name = "Thumb" + key }; thumbs[key] = rt; }
             if (it.kind == Kind.GunSkin) any |= preview.SnapshotWeapon(w, (GunSkinId)it.index, rt);
             else if (it.kind == Kind.Tracer) any |= preview.SnapshotTracer((TracerId)it.index, w, rt);
-            else any |= preview.Snapshot(c, w, rt);
+            else any |= preview.SnapshotHero(c, rt);
         }
         thumbWeapon = w;
         if (!any) return;
@@ -175,7 +177,7 @@ public class ShopUI : MonoBehaviour
         var w = Profile.SelectedWeapon;
         if (it.kind == Kind.GunSkin) preview.ShowWeapon(w, (GunSkinId)it.index);
         else if (it.kind == Kind.Tracer) preview.ShowTracer((TracerId)it.index, w);
-        else { ThumbKey(it, out var sc); preview.ShowCostume(sc); }
+        else { ThumbKey(it, out var sc); preview.ShowHero(sc); }
     }
 
     RenderTexture ThumbOf(Item it) => thumbs.TryGetValue(ThumbKey(it, out _), out var rt) ? rt : null;
@@ -192,6 +194,7 @@ public class ShopUI : MonoBehaviour
         c.sub = F(t.sub)?.GetComponent<TMP_Text>();
         c.tag = F(t.tag)?.GetComponent<TMP_Text>();
         c.tagBg = F(t.tagBg)?.GetComponent<Image>();
+        c.top = F(t.top)?.GetComponent<Image>();
         c.icon = F(t.icon)?.GetComponent<Image>();
         c.preview = F(t.preview)?.GetComponent<RawImage>();
         c.action = F(t.action)?.GetComponent<Button>();
@@ -325,7 +328,7 @@ public class ShopUI : MonoBehaviour
             r.sub.margin = new Vector4(owned ? 0f : 20f, 0f, 0f, 0f);
             if (r.icon) r.icon.gameObject.SetActive(!owned);
             if (r.selected) r.selected.gameObject.SetActive(i == selected);
-            if (r.frame) r.frame.color = i == selected ? UiKit.Hex(0x2A2210) : UiKit.Card;
+            if (r.frame) r.frame.color = i == selected ? UiKit.Hex(0x3A2C0E) : UiKit.Card;
         }
         var wid = (WeaponId)selected;
         var d = Economy.Weapon(wid);
@@ -351,7 +354,7 @@ public class ShopUI : MonoBehaviour
             int l = Profile.Level(wid, s);
             int cost = Economy.UpgradeCost(wid, s, l);
             upgradeLevels[i].text = Loc.F("shop.lv", l, Economy.MaxUpgrade);
-            for (int p = 0; p < Economy.MaxUpgrade; p++) upgradePips[i * Economy.MaxUpgrade + p].color = p < l ? UiKit.Hazard : UiKit.Hex(0x2A3324);
+            for (int p = 0; p < Economy.MaxUpgrade; p++) upgradePips[i * Economy.MaxUpgrade + p].color = p < l ? UiKit.Hazard : UiKit.Hex(0x3A3248);
             if (!owned2) SetButton(upgradeButtons[i], UiStyle.Disabled, cost < 0 ? Loc.T("shop.max") : cost.ToString(), false, coinIcon);
             else if (cost < 0) SetButton(upgradeButtons[i], UiStyle.Disabled, Loc.T("shop.max"), false);
             else SetButton(upgradeButtons[i], Profile.CanAfford(cost, 0) ? UiStyle.Yellow : UiStyle.Disabled, cost.ToString(), true, coinIcon);
@@ -380,11 +383,12 @@ public class ShopUI : MonoBehaviour
             card.sub.text = Loc.T(soldier ? "shop.soldier.desc" : d.Key + ".desc");
             string tagKey; Color tagBg, tagFg;
             if (eq) { tagKey = "shop.equipped"; tagBg = UiKit.Hazard; tagFg = UiKit.Ink; }
-            else if (soldier) { tagKey = "rarity.standard"; tagBg = UiKit.Hex(0x2A3324); tagFg = UiKit.Secondary; }
+            else if (soldier) { tagKey = "rarity.standard"; tagBg = UiKit.Hex(0x3A3248); tagFg = UiKit.Secondary; }
             else if (d.packOnly) { tagKey = "rarity.legendary"; tagBg = UiKit.Hex(0x3A2A08); tagFg = UiKit.Gold; }
             else if (d.gems > 0) { tagKey = "rarity.epic"; tagBg = UiKit.Hex(0x2C1B45); tagFg = UiKit.Hex(0xC9A2FF); }
             else if (d.gold > 0) { tagKey = "rarity.rare"; tagBg = UiKit.Hex(0x14304A); tagFg = UiKit.Gem; }
-            else { tagKey = "rarity.standard"; tagBg = UiKit.Hex(0x2A3324); tagFg = UiKit.Secondary; }
+            else { tagKey = "rarity.standard"; tagBg = UiKit.Hex(0x3A3248); tagFg = UiKit.Secondary; }
+            if (card.top) card.top.color = TopColor(tagKey);
             card.tag.text = Loc.T(tagKey); card.tagBg.color = tagBg; card.tag.color = tagFg;
             // Every card shows its character: the selected one live (turning), the others as a still.
             var thumb = sel ? previewImage.texture : ThumbOf(it);
@@ -402,17 +406,22 @@ public class ShopUI : MonoBehaviour
             else SetButton(card.action, UiStyle.Dark, d.gold.ToString(), true, coinIcon);
             if (sel) shown = soldier ? Profile.SoldierSkin : c;
         }
-        preview.ShowCostume(shown);
+        preview.ShowHero(shown);
         previewImage.enabled = true;
     }
 
     // ------------------------------------------------------------------ gun finishes + tracers (1.1.0)
+    /// <summary>B look: card top colour by rarity (legendary gold, epic purple, rare blue, standard yellow).</summary>
+    static Color TopColor(string rarityKey) =>
+        rarityKey == "rarity.legendary" ? UiKit.Hex(0xFFB547) : rarityKey == "rarity.epic" ? UiKit.Hex(0xC59BFF)
+        : rarityKey == "rarity.rare" ? UiKit.Hex(0x7FD7FF) : UiKit.Hex(0xFFD45E);
+
     static void Rarity(CosmeticDef d, out string key, out Color bg, out Color fg)
     {
         if (d.gems >= 150) { key = "rarity.legendary"; bg = UiKit.Hex(0x3A2A08); fg = UiKit.Gold; }
         else if (d.gems > 0) { key = "rarity.epic"; bg = UiKit.Hex(0x2C1B45); fg = UiKit.Hex(0xC9A2FF); }
         else if (d.gold > 0) { key = "rarity.rare"; bg = UiKit.Hex(0x14304A); fg = UiKit.Gem; }
-        else { key = "rarity.standard"; bg = UiKit.Hex(0x2A3324); fg = UiKit.Secondary; }
+        else { key = "rarity.standard"; bg = UiKit.Hex(0x3A3248); fg = UiKit.Secondary; }
     }
 
     /// <summary>Finish / tracer cards: still of the selected gun in that finish (or firing that tracer); live when selected.</summary>
@@ -435,6 +444,7 @@ public class ShopUI : MonoBehaviour
             card.title.text = Name(it);
             card.sub.text = Loc.T(d.key + ".desc");
             Rarity(d, out var tagKey, out var tagBg, out var tagFg);
+            if (card.top) card.top.color = TopColor(tagKey);
             if (eq) { tagKey = "shop.equipped"; tagBg = UiKit.Hazard; tagFg = UiKit.Ink; }
             card.tag.text = Loc.T(tagKey); card.tagBg.color = tagBg; card.tag.color = tagFg;
             var thumb = sel ? previewImage.texture : ThumbOf(it);
@@ -467,7 +477,7 @@ public class ShopUI : MonoBehaviour
             {
                 var pip = bonusPips[i * 3 + p];
                 pip.gameObject.SetActive(p < maxL);
-                pip.color = p < lvl ? UiKit.Hazard : UiKit.Hex(0x2A3324);
+                pip.color = p < lvl ? UiKit.Hazard : UiKit.Hex(0x3A3248);
             }
             r.tag.text = b == BonusId.StartCard ? Loc.F("shop.charges", lvl) : Loc.F("shop.lv", lvl, def.maxLevel);
             bonusNext[i].text = cost < 0 ? "" : Loc.T(def.Key + ".next");

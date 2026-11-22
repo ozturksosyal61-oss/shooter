@@ -79,7 +79,7 @@ public class ResultScreen : MonoBehaviour
         bool hard = GameMode.IsHard;
         modeTag.text = Loc.T(hard ? "over.mode_hard" : GameMode.IsCoop ? "over.mode_coop" : "over.mode_endless");
         modeTag.color = hard ? UiKit.DangerAlt : UiKit.Success;
-        if (modeTagBg) modeTagBg.color = hard ? UiKit.Hex(0x3A1512) : UiKit.Hex(0x1B2A12);
+        if (modeTagBg) modeTagBg.color = hard ? UiKit.Hex(0x3E1614) : UiKit.Hex(0x24331A);
         waveBig.text = Loc.F("over.wave_big", wave);
         bool record = wave > previousBestWave && wave > 0;
         newRecord.SetActive(record || rec.newScore);

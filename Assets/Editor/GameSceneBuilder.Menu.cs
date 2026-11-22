@@ -92,6 +92,7 @@ public static partial class GameSceneBuilder
         sc.referenceResolution = new Vector2(1920f, 1080f);
         sc.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         sc.matchWidthOrHeight = 1f;
+        go.AddComponent<CanvasAspectMatch>();
         go.AddComponent<GraphicRaycaster>();
         return c;
     }

@@ -206,6 +206,19 @@ public static partial class GameSceneBuilder
         foreach (var h in held) if (h != null && h.root) h.root.gameObject.SetActive(false);
         stage.heldWeapons = held;
         stage.soldierCamPos = new Vector3(0f, 1.25f, 4.2f);
+        // 1.1.0 hero poses: each character / skin with its own weapon and pose.
+        int nc = System.Enum.GetValues(typeof(CostumeId)).Length;
+        stage.heroWeapon = new WeaponId[nc]; stage.heroPose = new int[nc];
+        for (int i = 0; i < nc; i++) { stage.heroWeapon[i] = WeaponId.M4; stage.heroPose[i] = -1; }
+        foreach (var h in HeroLooks)
+        {
+            bool has = System.IO.File.Exists($"{SoldierAnim}/Poses/{PoseDefs[h.pose].file}.fbx");
+            stage.heroWeapon[(int)h.c] = h.w; stage.heroPose[(int)h.c] = has ? h.pose : -1;
+        }
+        stage.poseStates = PoseDefs.Select(p => p.state).ToArray();
+        stage.poseTwoHanded = PoseDefs.Select(p => p.twoHanded).ToArray();
+        stage.poseLoops = PoseDefs.Select(p => p.loop).ToArray();
+        stage.posePitch = PoseDefs.Select(p => p.pitch).ToArray();
         stage.soldierLook = new Vector3(0f, 0.95f, 0f);
 
         var wp = new GameObject("WeaponPivot").transform;

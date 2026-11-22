@@ -17,7 +17,7 @@ public static partial class GameSceneBuilder
 
     class Kit
     {
-        public Sprite r12, r12Stroke, r20, r20Stroke, r26, r26Stroke, gloss, pill, pillStroke, hazard, glow, ring, ringThin, dot, soft, stripes, dash;
+        public Sprite r12, r12Stroke, r20, r20Stroke, r26, r26Stroke, gloss, pill, pillStroke, hazard, glow, ring, ringThin, dot, soft, stripes, dash, dots;
         public Sprite gear, clipboard, gift, bag, crosshair, shirt, bolt, gemLine, arrowL, arrowR, back, play, lockI, check, close, clock, map,
             infinity, flame, refresh, film, heart, skull, flag, waves, speaker, monitor, globe, gamepad, mail, user, star, starLine, plus, coin,
             gem, bullet, cardI, pause, chevronR, warn;
@@ -76,6 +76,12 @@ public static partial class GameSceneBuilder
             float r = new Vector2(x - 32f, y - 32f).magnitude;
             return new Color(1f, 1f, 1f, Mathf.Clamp01(30.5f - r));
         }, Vector4.zero);
+        // B look: halftone dots tiled over menu pages.
+        k.dots = KitTex("K_Dots", 28, 28, (x, y) =>
+        {
+            float r = new Vector2(x - 14f, y - 14f).magnitude;
+            return new Color(0f, 0f, 0f, Mathf.Clamp01(3.6f - r));
+        }, Vector4.zero, TextureWrapMode.Repeat);
         k.dash = KitTex("K_Dash", 64, 64, (x, y) =>
         {
             float d = RoundBox(x - 32f, y - 32f, 30f, 30f, 14f);
@@ -185,7 +191,8 @@ public static partial class GameSceneBuilder
         return KitTex(name, size, size, (x, y) =>
         {
             float d = RoundBox(x - h, y - h, h - 1.5f, h - 1.5f, radius);
-            float a = stroke ? Mathf.Clamp01(0.5f - (Mathf.Abs(d + 1.4f) - 1.4f)) : Mathf.Clamp01(0.5f - d);
+            // B look: thick ink outline (3.4 px at ppu 2 ≈ 3 reference px).
+            float a = stroke ? Mathf.Clamp01(0.5f - (Mathf.Abs(d + 3.4f) - 3.4f)) : Mathf.Clamp01(0.5f - d);
             return new Color(1f, 1f, 1f, a);
         }, new Vector4(radius + 2, radius + 2, radius + 2, radius + 2));
     }
@@ -260,6 +267,7 @@ public static partial class GameSceneBuilder
         sc.referenceResolution = new Vector2(RefW, RefH);
         sc.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         sc.matchWidthOrHeight = 1f;
+        go.AddComponent<CanvasAspectMatch>(); // 16:9 / 4:3: match width instead, so the reference layout always fits
         go.AddComponent<GraphicRaycaster>();
         return c;
     }
@@ -328,6 +336,8 @@ public static partial class GameSceneBuilder
         t.textWrappingMode = TextWrappingModes.NoWrap;
         t.overflowMode = TextOverflowModes.Overflow;
         t.richText = true;
+        // B look: big Bungee titles get the ink outline + hard drop.
+        if (font == F.Display && size >= 26f && UiFonts.DisplayInk) t.fontSharedMaterial = UiFonts.DisplayInk;
         if (key != null) L(t, key);
         return t;
     }
@@ -357,6 +367,8 @@ public static partial class GameSceneBuilder
         {
             var s = KImg("Stroke", body.transform, radius <= 12 ? kit.r12Stroke : radius <= 20 ? kit.r20Stroke : kit.r26Stroke, stroke.Value, true);
             Fill(s);
+            // B look: a hard ink shadow under every outlined card / panel.
+            if (fill.a > 0.5f) { var sh = body.gameObject.AddComponent<Shadow>(); sh.effectDistance = UiKit.ShadowOffset; sh.effectColor = UiKit.ShadowColor; }
         }
         return body;
     }
@@ -425,7 +437,7 @@ public static partial class GameSceneBuilder
         root.sizeDelta = new Vector2(w, h);
         var lipS = radius <= 12 ? kit.r12 : kit.r20;
         var lip = KImg("Lip", root, lipS, Color.black, true);
-        Fill(lip); lip.rectTransform.offsetMax = new Vector2(0f, -4f); lip.rectTransform.offsetMin = new Vector2(0f, -4f);
+        Fill(lip); lip.rectTransform.offsetMax = UiKit.ShadowOffset; lip.rectTransform.offsetMin = UiKit.ShadowOffset; // B: hard offset shadow
         var faceRt = Rect("Face", root);
         Fill(faceRt);
         var face = KImg("Bg", faceRt, lipS, Color.white, true);
@@ -489,13 +501,14 @@ public static partial class GameSceneBuilder
     /// <summary>Currency pill: icon, right-aligned value, optional yellow "+" button.</summary>
     static UiText KCurrency(string name, Transform parent, Sprite icon, float w, float h, out Button plus)
     {
-        var p = KImg(name, parent, kit.pill, UiKit.Hex(0x0E120C, 0.9f), true, 2f);
+        var p = KImg(name, parent, kit.pill, UiKit.Hex(0xFFFFFF), true, 2f);
         p.rectTransform.sizeDelta = new Vector2(w, h);
         var s = KImg("Stroke", p.transform, kit.pillStroke, UiKit.Line, true, 2f);
         Fill(s);
+        var psh = p.gameObject.AddComponent<Shadow>(); psh.effectDistance = UiKit.ShadowOffset; psh.effectColor = UiKit.ShadowColor;
         var ic = KIcon("Icon", p.transform, icon, Color.white, h * 0.56f);
         In(ic, h * 0.24f, h * 0.22f, h * 0.56f, h * 0.56f);
-        var v = KTxt("Value", p.transform, F.Display, h * 0.42f, UiKit.Text, TextAlignmentOptions.Right);
+        var v = KTxt("Value", p.transform, F.Display, h * 0.42f, UiKit.Ink, TextAlignmentOptions.Right);
         plus = null;
         const float right = 14f;
         Fill(v);
@@ -519,7 +532,7 @@ public static partial class GameSceneBuilder
     /// <summary>Thin progress bar: trough + fill (anchored by anchorMax.x).</summary>
     static RectTransform KBar(string name, Transform parent, Color fill, out Image trough, float h = 8f)
     {
-        trough = KImg(name, parent, kit.r12, UiKit.Hex(0x232B1E), true, 6f);
+        trough = KImg(name, parent, kit.r12, UiKit.Hex(0x2E2740), true, 6f);
         trough.rectTransform.sizeDelta = new Vector2(100f, h);
         var f = KImg("Fill", trough.transform, kit.r12, fill, true, 6f);
         var r = f.rectTransform;
@@ -533,7 +546,7 @@ public static partial class GameSceneBuilder
         var arr = new Image[n];
         for (int i = 0; i < n; i++)
         {
-            var p = KImg("Pip" + i, parent, kit.r12, UiKit.Hex(0x2A3324), true, 6f);
+            var p = KImg("Pip" + i, parent, kit.r12, UiKit.Hex(0x3A3248), true, 6f);
             In(p, i * (w + gap), 0f, w, h);
             arr[i] = p;
         }
@@ -555,7 +568,7 @@ public static partial class GameSceneBuilder
     /// <summary>Menu background: darkens / tints the live 3D scene ("blurred scene at 40 % brightness").</summary>
     static void KBackdrop(Transform parent, float alpha = 0.6f)
     {
-        var d = Img("Backdrop", parent, null, new Color(0.04f, 0.035f, 0.025f, alpha));
+        var d = Img("Backdrop", parent, null, new Color(0.11f, 0.09f, 0.15f, alpha));
         Fill(d, -4f); d.type = Image.Type.Simple; d.raycastTarget = false;
         var v = Img("Vignette", parent, kit.soft, new Color(0f, 0f, 0f, 0f));
         Fill(v);

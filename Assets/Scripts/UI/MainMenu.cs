@@ -141,7 +141,7 @@ public class MainMenu : MonoBehaviour
         if (costumeChip) costumeChip.text = Loc.T(Economy.Costume(c).Key);
         int lv = Profile.Level(wpn, WeaponStat.Damage) + Profile.Level(wpn, WeaponStat.Magazine) + Profile.Level(wpn, WeaponStat.Reload);
         if (weaponChip) weaponChip.text = Loc.F("menu.weapon_chip", Loc.T(Economy.Weapon(wpn).Key), lv);
-        if (preview && (!shopUI || !shopUI.IsOpen) && (!loadout || !loadout.root.activeSelf)) preview.ShowCostume(c);
+        if (preview && (!shopUI || !shopUI.IsOpen) && (!loadout || !loadout.root.activeSelf)) preview.ShowHero(c);
     }
 
     /// <summary>OYNA: story → chapter select, endless / hard → weapon select.</summary>

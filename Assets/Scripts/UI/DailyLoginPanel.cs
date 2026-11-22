@@ -44,7 +44,7 @@ public class DailyLoginPanel : MonoBehaviour
             dayRewards[i].text = (r.gold > 0 ? Loc.F("shop.gold", r.gold) : "") + (r.gems > 0 ? "\n<color=#5CCBF5>+" + Loc.F("shop.gems", r.gems) + "</color>" : "");
             dayChecks[i].SetActive(claimed);
             dayIcons[i].SetActive(!claimed);
-            days[i].color = claimed ? UiKit.Hex(0x1B2A12) : big ? UiKit.Hex(0x12273A) : today ? UiKit.Hex(0x2A2210) : UiKit.Card;
+            days[i].color = claimed ? UiKit.Hex(0x24331A) : big ? UiKit.Hex(0x12273A) : today ? UiKit.Hex(0x3A2C0E) : UiKit.Card;
             dayStrokes[i].color = claimed ? UiKit.Hex(0x4F7A0C) : big ? UiKit.Hex(0x2C6E92) : UiKit.Line;
             dayStrokes[i].enabled = !(today || i == tomorrow);
             dayDash[i].SetActive(today || i == tomorrow);

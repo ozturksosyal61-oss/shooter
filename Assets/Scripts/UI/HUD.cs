@@ -154,7 +154,7 @@ public class HUD : MonoBehaviour
             var rt = b.frame.rectTransform;
             rt.anchoredPosition = new Vector2(16f + (i % 15) * 36f, -16f - (i / 15) * 36f); // 22 cards (1.1.0): second row
             Color rc = Upgrades.RarityColors[(int)d.rarity];
-            b.frame.color = Color.Lerp(new Color(0.17f, 0.2f, 0.11f), rc, 0.35f);
+            b.frame.color = Color.Lerp(new Color(0.2f, 0.17f, 0.27f), rc, 0.35f);
             b.icon.sprite = Upgrades.I.IconOf(owned[i]);
             b.icon.color = Color.Lerp(rc, Color.white, 0.4f);
             int l = Upgrades.I.Level(owned[i]);

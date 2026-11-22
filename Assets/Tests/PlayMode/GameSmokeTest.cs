@@ -2297,7 +2297,8 @@ public class GameSmokeTest
     {
         string dir = System.Environment.GetEnvironmentVariable("CAPTURE_DIR");
         if (string.IsNullOrEmpty(dir)) dir = Application.temporaryCachePath;
-        const int W = 1600, H = 738;
+        int W = int.TryParse(System.Environment.GetEnvironmentVariable("CAPTURE_W"), out var cw) ? cw : 1600; // iPad check: CAPTURE_W=1600 CAPTURE_H=1200
+        int H = int.TryParse(System.Environment.GetEnvironmentVariable("CAPTURE_H"), out var ch) ? ch : 738;
         Profile.Grant(584, 0, "test");
         SceneManager.LoadScene(LoadingScreen.MenuScene);
         yield return null;

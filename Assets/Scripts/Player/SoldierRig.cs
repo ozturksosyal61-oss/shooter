@@ -56,7 +56,7 @@ public class SoldierRig : MonoBehaviour
     /// <summary>Per-frame locomotion/aim state from the PlayerController.</summary>
     public void Tick(float dt, Vector3 move, float speed, bool isAiming, bool isVaulting)
     {
-        if (dead) return;
+        if (dead || Posing) return;
         aiming = isAiming;
         // Local move direction relative to where the body faces → backpedal / strafe animations.
         Vector3 local = owner.InverseTransformDirection(move);
@@ -122,6 +122,32 @@ public class SoldierRig : MonoBehaviour
     Vector3 weaponLocalPos;
     Quaternion weaponLocalRot;
 
+    // ---- 1.1.0 menu / shop hero poses: a full-body clip; the gun points along the body's facing (tilted by the pose's
+    // pitch, e.g. a lowered rifle) with its grip at the clip's right hand, and the hands are IK'd onto it — the same
+    // idea as the in-game hold, so every pose keeps a clean grip.
+    public bool Posing { get; private set; }
+    bool poseTwoHanded;
+    float posePitch;
+
+    public void StartPose(string state, bool twoHanded, float normalizedTime, float pitch = 0f)
+    {
+        if (!anim) anim = GetComponent<Animator>();
+        if (!weaponRoot) return;
+        Posing = true;
+        poseTwoHanded = twoHanded;
+        posePitch = pitch;
+        anim.SetLayerWeight(1, 0f);
+        upperWeight = 0f;
+        anim.Play(state, 0, normalizedTime);
+    }
+
+    public void StopPose()
+    {
+        if (!Posing) return;
+        Posing = false;
+        if (anim) anim.Play("Locomotion", 0, 0f);
+    }
+
     public void Revive()
     {
         if (!dead) return;
@@ -152,6 +178,22 @@ public class SoldierRig : MonoBehaviour
     void OnAnimatorIK(int layerIndex)
     {
         if (layerIndex != 0 || dead || !weaponRoot) return;
+        if (Posing)
+        {
+            // Gun: along the facing (+ pose pitch), grip where the clip's right hand is; hands onto the grips.
+            Vector3 fwd = owner.forward; fwd.y = 0f;
+            Quaternion prot = Quaternion.LookRotation(fwd.sqrMagnitude > 0.001f ? fwd.normalized : Vector3.forward, Vector3.up) * Quaternion.Euler(posePitch, 0f, 0f);
+            weaponRoot.rotation = prot;
+            if (rightGrip) weaponRoot.position += anim.GetIKPosition(AvatarIKGoal.RightHand) - rightGrip.position;
+            anim.SetIKPositionWeight(AvatarIKGoal.RightHand, 1f);
+            anim.SetIKRotationWeight(AvatarIKGoal.RightHand, 0.5f);
+            if (rightGrip) { anim.SetIKPosition(AvatarIKGoal.RightHand, rightGrip.position); anim.SetIKRotation(AvatarIKGoal.RightHand, rightGrip.rotation); }
+            float lw = poseTwoHanded && leftGrip ? 1f : 0f;
+            anim.SetIKPositionWeight(AvatarIKGoal.LeftHand, lw);
+            anim.SetIKRotationWeight(AvatarIKGoal.LeftHand, lw * 0.5f);
+            if (lw > 0f) { anim.SetIKPosition(AvatarIKGoal.LeftHand, leftGrip.position); anim.SetIKRotation(AvatarIKGoal.LeftHand, leftGrip.rotation); }
+            return;
+        }
 
         // Rifle: grip at the right hand, barrel along the aim (with reload tilt + recoil).
         Quaternion rot = aimRot;

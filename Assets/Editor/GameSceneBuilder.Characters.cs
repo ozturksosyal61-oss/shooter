@@ -30,10 +30,32 @@ public static partial class GameSceneBuilder
         new Vector2(0, -1), new Vector2(-0.7071f, -0.7071f), new Vector2(-1, 0), new Vector2(-0.7071f, 0.7071f),
     };
 
+    /// <summary>1.1.0 hero poses: Mixamo file, Animator state, loops (one-shot clips hold their last frame), two-handed.</summary>
+    static readonly (string file, string state, bool loop, bool twoHanded, float pitch)[] PoseDefs =
+    {
+        ("Rifle Aiming Idle", "PoseRifleAim", true, true, 0f),
+        ("Idle Crouching Aiming", "PoseCrouchAim", true, true, 0f),
+        ("Rifle Aim To Down", "PoseRifleDown", false, true, 45f),
+        ("Pistol Kneeling Idle", "PoseKneel", true, false, 8f),
+        ("Gunplay", "PoseGunplay", true, false, -10f),
+        ("Drawing Gun", "PoseDraw", false, false, 5f),
+    };
+
+    /// <summary>Hero look per CostumeId: signature weapon + pose index (characters get their own; soldier skins vary).</summary>
+    static readonly (CostumeId c, WeaponId w, int pose)[] HeroLooks =
+    {
+        (CostumeId.Standard, WeaponId.M4, 0), (CostumeId.Woodland, WeaponId.M4, 1), (CostumeId.Desert, WeaponId.Shotgun, 2),
+        (CostumeId.Night, WeaponId.Uzi, 5), (CostumeId.Arctic, WeaponId.Smg, 3), (CostumeId.Gold, WeaponId.Uzi, 4),
+        (CostumeId.Commando, WeaponId.Hmg, 0), (CostumeId.SpecOps, WeaponId.Hmg, 1), (CostumeId.Firefighter, WeaponId.Shotgun, 2),
+        (CostumeId.Hush, WeaponId.Smg, 3), (CostumeId.Lynx, WeaponId.Uzi, 4),
+    };
+
     class CharacterAnims
     {
         public Avatar soldierAvatar, zombieAvatar;
         public AnimationClip idle, idleAim, jump, reload, deathFront, deathBack;
+        /// <summary>1.1.0 menu / shop hero poses (Mixamo, `Anim/Poses/`), state names in <see cref="PoseDefs"/>.</summary>
+        public AnimationClip[] poses;
         public AnimationClip[] walk = new AnimationClip[8], run = new AnimationClip[8];
         public AnimationClip zIdle, zWalk, zRun, zAttack, zPunch, zHit, zDying, zScream;
         public bool screamIsSubstitute;
@@ -111,6 +133,12 @@ public static partial class GameSceneBuilder
             new[] { Ev(0.22f, "MagOut"), Ev(0.55f, "MagIn"), Ev(0.8f, "Bolt") });
         a.deathFront = ConfigureClip(S("death from the front"), a.soldierAvatar, "DeathFront", false, true);
         a.deathBack = ConfigureClip(S("death from the back"), a.soldierAvatar, "DeathBack", false, true);
+        a.poses = new AnimationClip[PoseDefs.Length];
+        for (int i = 0; i < PoseDefs.Length; i++)
+        {
+            string pp = $"{SoldierAnim}/Poses/{PoseDefs[i].file}.fbx";
+            if (System.IO.File.Exists(pp)) a.poses[i] = ConfigureClip(pp, a.soldierAvatar, PoseDefs[i].state, PoseDefs[i].loop, true);
+        }
         for (int i = 0; i < 8; i++)
         {
             a.walk[i] = ConfigureClip(S("walk " + Dirs[i]), a.soldierAvatar, "Walk " + Dirs[i], true, false);
@@ -227,6 +255,10 @@ public static partial class GameSceneBuilder
             t.AddCondition(AnimatorConditionMode.Equals, i, "DeathIndex");
             t.canTransitionToSelf = false; t.duration = 0.12f; t.hasExitTime = false;
         }
+
+        // 1.1.0 hero poses (menu / shop only, played by name from PreviewStage; never reached in a run).
+        for (int i = 0; i < PoseDefs.Length; i++)
+            if (a.poses != null && a.poses[i]) { var ps = sm.AddState(PoseDefs[i].state); ps.motion = a.poses[i]; }
 
         var layers = c.layers;
         layers[0].iKPass = true;

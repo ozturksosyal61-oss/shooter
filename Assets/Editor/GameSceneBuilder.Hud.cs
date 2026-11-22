@@ -84,9 +84,9 @@ public static partial class GameSceneBuilder
         Place(aimKnob.rectTransform, new Vector2(0.5f, 0.5f), 0f, 0f, 44f, 44f);
 
         // ---- Health (top-left): heart box + bar; XP + level under it; owned cards row.
-        var heartBox = KCard("HeartBox", root, 12, UiKit.Panel, UiKit.Line); TL(heartBox, Safe, 22f, 44f, 44f);
-        var heart = KIcon("Heart", heartBox.transform, kit.heart, UiKit.Danger, 24f); In(heart, 10f, 10f, 24f, 24f);
-        var hpBar = KCard("HealthBar", root, 12, UiKit.Hex(0x0E120C, 0.92f), UiKit.Line); TL(hpBar, 112f, 31f, 284f, 26f);
+        var heartBox = KCard("HeartBox", root, 12, UiKit.Danger, UiKit.Line); TL(heartBox, Safe, 22f, 44f, 44f);
+        var heart = KIcon("Heart", heartBox.transform, kit.heart, UiKit.Text, 24f); In(heart, 10f, 10f, 24f, 24f);
+        var hpBar = KCard("HealthBar", root, 12, UiKit.Hex(0x17131F, 0.92f), UiKit.Line); TL(hpBar, 112f, 31f, 284f, 26f);
         var hpLag = KImg("Lag", hpBar.transform, kit.r12, UiKit.Hex(0x8A2A22), true, 4f);
         var hpFill = KImg("Fill", hpBar.transform, kit.r12, UiKit.Danger, true, 4f);
         foreach (var f in new[] { hpLag, hpFill })
@@ -96,6 +96,7 @@ public static partial class GameSceneBuilder
         }
         var hpGloss = KImg("Gloss", hpFill.transform, kit.gloss, Color.white, true, 2f); Fill(hpGloss);
         var hpText = KTxt("Value", hpBar.transform, F.Bold, 16f, UiKit.Text, TextAlignmentOptions.Center); Fill(hpText);
+        hpText.outlineWidth = 0.25f; hpText.outlineColor = UiKit.Ink;
         hpText.text = "100 / 100";
         hud.healthFill = hpFill.rectTransform; hud.healthFillImage = hpFill; hud.healthLag = hpLag.rectTransform; hud.healthText = hpText;
         hud.healthHeart = heart.rectTransform;
@@ -114,28 +115,35 @@ public static partial class GameSceneBuilder
         hud.cardRow = row; hud.cardIconTemplate = badge;
 
         // ---- Wave pill (top-centre).
-        var wave = KImg("WavePill", root, kit.pill, UiKit.Hex(0x10140E, 0.92f), true, 2f); TC(wave, 494f, 14f, 292f, 48f);
+        // B look: the wave is a yellow sticker with ink text.
+        var wave = KImg("WavePill", root, kit.pill, UiKit.Hazard, true, 2f); TC(wave, 494f, 14f, 292f, 48f);
         var ws = KImg("Stroke", wave.transform, kit.pillStroke, UiKit.Line, true, 2f); Fill(ws);
-        var wl = KCaps("Label", wave.transform, 12f, UiKit.Hazard, "hud.wave_label"); In(wl, 22f, 16f, 60f, 16f);
-        hud.waveNumber = KTxt("Number", wave.transform, F.Display, 28f, UiKit.Text, TextAlignmentOptions.Center); In(hud.waveNumber, 78f, 6f, 40f, 36f);
+        var wsh = wave.gameObject.AddComponent<Shadow>(); wsh.effectDistance = UiKit.ShadowOffset; wsh.effectColor = UiKit.ShadowColor;
+        wave.rectTransform.localEulerAngles = new Vector3(0f, 0f, -1f);
+        var wl = KCaps("Label", wave.transform, 12f, UiKit.Ink, "hud.wave_label"); In(wl, 22f, 16f, 60f, 16f);
+        hud.waveNumber = KTxt("Number", wave.transform, F.Display, 28f, UiKit.Ink, TextAlignmentOptions.Center); In(hud.waveNumber, 78f, 6f, 40f, 36f);
+        hud.waveNumber.fontSharedMaterial = UiFonts.Display.material;
         hud.waveNumber.text = "1";
-        hud.waveProgress = KBar("Progress", wave.transform, UiKit.Hazard, out var wtr, 6f); In(wtr, 124f, 21f, 96f, 6f);
-        hud.waveLeft = KTxt("Left", wave.transform, F.Semi, 14f, UiKit.Secondary, TextAlignmentOptions.Right); InR(hud.waveLeft, 18f, 14f, 60f, 20f);
+        hud.waveProgress = KBar("Progress", wave.transform, UiKit.Ink, out var wtr, 6f); In(wtr, 124f, 21f, 96f, 6f);
+        wtr.color = UiKit.Hex(0xB8860B);
+        hud.waveLeft = KTxt("Left", wave.transform, F.Bold, 14f, UiKit.Ink, TextAlignmentOptions.Right); InR(hud.waveLeft, 18f, 14f, 60f, 20f);
 
         // ---- Kills / run gold / pause (top-right) + score under them.
         Image Pill(string name, Sprite icon, Color ic, float right, float w, out TMP_Text value)
         {
-            var p = KImg(name, root, kit.pill, UiKit.Hex(0x10140E, 0.92f), true, 2f); TR(p, right, 22f, w, 40f);
+            var p = KImg(name, root, kit.pill, UiKit.Hex(0xFFFFFF), true, 2f); TR(p, right, 22f, w, 40f);
             var s = KImg("Stroke", p.transform, kit.pillStroke, UiKit.Line, true, 2f); Fill(s);
+            var psh = p.gameObject.AddComponent<Shadow>(); psh.effectDistance = UiKit.ShadowOffset; psh.effectColor = UiKit.ShadowColor;
             var i = KIcon("Icon", p.transform, icon, ic, 20f); In(i, 12f, 10f, 20f, 20f);
-            value = KTxt("Value", p.transform, F.Display, 18f, UiKit.Text, TextAlignmentOptions.Right); Margins(value, 36f, 0f, 14f, 0f);
+            value = KTxt("Value", p.transform, F.Display, 18f, UiKit.Ink, TextAlignmentOptions.Right); Margins(value, 36f, 0f, 14f, 0f);
             value.text = "0";
             return p;
         }
-        Pill("Kills", kit.skull, UiKit.Success, Safe + 140f, 96f, out hud.killsText);
+        Pill("Kills", kit.skull, UiKit.Ink, Safe + 140f, 96f, out hud.killsText);
         Pill("RunGold", kit.coin, Color.white, Safe + 50f, 82f, out hud.runGoldText);
         var scoreLbl = KCaps("ScoreLabel", root, 11f, UiKit.Secondary, "hud.score", TextAlignmentOptions.Right); TR(scoreLbl, Safe + 100f, 68f, 120f, 16f);
-        var score = KTxt("Score", root, F.Display, 16f, UiKit.Text, TextAlignmentOptions.Right); TR(score, Safe, 66f, 96f, 20f);
+        var score = KTxt("Score", root, F.Display, 20f, UiKit.Text, TextAlignmentOptions.Right); TR(score, Safe, 66f, 140f, 26f);
+        score.fontSharedMaterial = UiFonts.DisplayInk;
         score.text = "0";
         hud.scoreText = score;
 
@@ -144,7 +152,8 @@ public static partial class GameSceneBuilder
         var ck = KCaps("Label", comboRoot, 13f, UiKit.Hazard, "hud.combo"); InR(ck, 92f, 22f, 120f, 18f);
         ((TextMeshProUGUI)ck).alignment = TextAlignmentOptions.Right;
         var mult = KTxt("Multiplier", comboRoot, F.Display, 40f, UiKit.Gold, TextAlignmentOptions.Right); InR(mult, 0f, 0f, 90f, 48f);
-        mult.fontSharedMaterial = UiFonts.DisplayShadow; mult.text = "X1";
+        mult.fontSharedMaterial = UiFonts.DisplayInk; mult.color = UiKit.Orange; mult.text = "X1";
+        mult.rectTransform.localEulerAngles = new Vector3(0f, 0f, 6f);
         var comboBar = KBar("Bar", comboRoot, UiKit.Hazard, out var ctr, 5f); InR(ctr, 0f, 50f, 150f, 5f);
         var comboTxt = KTxt("ComboCount", comboRoot, F.Semi, 12f, UiKit.Secondary, TextAlignmentOptions.Right); InR(comboTxt, 0f, 58f, 230f, 16f);
         comboRoot.gameObject.SetActive(false);
@@ -159,7 +168,7 @@ public static partial class GameSceneBuilder
 
         // ---- Ammo panel (bottom-right) = reload button; active-reload bar above it.
         var ammoPanel = KCard("AmmoPanel", root, 20, UiKit.Panel, UiKit.Line); BR(ammoPanel, Safe + 2f, 58f, 182f, 78f);
-        var ringBg = KImg("RingBg", ammoPanel.transform, kit.ring, UiKit.Hex(0x2A3324)); In(ringBg, 14f, 13f, 52f, 52f);
+        var ringBg = KImg("RingBg", ammoPanel.transform, kit.ring, UiKit.Hex(0x3A3248)); In(ringBg, 14f, 13f, 52f, 52f);
         var ring = KImg("Ring", ammoPanel.transform, kit.ring, UiKit.Hazard); In(ring, 14f, 13f, 52f, 52f);
         ring.type = Image.Type.Filled; ring.fillMethod = Image.FillMethod.Radial360; ring.fillOrigin = 2; ring.fillClockwise = false; ring.fillAmount = 1f;
         hud.weaponName = KTxt("Weapon", ammoPanel.transform, F.Display, 11f, UiKit.Text, TextAlignmentOptions.Center); In(hud.weaponName, 14f, 13f, 52f, 52f);
@@ -171,7 +180,7 @@ public static partial class GameSceneBuilder
         hud.reloadButton = ammoPanel.rectTransform; hud.reloadButtonFill = ring;
         var reloadRoot = Rect("Reload", root); BR(reloadRoot, Safe + 2f, 142f, 182f, 34f);
         var reloadLabel = KTxt("Label", reloadRoot, F.Bold, 13f, UiKit.Hazard, TextAlignmentOptions.Right); InR(reloadLabel, 0f, 0f, 182f, 16f);
-        var reloadBg = KImg("BarBg", reloadRoot, kit.r12, UiKit.Hex(0x10140E, 0.92f), true, 4f); InR(reloadBg, 0f, 18f, 182f, 14f);
+        var reloadBg = KImg("BarBg", reloadRoot, kit.r12, UiKit.Hex(0x1E1928, 0.92f), true, 4f); InR(reloadBg, 0f, 18f, 182f, 14f);
         var sweet = KImg("SweetSpot", reloadBg.transform, kit.r12, new Color(UiKit.Hazard.r, UiKit.Hazard.g, UiKit.Hazard.b, 0.7f), true, 6f);
         sweet.rectTransform.anchorMin = new Vector2(0.4f, 0f); sweet.rectTransform.anchorMax = new Vector2(0.6f, 1f); sweet.rectTransform.offsetMin = new Vector2(0f, 2f); sweet.rectTransform.offsetMax = new Vector2(0f, -2f);
         var reloadBar = KImg("Bar", reloadBg.transform, kit.r12, Color.white, true, 8f);
@@ -188,7 +197,7 @@ public static partial class GameSceneBuilder
         var picker = BuildCardPicker(legacy, t);
 
         // ---- Result screens.
-        var go = Img("GameOver", root, null, new Color(0.035f, 0.04f, 0.03f, 0.95f));
+        var go = Img("GameOver", root, null, new Color(0.08f, 0.065f, 0.11f, 0.95f));
         Fill(go, -4f); go.type = Image.Type.Simple; go.raycastTarget = true;
         var rs = go.gameObject.AddComponent<ResultScreen>();
         var hidden = Rect("Hidden", go.transform); Fill(hidden); hidden.gameObject.AddComponent<CanvasGroup>().alpha = 0f;
@@ -196,7 +205,7 @@ public static partial class GameSceneBuilder
         hud.gameOverStats = KTxt("Stats", hidden, F.Bold, 10f, Color.white);
         hud.recordText = KTxt("Record", hidden, F.Bold, 10f, Color.white);
         hud.recordText.gameObject.SetActive(false);
-        var restart = KButton("RestartButton", go.transform, UiStyle.Yellow, "over.again", 266f, 72f, 34f, kit.refresh, true, 20);
+        var restart = KButton("RestartButton", go.transform, UiStyle.Green, "over.again", 266f, 72f, 34f, kit.refresh, true, 20);
         hud.restartButton = (RectTransform)restart.transform;
         BuildDeathLayout(go.transform, rs, hud);
         BuildStoryLayout(go.transform, rs, hud);
@@ -220,10 +229,13 @@ public static partial class GameSceneBuilder
 
     static UiText StatCard(Transform parent, float refW, float x0, float x1, float y, string key, Color valueColor)
     {
-        var c = KCard("Stat_" + key, parent, 20, UiKit.Card, UiKit.Line);
+        // B look: paper stat sticker, ink label + value (gold values become orange), slight tilt.
+        var c = KCard("Stat_" + key, parent, 20, UiKit.Paper, UiKit.Line);
         Prop(c, refW, x0, x1, y, 75f);
-        var l = KCaps("Label", c.transform, 12f, UiKit.Secondary, key); In(l, 18f, 14f, 220f, 16f);
-        var v = KTxt("Value", c.transform, F.Display, 28f, valueColor); In(v, 18f, 32f, 220f, 36f);
+        c.rectTransform.localEulerAngles = new Vector3(0f, 0f, ((int)(x0 + y) % 3 - 1) * 1f);
+        var l = KCaps("Label", c.transform, 12f, UiKit.Hex(0x4A4252), key); In(l, 18f, 14f, 220f, 16f);
+        var v = KTxt("Value", c.transform, F.Display, 28f, valueColor == UiKit.Gold ? UiKit.Orange : UiKit.Ink); In(v, 18f, 32f, 220f, 36f);
+        v.fontSharedMaterial = UiFonts.Display.material;
         return v;
     }
 
@@ -232,12 +244,12 @@ public static partial class GameSceneBuilder
         const float W = 1168f;
         var body = ResultBody(go, "Death");
         rs.deathLayout = body.gameObject;
-        var tag = KChip("Mode", body, null, UiKit.Hex(0x1B2A12), UiKit.Success, 24f, 12f);
+        var tag = KChip("Mode", body, null, UiKit.Hex(0x24331A), UiKit.Success, 24f, 12f);
         rs.modeTag = tag; rs.modeTagBg = tag.transform.parent.GetComponent<Image>();
         In(rs.modeTagBg, 0f, 0f, 100f, 24f);
         var fell = KTxt("Fell", body, F.Display, 40f, UiKit.Secondary, TextAlignmentOptions.Left, "over.fell"); In(fell, 0f, 30f, 560f, 50f);
-        rs.waveBig = KTxt("Wave", body, F.Display, 80f, UiKit.Gold, TextAlignmentOptions.Left); In(rs.waveBig, 0f, 80f, 600f, 96f);
-        rs.waveBig.fontSharedMaterial = UiFonts.DisplayShadow;
+        rs.waveBig = KTxt("Wave", body, F.Display, 80f, UiKit.Hazard, TextAlignmentOptions.Left); In(rs.waveBig, 0f, 80f, 600f, 96f);
+        rs.waveBig.fontSharedMaterial = UiFonts.DisplayInk;
         var rec = KChip("NewRecord", body, "over.record", UiKit.Success, UiKit.Ink, 30f, 14f);
         In(rec.transform.parent.GetComponent<Image>(), 0f, 172f, 120f, 30f);
         rs.newRecord = rec.transform.parent.gameObject;
@@ -258,10 +270,10 @@ public static partial class GameSceneBuilder
         var gold = KTxt("Gold", panel.transform, F.Display, 44f, UiKit.Text); Prop(gold, PW, 86f, 330f, 54f, 52f);
         var dbl = KButton("Double", panel.transform, UiStyle.Green, null, 190f, 56f, 18f, kit.film);
         Prop(dbl, PW, 344f, 534f, 50f, 56f);
-        var hard = KChip("HardBonus", panel.transform, "over.hard_bonus", UiKit.Hex(0x3A1512), UiKit.DangerAlt, 22f, 11f);
+        var hard = KChip("HardBonus", panel.transform, "over.hard_bonus", UiKit.Hex(0x3E1614), UiKit.DangerAlt, 22f, 11f);
         In(hard.transform.parent.GetComponent<Image>(), 30f, 116f, 160f, 22f);
         rs.hardBonus = hard.transform.parent.gameObject;
-        var msg = KTxt("Message", panel.transform, F.Bold, 14f, UiKit.DangerAlt, TextAlignmentOptions.Right); Prop(msg, PW, 300f, 534f, 112f, 20f);
+        var msg = KTxt("Message", panel.transform, F.Bold, 14f, UiKit.Hazard, TextAlignmentOptions.Right); Prop(msg, PW, 300f, 534f, 112f, 20f);
         Divider(panel.transform, 148f, 30f);
         var ql = KCaps("QuestLabel", panel.transform, 13f, UiKit.Hazard, "over.quest_progress"); In(ql, 30f, 168f, 300f, 18f);
         rs.questRows = new GameObject[3]; rs.questTitles = new TMP_Text[3]; rs.questStates = new TMP_Text[3]; rs.questChecks = new Image[3];
@@ -434,7 +446,7 @@ public static partial class GameSceneBuilder
         var skull = KIcon("Skull", bar, kit.skull, UiKit.DangerAlt, 20f); In(skull, 0f, 2f, 20f, 20f);
         var name = KTxt("Name", bar, F.Display, 16f, UiKit.DangerAlt, TextAlignmentOptions.Left); In(name, 26f, 0f, 120f, 24f);
         name.enableAutoSizing = true; name.fontSizeMin = 10f; name.fontSizeMax = 16f;
-        var frame = KCard("Frame", bar, 12, UiKit.Hex(0x0E120C, 0.92f), UiKit.Line); In(frame, 132f, 3f, 328f, 18f);
+        var frame = KCard("Frame", bar, 12, UiKit.Hex(0x17131F, 0.92f), UiKit.Line); In(frame, 132f, 3f, 328f, 18f);
         var lag = KImg("Lag", frame.transform, kit.r12, new Color(1f, 1f, 1f, 0.85f), true, 6f);
         var fill = KImg("Fill", frame.transform, kit.r12, UiKit.Purple, true, 6f);
         foreach (var f in new[] { lag, fill })

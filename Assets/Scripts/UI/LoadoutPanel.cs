@@ -89,7 +89,7 @@ public class LoadoutPanel : MonoBehaviour
             rowNames[i].text = Loc.T(d.Key);
             rowSubs[i].text = eq ? Loc.T(d.Key + ".type") : owned ? Loc.T("shop.owned") : Loc.T(d.Key + ".short");
             rowSelected[i].SetActive(i == selected);
-            rowFrames[i].color = i == selected ? UiKit.Hex(0x2A2210) : UiKit.Card;
+            rowFrames[i].color = i == selected ? UiKit.Hex(0x3A2C0E) : UiKit.Card;
             rowEquipped[i].SetActive(eq);
             rowIcons[i].sprite = owned ? crossIcon : lockIcon;
             rowIcons[i].color = eq ? UiKit.Hazard : UiKit.Disabled;
