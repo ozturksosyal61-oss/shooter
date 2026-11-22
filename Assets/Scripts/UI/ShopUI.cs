@@ -210,7 +210,11 @@ public class ShopUI : MonoBehaviour
         root.SetActive(true);
         confirm.SetActive(false);
         Current = tab;
-        for (int i = 0; i < tabButtons.Length; i++) Style(tabButtons[i], i == (int)tab ? UiStyle.Yellow : UiStyle.Ghost);
+        for (int i = 0; i < tabButtons.Length; i++)
+        {
+            Style(tabButtons[i], i == (int)tab ? UiStyle.Yellow : UiStyle.Ghost);
+            tabButtons[i].transform.localEulerAngles = new Vector3(0f, 0f, i == (int)tab ? -2f : 0f); // B: the active tab tilts
+        }
         var pane = (int)tab < panes.Length ? panes[(int)tab] : null;
         foreach (var p in panes) if (p && p != pane) p.SetActive(false);
         if (pane) pane.SetActive(true);
@@ -399,6 +403,7 @@ public class ShopUI : MonoBehaviour
             card.icon.sprite = owned ? userIcon : lockIcon;
             if (card.selected) card.selected.gameObject.SetActive(sel || eq);
             if (card.selected) card.selected.color = eq ? UiKit.Hazard : UiKit.Line2;
+            Bump(card, sel);
             if (eq) SetButton(card.action, UiStyle.Disabled, Loc.T("shop.equipped"), false, checkIcon);
             else if (owned) SetButton(card.action, UiStyle.Dark, Loc.T("shop.equip"));
             else if (d.packOnly) SetButton(card.action, UiStyle.Yellow, Store.Price(Economy.ProductPrefix + "starter_pack"), !Profile.StarterPackOwned);
@@ -408,6 +413,14 @@ public class ShopUI : MonoBehaviour
         }
         preview.ShowHero(shown);
         previewImage.enabled = true;
+    }
+
+    /// <summary>B look: the selected card pops a little bigger and tilts (like a sticker picked up).</summary>
+    static void Bump(Card card, bool on)
+    {
+        var t = card.button.transform;
+        t.localScale = Vector3.one * (on ? 1.03f : 1f);
+        t.localEulerAngles = new Vector3(0f, 0f, on ? -1.5f : 0f);
     }
 
     // ------------------------------------------------------------------ gun finishes + tracers (1.1.0)
@@ -454,6 +467,7 @@ public class ShopUI : MonoBehaviour
             card.icon.sprite = owned ? checkIcon : lockIcon;
             if (card.selected) card.selected.gameObject.SetActive(sel || eq);
             if (card.selected) card.selected.color = eq ? UiKit.Hazard : UiKit.Line2;
+            Bump(card, sel);
             if (eq) SetButton(card.action, UiStyle.Disabled, Loc.T("shop.equipped"), false, checkIcon);
             else if (owned) SetButton(card.action, UiStyle.Dark, Loc.T("shop.equip"));
             else if (d.gems > 0) SetButton(card.action, UiStyle.Yellow, d.gems.ToString(), true, gemIcon);

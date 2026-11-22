@@ -409,30 +409,35 @@ public static partial class GameSceneBuilder
         shop.root = page.gameObject; shop.preview = stage;
         shop.coinIcon = kit.coin; shop.gemIcon = kit.gem; shop.checkIcon = kit.check; shop.lockIcon = kit.lockI; shop.userIcon = kit.user;
         shop.heartIcon = kit.heart; shop.cardIcon = kit.cardI; shop.goldIcon = kit.coin;
-        var t = KTxt("Title", page.transform, F.Display, 30f, UiKit.Text, TextAlignmentOptions.Left, "shop.title"); TL(t, Safe, 26f, 400f, 40f);
+        var t = KTxt("Title", page.transform, F.Display, 34f, UiKit.Hazard, TextAlignmentOptions.Left, "shop.title"); TL(t, Safe + 146f, 22f, 400f, 44f);
+        t.rectTransform.localEulerAngles = new Vector3(0f, 0f, 2f);
         Pills(page.transform, true, 26f, 44f, 144f, out shop.gold, out shop.gems, out shop.goldPlus, out shop.gemPlus);
 
         // Sidebar.
-        // ShopUI.Tab order: weapons, finishes, tracers, characters, costumes, bonuses, gems (7 tabs fit above MENU).
+        // ShopUI.Tab order: weapons, finishes, tracers, characters, costumes, bonuses, gems — B look: one row of sticker
+        // tabs across the top (the selected one yellow + tilted, ShopUI), content uses the full width below.
         string[] tabKeys = { "shop.tab.weapons", "shop.tab.skins", "shop.tab.tracers", "shop.tab.characters", "shop.tab.costumes", "shop.tab.bonuses", "shop.tab.gems" };
         Sprite[] tabIcons = { kit.crosshair, kit.starLine, kit.bullet, kit.user, kit.shirt, kit.bolt, kit.gemLine };
         int tabN = tabKeys.Length;
         shop.tabButtons = new Button[tabN];
+        const float TabGap = 8f, TabW = (RefW - 2f * Safe - 6f * TabGap) / 7f;
         for (int i = 0; i < tabN; i++)
         {
-            var b = KButton("Tab" + i, page.transform, i == 0 ? UiStyle.Yellow : UiStyle.Ghost, tabKeys[i], 200f, 46f, 17f, tabIcons[i]);
+            var b = KButton("Tab" + i, page.transform, i == 0 ? UiStyle.Yellow : UiStyle.Ghost, tabKeys[i], TabW, 40f, 15f, tabIcons[i]);
             var hl = b.transform.Find("Face/Content").GetComponent<HorizontalLayoutGroup>();
-            hl.childAlignment = TextAnchor.MiddleLeft; hl.padding = new RectOffset(18, 12, 0, 0); hl.spacing = 12f;
-            TL(b, Safe, 88f + i * 52f, 200f, 46f);
+            hl.padding = new RectOffset(8, 8, 0, 0); hl.spacing = 7f;
+            TL(b, Safe + i * (TabW + TabGap), 80f, TabW, 40f);
             shop.tabButtons[i] = b;
         }
+        // "FREE" sticker on the gems tab's top-right corner.
         var free = KChip("Free", shop.tabButtons[(int)ShopUI.Tab.Gems].transform, "shop.free", UiKit.Success, UiKit.Ink, 20f, 11f);
-        var fr = (RectTransform)free.transform.parent; fr.anchorMin = fr.anchorMax = new Vector2(1f, 0.5f); fr.pivot = new Vector2(1f, 0.5f); fr.anchoredPosition = new Vector2(-12f, 0f);
+        var fr = (RectTransform)free.transform.parent; fr.anchorMin = fr.anchorMax = new Vector2(1f, 1f); fr.pivot = new Vector2(1f, 0.5f); fr.anchoredPosition = new Vector2(4f, 2f);
+        fr.localEulerAngles = new Vector3(0f, 0f, 6f);
         shop.freeChip = fr.gameObject;
-        shop.close = KButton("Menu", page.transform, UiStyle.Dark, "shop.menu", 200f, 52f, 19f, kit.back);
-        BL(shop.close, Safe, 38f, 200f, 52f);
+        shop.close = KButton("Menu", page.transform, UiStyle.Dark, "shop.menu", 130f, 44f, 17f, kit.back);
+        TL(shop.close, Safe, 24f, 130f, 44f);
 
-        var content = Margins(Rect("Content", page.transform), 284f, 92f, Safe, 38f);
+        var content = Margins(Rect("Content", page.transform), Safe, 136f, Safe, 22f);
         // Characters + Costumes share the card pane (each tab fills it with its own cards).
         // Characters + Costumes + Finishes + Tracers share the card pane (each tab fills it with its own cards).
         shop.panes = new GameObject[tabN];
@@ -512,8 +517,9 @@ public static partial class GameSceneBuilder
 
         // ---- Characters: horizontal cards.
         var cp = shop.panes[(int)ShopUI.Tab.Characters].transform;
-        var scroll = HScroll(cp, out var ccontent, 18f);
+        var scroll = HScroll(cp, out var ccontent, 14f);
         Fill(scroll);
+        ccontent.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(4, 8, 10, 10); // tilt / bump room
         shop.characterContent = ccontent;
         shop.characterTemplate = CharacterCard(ccontent, rt);
 
@@ -551,23 +557,23 @@ public static partial class GameSceneBuilder
         // ---- Gems: free banner + packs.
         var gp = shop.panes[(int)ShopUI.Tab.Gems].transform;
         var banner = KCard("Free", gp, 20, UiKit.Hex(0x111C0C), UiKit.Hex(0x4F7A0C));
-        var br = Margins(banner, 0f, 0f, 0f, 0f); br.anchorMin = new Vector2(0f, 1f); br.pivot = new Vector2(0.5f, 1f); br.sizeDelta = new Vector2(0f, 168f); br.anchoredPosition = Vector2.zero;
+        var br = Margins(banner, 0f, 0f, 0f, 0f); br.anchorMin = new Vector2(0f, 1f); br.pivot = new Vector2(0.5f, 1f); br.sizeDelta = new Vector2(0f, 150f); br.anchoredPosition = Vector2.zero;
         var bglow = KImg("Glow", banner.transform, kit.soft, new Color(UiKit.Success.r, UiKit.Success.g, UiKit.Success.b, 0.08f)); Fill(bglow, -30f);
-        var gtile = KCard("Tile", banner.transform, 20, UiKit.Hex(0x112030), UiKit.Hex(0x2C6E92)); In(gtile, 28f, 26f, 116f, 116f);
+        var gtile = KCard("Tile", banner.transform, 20, UiKit.Hex(0x112030), UiKit.Hex(0x2C6E92)); In(gtile, 28f, 17f, 116f, 116f);
         var gic = KIcon("Gem", gtile.transform, kit.gem, Color.white, 64f); In(gic, 26f, 26f, 64f, 64f);
         var plus5 = KChip("Plus", gtile.transform, null, UiKit.Success, UiKit.Ink, 30f, 16f);
         plus5.text = "+" + Economy.FreeGemAd; plus5.font = UiFonts.Display;
         var pr = (RectTransform)plus5.transform.parent; pr.anchorMin = pr.anchorMax = new Vector2(1f, 0f); pr.pivot = new Vector2(0.5f, 0.5f); pr.anchoredPosition = new Vector2(-4f, 6f);
-        var daily = KCaps("Daily", banner.transform, 12f, UiKit.Success, "shop.daily_refresh"); In(daily, 168f, 44f, 400f, 18f);
-        var ft = KTxt("FreeTitle", banner.transform, F.Display, 30f, UiKit.Text, TextAlignmentOptions.Left, "shop.free_title"); In(ft, 168f, 62f, 420f, 40f);
-        shop.freeDesc = KTxt("FreeDesc", banner.transform, F.Semi, 16f, UiKit.Secondary); In(shop.freeDesc, 168f, 104f, 420f, 22f);
+        var daily = KCaps("Daily", banner.transform, 12f, UiKit.Success, "shop.daily_refresh"); In(daily, 168f, 34f, 400f, 18f);
+        var ft = KTxt("FreeTitle", banner.transform, F.Display, 30f, UiKit.Text, TextAlignmentOptions.Left, "shop.free_title"); In(ft, 168f, 52f, 420f, 40f);
+        shop.freeDesc = KTxt("FreeDesc", banner.transform, F.Semi, 16f, UiKit.Secondary); In(shop.freeDesc, 168f, 94f, 420f, 22f);
         shop.freeButton = KButton("Watch", banner.transform, UiStyle.Green, "shop.watch_ad", 220f, 64f, 22f, kit.film);
-        InR(shop.freeButton, 28f, 52f, 220f, 64f);
-        var pl = KCaps("PacksLabel", gp, 13f, UiKit.Hazard, "shop.packs"); In(pl, 0f, 190f, 400f, 20f);
-        var note = KTxt("Note", gp, F.Semi, 13f, UiKit.Secondary, TextAlignmentOptions.Right); InR(note, 0f, 190f, 520f, 20f);
+        InR(shop.freeButton, 28f, 43f, 220f, 64f);
+        var pl = KCaps("PacksLabel", gp, 13f, UiKit.Hazard, "shop.packs"); In(pl, 0f, 164f, 400f, 20f);
+        var note = KTxt("Note", gp, F.Semi, 13f, UiKit.Secondary, TextAlignmentOptions.Right); InR(note, 0f, 164f, 520f, 20f);
         shop.priceNote = note;
         var gs = HScroll(gp, out var gcontent, 18f);
-        var gsr = Margins(gs, 0f, 218f, 0f, 0f);
+        var gsr = Margins(gs, 0f, 190f, 0f, 0f);
         shop.productContent = gcontent;
         shop.productTemplate = ProductCard(gcontent);
 
@@ -580,7 +586,8 @@ public static partial class GameSceneBuilder
         shop.confirmYes = KButton("Yes", cm.transform, UiStyle.Yellow, "shop.yes", 210f, 54f, 19f); InR(shop.confirmYes, 32f, 128f, 210f, 54f);
         shop.confirm = conf.gameObject;
         shop.message = KTxt("Message", page.transform, F.Bold, 18f, UiKit.Gold, TextAlignmentOptions.Center);
-        Place(shop.message.rectTransform, new Vector2(0.5f, 0f), 120f, 12f, 600f, 24f);
+        Place(shop.message.rectTransform, new Vector2(0.5f, 0f), 0f, 11f, 900f, 20f);
+        shop.message.fontSize = 16f;
         return shop;
     }
 
@@ -607,22 +614,22 @@ public static partial class GameSceneBuilder
         body.rectTransform.sizeDelta = new Vector2(222f, 460f);
         var c = new ShopUI.Card { button = CardButton(body), frame = body };
         // B look: collectible card — rarity-coloured top (ShopUI tints it), halftone dots, paper bottom with ink text.
-        var top = KImg("Top", body.transform, kit.r20, UiKit.Hazard, true); In(top, 3f, 3f, 216f, 280f);
+        var top = KImg("Top", body.transform, kit.r20, UiKit.Hazard, true); In(top, 3f, 3f, 216f, 262f);
         c.top = top;
         var tdots = KImg("Dots", top.transform, kit.dots, new Color(0f, 0f, 0f, 0.16f)); tdots.type = Image.Type.Tiled; tdots.pixelsPerUnitMultiplier = 1f; Fill(tdots, 4f);
-        var art = KImg("Art", body.transform, kit.soft, new Color(1f, 1f, 1f, 0.45f)); In(art, 6f, 60f, 210f, 230f);
-        c.preview = Preview("Preview", body.transform, rt); In(c.preview, 6f, 30f, 210f, 250f);
+        var art = KImg("Art", body.transform, kit.soft, new Color(1f, 1f, 1f, 0.45f)); In(art, 6f, 46f, 210f, 220f);
+        c.preview = Preview("Preview", body.transform, rt); In(c.preview, 6f, 22f, 210f, 240f);
         // Lock badge (top right) over the character still.
         c.icon = KIcon("Icon", body.transform, kit.user, UiKit.Secondary, 26f); In(c.icon, 180f, 14f, 26f, 26f);
         c.tag = KChip("Tag", body.transform, null, UiKit.Hazard, UiKit.Ink, 22f, 11f);
         c.tagBg = c.tag.transform.parent.GetComponent<Image>();
         In(c.tagBg, 16f, 16f, 80f, 22f);
-        c.title = KTxt("Name", body.transform, F.Display, 22f, UiKit.Ink); In(c.title, 18f, 290f, 190f, 30f);
-        c.title.enableAutoSizing = true; c.title.fontSizeMin = 14f; c.title.fontSizeMax = 22f;
-        c.sub = KPara("Desc", body.transform, 15f, UiKit.Hex(0x4A4252)); In(c.sub, 18f, 324f, 188f, 64f);
-        c.action = KButton("Action", body.transform, UiStyle.Dark, null, 186f, 46f, 18f, kit.coin);
+        c.title = KTxt("Name", body.transform, F.Display, 24f, UiKit.Ink); In(c.title, 16f, 270f, 194f, 30f);
+        c.title.enableAutoSizing = true; c.title.fontSizeMin = 14f; c.title.fontSizeMax = 24f;
+        c.sub = KPara("Desc", body.transform, 14f, UiKit.Hex(0x4A4252)); In(c.sub, 16f, 302f, 192f, 58f);
+        c.action = KButton("Action", body.transform, UiStyle.Dark, null, 186f, 44f, 18f, kit.coin);
         KeepIcon(c.action);
-        In(c.action, 18f, 398f, 186f, 46f);
+        In(c.action, 16f, 366f, 190f, 44f);
         c.selected = SelectedFrame(body.transform, 20);
         return c;
     }
